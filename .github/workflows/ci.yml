@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  linux:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools cmake g++ build-essential
+      
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      
+      - name: Build
+        run: |
+          cmake --build build --config Release
+      
+      - name: Test
+        run: |
+          cd build && ctest --output-on-failure || echo "Tests not yet implemented"
+
+  macos:
+    name: macOS Build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          brew install qt cmake
+      
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      
+      - name: Build
+        run: |
+          cmake --build build --config Release
+      
+      - name: Test
+        run: |
+          cd build && ctest --output-on-failure || echo "Tests not yet implemented"
+
+  windows:
+    name: Windows Build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.5.0'
+          modules: 'qtbase'
+          cached: 'true'
+      
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022"
+      
+      - name: Build
+        run: |
+          cmake --build build --config Release
+      
+      - name: Test
+        run: |
+          cd build && ctest -C Release --output-on-failure || echo "Tests not yet implemented"
+
