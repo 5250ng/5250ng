@@ -1,34 +1,34 @@
-#include <QtTest/QtTest>
+#include "network/tn5250/client/client.h"
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
-#include "transport/tn5250_client.h"
+#include <QtTest/QtTest>
 
-using namespace transport;
+using namespace tn5250::client;
 
 class TestTN5250Connection : public QObject {
     Q_OBJECT
 
-private slots:
+  private slots:
     void init();
     void cleanup();
-    
+
     void testBasicConnection();
     void testConnectionFailure();
     void testTelnetNegotiation();
     void testDataTransmission();
 
-private:
-    TN5250Client* m_client;
-    QTcpServer* m_server;
-    QTcpSocket* m_serverSocket;
+  private:
+    TN5250Client *m_client;
+    QTcpServer *m_server;
+    QTcpSocket *m_serverSocket;
     QByteArray m_serverReceivedData;
     bool m_connectionEstablished;
 
-private slots:
+  private slots:
     void onClientConnected();
     void onClientDisconnected();
-    void onClientDataReceived(const QByteArray& data);
+    void onClientDataReceived(const QByteArray &data);
     void onServerNewConnection();
     void onServerReadyRead();
 };
@@ -39,17 +39,17 @@ void TestTN5250Connection::init() {
     m_serverSocket = nullptr;
     m_serverReceivedData.clear();
     m_connectionEstablished = false;
-    
+
     connect(m_client, &TN5250Client::connected,
             this, &TestTN5250Connection::onClientConnected);
     connect(m_client, &TN5250Client::disconnected,
             this, &TestTN5250Connection::onClientDisconnected);
     connect(m_client, &TN5250Client::dataReceived,
             this, &TestTN5250Connection::onClientDataReceived);
-    
+
     connect(m_server, &QTcpServer::newConnection,
             this, &TestTN5250Connection::onServerNewConnection);
-    
+
     // Start server on any available port
     QVERIFY(m_server->listen(QHostAddress::LocalHost, 0));
 }
@@ -74,14 +74,14 @@ void TestTN5250Connection::onClientDisconnected() {
     m_connectionEstablished = false;
 }
 
-void TestTN5250Connection::onClientDataReceived(const QByteArray& data) {
+void TestTN5250Connection::onClientDataReceived(const QByteArray &data) {
     // Store received data for verification
 }
 
 void TestTN5250Connection::onServerNewConnection() {
     m_serverSocket = m_server->nextPendingConnection();
     QVERIFY(m_serverSocket != nullptr);
-    
+
     connect(m_serverSocket, &QTcpSocket::readyRead,
             this, &TestTN5250Connection::onServerReadyRead);
     connect(m_serverSocket, &QTcpSocket::disconnected,
@@ -96,18 +96,18 @@ void TestTN5250Connection::onServerReadyRead() {
 
 void TestTN5250Connection::testBasicConnection() {
     quint16 port = m_server->serverPort();
-    
+
     m_client->connectToHost("127.0.0.1", port, false);
-    
+
     // Wait for connection (with timeout)
     QTimer::singleShot(2000, [this]() {
         if (!m_connectionEstablished) {
             QFAIL("Connection timeout");
         }
     });
-    
+
     QTest::qWait(100);
-    
+
     // Verify connection state
     QVERIFY(m_client->state() == TN5250Client::ConnectionState::Connecting ||
             m_client->state() == TN5250Client::ConnectionState::Negotiating ||
@@ -117,9 +117,9 @@ void TestTN5250Connection::testBasicConnection() {
 void TestTN5250Connection::testConnectionFailure() {
     // Try to connect to non-existent host
     m_client->connectToHost("127.0.0.1", 1, false); // Port 1 is typically not listening
-    
+
     QTest::qWait(500);
-    
+
     // Should be in error or disconnected state
     QVERIFY(m_client->state() == TN5250Client::ConnectionState::Error ||
             m_client->state() == TN5250Client::ConnectionState::Disconnected);
@@ -127,12 +127,12 @@ void TestTN5250Connection::testConnectionFailure() {
 
 void TestTN5250Connection::testTelnetNegotiation() {
     quint16 port = m_server->serverPort();
-    
+
     m_client->connectToHost("127.0.0.1", port, false);
-    
+
     // Wait for connection and negotiation
     QTest::qWait(500);
-    
+
     // Server should have received telnet negotiation commands
     // Look for IAC sequences in received data
     bool foundIAC = false;
@@ -142,7 +142,7 @@ void TestTN5250Connection::testTelnetNegotiation() {
             break;
         }
     }
-    
+
     // Note: In a real test, we'd verify the exact negotiation sequence
     // For now, we just verify that some data was exchanged
     QVERIFY(m_serverReceivedData.size() > 0 || foundIAC);
@@ -150,18 +150,18 @@ void TestTN5250Connection::testTelnetNegotiation() {
 
 void TestTN5250Connection::testDataTransmission() {
     quint16 port = m_server->serverPort();
-    
+
     m_client->connectToHost("127.0.0.1", port, false);
-    
+
     // Wait for connection
     QTest::qWait(500);
-    
+
     if (m_client->isConnected()) {
         QByteArray testData("Hello TN5250");
         m_client->sendData(testData);
-        
+
         QTest::qWait(100);
-        
+
         // Verify server received the data (may be escaped with IAC)
         QVERIFY(m_serverReceivedData.size() > 0);
     }
@@ -169,4 +169,3 @@ void TestTN5250Connection::testDataTransmission() {
 
 QTEST_MAIN(TestTN5250Connection)
 #include "test_tn5250_connection.moc"
-

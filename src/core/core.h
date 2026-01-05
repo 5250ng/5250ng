@@ -9,6 +9,5 @@
 // - Session management
 
 namespace core {
-    // Core components will be implemented in Phase 2-3
+// Core components will be implemented in Phase 2-3
 }
-

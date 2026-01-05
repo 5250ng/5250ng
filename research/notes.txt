@@ -1,0 +1,274 @@
+@src/network/tn5250 I want you to refactor and improve the TN5250 protocol parsing
+Here is a data blob: 01f512a00000040000030440041100180107000000180000001101162240404040404040404040404040e289879540d695020137402011022f20e2a8a2a3859440404b404b404b404b404b407a2011024520e2f1f0f9f6f7f8c62011032f20e2a482a2a8a2a38594404b404b404b404b407a2011034520d8c2c1e2c540404040402011042f20c489a2979381a8404b404b404b404b404b407a2011044520d8d7c1c4c5e5f0f0f0f22011061020e4a2859940404b404b404b404b404b404b404b404b404b404b404b404b404b404b201106341d402024000a000000000000000000001107341d402027000a11081020d799968799819461979996838584a49985404b404b404b404b404b404b404b404b201108341d400024000a0000000000000000000011091020d48595a440404b404b404b404b404b404b404b404b404b404b404b404b404b404b201109341d400024000a00000000000000000000110a1020c3a499998595a340938982998199a8404b404b404b404b404b404b404b404b404b20110a341d400024000a0000000000000000000011071020d781a2a2a696998440404b404b404b404b404b404b404b404b404b404b404b404b201107342702073e0011182722404dc35d40c3d6d7e8d9c9c7c8e340c9c2d440c3d6d9d74b40f1f9f8f06b40f2f0f0f54b404040402004520000ffef
+
+And here is its meaning:  
+TN5250 Protocol
+    TN5250 Logical Record Length: 501
+    TN5250 SNA Record Type: General Data Stream (0x12a0)
+    Flags (Reserved): Reserved (0x00)
+    TN5250 Variable Record Length: 4
+    TN5250 SNA Flags: 0x00
+        0... .... = Data Stream Output Error: False
+        .0.. .... = 5250 attention key was pressed.: False
+        .... .0.. = 5250 System Request key was pressed: False
+        .... ..0. = 5250 Test Request key was pressed: False
+        .... ...0 = In Error State: False
+    Flags (Reserved): Reserved (0x00)
+    TN5250 Operation Code: Put or Get Operation (0x03)
+    Escape Code: ESC (0x04)
+        Command Code: Clear Unit (0x40)
+    Escape Code: ESC (0x04)
+        Command Code: Write To Display (0x11)
+        0000 0000 = Write To Display Command Control Character Byte 1:  (0x00)
+        Write To Display Command Control Character Byte 2: 0x18, Set blinking cursor, Unlock the keyboard and reset any pending AID bytes
+            0... .... = Reserved: False
+            .0.. .... = Cursor does not move when keyboard unlocks: False
+            ..0. .... = Reset blinking cursor: False
+            ...1 .... = Set blinking cursor: True
+            .... 1... = Unlock the keyboard and reset any pending AID bytes: True
+            .... .0.. = Sound Alarm: False
+            .... ..0. = Set Message Waiting indicator off: False
+            .... ...0 = Set Message Waiting indicator on: False
+        Order Code: Start of Header (SOH) (0x01)
+            Length: 7
+            Start of Header Flags: 0x00
+                0... .... = Right To Left Screen-Level Cursor Direction: False
+                ..0. .... = Automatic local screen reverse: False
+                ...0 .... = The cursor is allowed to move only to input-capable positions: False
+            Flags (Reserved): Reserved (0x00)
+            Resequence to Field: 0
+            Error Row: 24
+            Command Key Switch 1: 0x00
+                0... .... = PF24: False
+                .0.. .... = PF23: False
+                ..0. .... = PF22: False
+                ...0 .... = PF21: False
+                .... 0... = PF20: False
+                .... .0.. = PF19: False
+                .... ..0. = PF18: False
+                .... ...0 = PF17: False
+            Command Key Switch 2: 0x00
+                0... .... = PF16: False
+                .0.. .... = PF15: False
+                ..0. .... = PF14: False
+                ...0 .... = PF13: False
+                .... 0... = PF12: False
+                .... .0.. = PF11: False
+                .... ..0. = PF10: False
+                .... ...0 = PF9: False
+            Command Key Switch 3: 0x00
+                0... .... = PF8: False
+                .0.. .... = PF7: False
+                ..0. .... = PF6: False
+                ...0 .... = PF5: False
+                .... 0... = PF4: False
+                .... .0.. = PF3: False
+                .... ..0. = PF2: False
+                .... ...0 = PF1: False
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 1
+            Column Address: 22
+            Repeated Character: \u0082             Sign On
+        Order Code: Repeat to Address (RA) (0x02)
+            Row Address: 1
+            Column Address: 55
+            Repeated Character:  \u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 2
+            Column Address: 47
+            Repeated Character: \u0080System  . . . . . :\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 2
+            Column Address: 69
+            Repeated Character: \u0080S109678F\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 3
+            Column Address: 47
+            Repeated Character: \u0080Subsystem . . . . :\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 3
+            Column Address: 69
+            Repeated Character: \u0080QBASE     \u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 4
+            Column Address: 47
+            Repeated Character: \u0080Display . . . . . :\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 4
+            Column Address: 69
+            Repeated Character: \u0080QPADEV0002\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 6
+            Column Address: 16
+            Repeated Character: \u0080User  . . . . . . . . . . . . . .\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 6
+            Column Address: 52
+        Order Code: Start Field (SF) (0x1d)
+            Field Format Word: 0x40, Field Format Word ID: Identifies Field as Field Format Word, Field Shift/Edit Specification: Alpha shift
+                01.. .... = Field Format Word ID: Identifies Field as Field Format Word (0x1)
+                ..0. .... = Bypass: This is not a bypass field
+                ...0 .... = Dupe or Field Mark Enable: Duplication or Field Mark is not allowed in this field
+                .... 0... = Modified Data Tag: This field has not been modified
+                .... .000 = Field Shift/Edit Specification: Alpha shift (0x0)
+            Field Format Word: 0x20, Monocase, Right Adjust/Mandatory Fill: No adjust specified
+                0... .... = Auto Enter: No Auto Enter
+                .0.. .... = Field Exit Required: Field Exit key is not required
+                ..1. .... = Monocase: Translate operator keyed letters to uppercase
+                ...0 .... = Reserved: False
+                .... 0... = Mandatory Enter: Not A Mandatory Enter Field
+                .... .000 = Right Adjust/Mandatory Fill: No adjust specified (0x0)
+            Field Attributes: 0x24, Attribute ID: Identifies Field as Field Format Word, Underscore
+                001. .... = Attribute ID: Identifies Field as Field Format Word (0x1)
+                ...0 .... = Column Separator: Column Separator Off
+                .... 0... = Blink: Do Not Blink Field
+                .... .1.. = Underscore: Underscore Field
+                .... ..0. = Intensity: Low Intensity
+                .... ...0 = Reverse Image: Normal Image
+            Length: 10
+            Repeated Character: 
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 7
+            Column Address: 52
+        Order Code: Start Field (SF) (0x1d)
+            Field Format Word: 0x40, Field Format Word ID: Identifies Field as Field Format Word, Field Shift/Edit Specification: Alpha shift
+                01.. .... = Field Format Word ID: Identifies Field as Field Format Word (0x1)
+                ..0. .... = Bypass: This is not a bypass field
+                ...0 .... = Dupe or Field Mark Enable: Duplication or Field Mark is not allowed in this field
+                .... 0... = Modified Data Tag: This field has not been modified
+                .... .000 = Field Shift/Edit Specification: Alpha shift (0x0)
+            Field Format Word: 0x20, Monocase, Right Adjust/Mandatory Fill: No adjust specified
+                0... .... = Auto Enter: No Auto Enter
+                .0.. .... = Field Exit Required: Field Exit key is not required
+                ..1. .... = Monocase: Translate operator keyed letters to uppercase
+                ...0 .... = Reserved: False
+                .... 0... = Mandatory Enter: Not A Mandatory Enter Field
+                .... .000 = Right Adjust/Mandatory Fill: No adjust specified (0x0)
+            Field Attributes: 0x27, Attribute ID: Identifies Field as Field Format Word, Underscore, Intensity, Reverse Image
+                001. .... = Attribute ID: Identifies Field as Field Format Word (0x1)
+                ...0 .... = Column Separator: Column Separator Off
+                .... 0... = Blink: Do Not Blink Field
+                .... .1.. = Underscore: Underscore Field
+                .... ..1. = Intensity: High Intensity
+                .... ...1 = Reverse Image: Reverse Image
+            Length: 10
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 8
+            Column Address: 16
+            Repeated Character: \u0080Program/procedure . . . . . . . .\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 8
+            Column Address: 52
+        Order Code: Start Field (SF) (0x1d)
+            Field Format Word: 0x40, Field Format Word ID: Identifies Field as Field Format Word, Field Shift/Edit Specification: Alpha shift
+                01.. .... = Field Format Word ID: Identifies Field as Field Format Word (0x1)
+                ..0. .... = Bypass: This is not a bypass field
+                ...0 .... = Dupe or Field Mark Enable: Duplication or Field Mark is not allowed in this field
+                .... 0... = Modified Data Tag: This field has not been modified
+                .... .000 = Field Shift/Edit Specification: Alpha shift (0x0)
+            Field Format Word: 0x00, Right Adjust/Mandatory Fill: No adjust specified
+                0... .... = Auto Enter: No Auto Enter
+                .0.. .... = Field Exit Required: Field Exit key is not required
+                ..0. .... = Monocase: Accept lower case letters
+                ...0 .... = Reserved: False
+                .... 0... = Mandatory Enter: Not A Mandatory Enter Field
+                .... .000 = Right Adjust/Mandatory Fill: No adjust specified (0x0)
+            Field Attributes: 0x24, Attribute ID: Identifies Field as Field Format Word, Underscore
+                001. .... = Attribute ID: Identifies Field as Field Format Word (0x1)
+                ...0 .... = Column Separator: Column Separator Off
+                .... 0... = Blink: Do Not Blink Field
+                .... .1.. = Underscore: Underscore Field
+                .... ..0. = Intensity: Low Intensity
+                .... ...0 = Reverse Image: Normal Image
+            Length: 10
+            Repeated Character: 
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 9
+            Column Address: 16
+            Repeated Character: \u0080Menu  . . . . . . . . . . . . . .\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 9
+            Column Address: 52
+        Order Code: Start Field (SF) (0x1d)
+            Field Format Word: 0x40, Field Format Word ID: Identifies Field as Field Format Word, Field Shift/Edit Specification: Alpha shift
+                01.. .... = Field Format Word ID: Identifies Field as Field Format Word (0x1)
+                ..0. .... = Bypass: This is not a bypass field
+                ...0 .... = Dupe or Field Mark Enable: Duplication or Field Mark is not allowed in this field
+                .... 0... = Modified Data Tag: This field has not been modified
+                .... .000 = Field Shift/Edit Specification: Alpha shift (0x0)
+            Field Format Word: 0x00, Right Adjust/Mandatory Fill: No adjust specified
+                0... .... = Auto Enter: No Auto Enter
+                .0.. .... = Field Exit Required: Field Exit key is not required
+                ..0. .... = Monocase: Accept lower case letters
+                ...0 .... = Reserved: False
+                .... 0... = Mandatory Enter: Not A Mandatory Enter Field
+                .... .000 = Right Adjust/Mandatory Fill: No adjust specified (0x0)
+            Field Attributes: 0x24, Attribute ID: Identifies Field as Field Format Word, Underscore
+                001. .... = Attribute ID: Identifies Field as Field Format Word (0x1)
+                ...0 .... = Column Separator: Column Separator Off
+                .... 0... = Blink: Do Not Blink Field
+                .... .1.. = Underscore: Underscore Field
+                .... ..0. = Intensity: Low Intensity
+                .... ...0 = Reverse Image: Normal Image
+            Length: 10
+            Repeated Character: 
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 10
+            Column Address: 16
+            Repeated Character: \u0080Current library . . . . . . . . .\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 10
+            Column Address: 52
+        Order Code: Start Field (SF) (0x1d)
+            Field Format Word: 0x40, Field Format Word ID: Identifies Field as Field Format Word, Field Shift/Edit Specification: Alpha shift
+                01.. .... = Field Format Word ID: Identifies Field as Field Format Word (0x1)
+                ..0. .... = Bypass: This is not a bypass field
+                ...0 .... = Dupe or Field Mark Enable: Duplication or Field Mark is not allowed in this field
+                .... 0... = Modified Data Tag: This field has not been modified
+                .... .000 = Field Shift/Edit Specification: Alpha shift (0x0)
+            Field Format Word: 0x00, Right Adjust/Mandatory Fill: No adjust specified
+                0... .... = Auto Enter: No Auto Enter
+                .0.. .... = Field Exit Required: Field Exit key is not required
+                ..0. .... = Monocase: Accept lower case letters
+                ...0 .... = Reserved: False
+                .... 0... = Mandatory Enter: Not A Mandatory Enter Field
+                .... .000 = Right Adjust/Mandatory Fill: No adjust specified (0x0)
+            Field Attributes: 0x24, Attribute ID: Identifies Field as Field Format Word, Underscore
+                001. .... = Attribute ID: Identifies Field as Field Format Word (0x1)
+                ...0 .... = Column Separator: Column Separator Off
+                .... 0... = Blink: Do Not Blink Field
+                .... .1.. = Underscore: Underscore Field
+                .... ..0. = Intensity: Low Intensity
+                .... ...0 = Reverse Image: Normal Image
+            Length: 10
+            Repeated Character: 
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 7
+            Column Address: 16
+            Repeated Character: \u0080Password  . . . . . . . . . . . .\u0080
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 7
+            Column Address: 52
+            Repeated Character: \x1B
+        Order Code: Repeat to Address (RA) (0x02)
+            Row Address: 7
+            Column Address: 62
+            Repeated Character: 
+        Order Code: Set Buffer Address (SBA) (0x11)
+            Row Address: 24
+            Column Address: 39
+            Repeated Character: \u0082 (C) COPYRIGHT IBM CORP. 1980, 2005.    \u0080
+    Escape Code: ESC (0x04)
+        Command Code: Read Mdt Fields (0x52)
+        0000 0000 = Write To Display Command Control Character Byte 1:  (0x00)
+        Write To Display Command Control Character Byte 2: 0x00
+            0... .... = Reserved: False
+            .0.. .... = Cursor does not move when keyboard unlocks: False
+            ..0. .... = Reset blinking cursor: False
+            ...0 .... = Set blinking cursor: False
+            .... 0... = Unlock the keyboard and reset any pending AID bytes: False
+            .... .0.. = Sound Alarm: False
+            .... ..0. = Set Message Waiting indicator off: False
+            .... ...0 = Set Message Waiting indicator on: False
+
+Implement the missing features of my @src/network/tn5250 library to be able to emulate the 5250 terminal fully 

@@ -7,7 +7,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Build options
 option(BUILD_TESTS "Build unit and integration tests" ON)
-option(BUILD_AI_MODULE "Build AI integration module" OFF)
 
 # Qt6 configuration
 set(CMAKE_AUTOMOC ON)
@@ -20,30 +19,6 @@ find_package(Qt6 REQUIRED COMPONENTS
     Network
 )
 
-# SSL is optional (for TLS support)
-# Try to find Qt6 SSL component first
-find_package(Qt6 QUIET COMPONENTS Ssl)
-if(Qt6Ssl_FOUND)
-    message(STATUS "Qt6 SSL found - TLS support enabled")
-    set(HAVE_QT6_SSL ON)
-else()
-    # Check if SSL is available through Network module (some Qt6 distributions include it)
-    # Check if QSslSocket header file exists
-    find_path(QT6_SSL_HEADER_DIR QSslSocket
-        PATHS ${Qt6Network_INCLUDE_DIRS}
-        PATH_SUFFIXES QtNetwork
-        NO_DEFAULT_PATH
-    )
-    if(QT6_SSL_HEADER_DIR)
-        message(STATUS "Qt6 SSL support found via Network module - TLS support enabled")
-        set(HAVE_QT6_SSL ON)
-        # SSL is part of Network module, no separate component needed
-    else()
-        message(STATUS "Qt6 SSL not found - TLS support disabled")
-        message(STATUS "  Install libssl-dev and rebuild to enable TLS support")
-        set(HAVE_QT6_SSL OFF)
-    endif()
-endif()
 
 # Source files organized by layer
 set(CORE_SOURCES
@@ -51,49 +26,175 @@ set(CORE_SOURCES
     src/core/ebcdic.h
     src/core/keyboard_encoder.cpp
     src/core/keyboard_encoder.h
-    src/core/input_handler.cpp
-    src/core/input_handler.h
-    src/core/session_config.cpp
-    src/core/session_config.h
-    src/core/session_manager.cpp
-    src/core/session_manager.h
-    src/core/logger.cpp
-    src/core/logger.h
 )
 
-set(TRANSPORT_SOURCES
-    src/transport/tn5250_client.cpp
-    src/transport/tn5250_client.h
-    src/transport/protocol_parser.cpp
-    src/transport/protocol_parser.h
-    src/transport/telnet_options.h
+set(SESSION_SOURCES
+    src/session/config.cpp
+    src/session/config.h
+    src/session/manager.cpp
+    src/session/manager.h
+    src/session/worker.cpp
+    src/session/worker.h
+)
+
+set(LOGGER_SOURCES
+    src/logger/logger.cpp
+    src/logger/logger.h
+)
+
+set(TELNET_SOURCES
+    src/network/tn5250/telnet/commands.cpp
+    src/network/tn5250/telnet/commands.h
+    src/network/tn5250/telnet/options.cpp
+    src/network/tn5250/telnet/options.h
+    src/network/tn5250/telnet/client.cpp
+    src/network/tn5250/telnet/client.h
+    src/network/tn5250/devices/devices.cpp
+    src/network/tn5250/devices/devices.h
+)
+
+set(TN5250_CLIENT_SOURCES
+    src/network/tn5250/client/client_connection.cpp
+    src/network/tn5250/client/client_io.cpp
+    src/network/tn5250/client/client_telnet.cpp
+    src/network/tn5250/client/client_handshake.cpp
+    src/network/tn5250/client/client_tls.cpp
+    src/network/tn5250/client/client.h
+    src/network/tn5250/client/decoder.h
+    src/network/tn5250/client/decoder.cpp
+    # message
+    src/network/tn5250/message/message.cpp
+    src/network/tn5250/message/message.h
+    src/network/tn5250/message/header/header.cpp
+    src/network/tn5250/message/header/header.h
+    src/network/tn5250/message/header/record_type.cpp
+    src/network/tn5250/message/header/record_type.h
+    src/network/tn5250/message/operation_code.cpp
+    src/network/tn5250/message/operation_code.h
+    # command
+    src/network/tn5250/message/command/command.cpp
+    src/network/tn5250/message/command/command.h
+    src/network/tn5250/message/command/command_base.h
+    src/network/tn5250/message/command/commands/command_cs_clear_screen.cpp
+    src/network/tn5250/message/command/commands/command_cs_clear_screen.h
+    src/network/tn5250/message/command/commands/command_rmf_read_mdt_fields.cpp
+    src/network/tn5250/message/command/commands/command_rmf_read_mdt_fields.h
+    src/network/tn5250/message/command/commands/command_wtd_write_to_display.cpp
+    src/network/tn5250/message/command/commands/command_wtd_write_to_display.h
+    src/network/tn5250/message/command/command_code.cpp
+    src/network/tn5250/message/command/command_code.h
+    # order base
+    src/network/tn5250/message/command/order/order.h
+    src/network/tn5250/message/command/order/order.cpp
+    src/network/tn5250/message/command/order/order_base.h
+    src/network/tn5250/message/command/order/order_code.cpp
+    src/network/tn5250/message/command/order/order_code.h
+    # orders
+    src/network/tn5250/message/command/order/orders/order_ic_insert_cursor.cpp
+    src/network/tn5250/message/command/order/orders/order_ic_insert_cursor.h
+    src/network/tn5250/message/command/order/orders/order_ra_repeat_to_address.cpp
+    src/network/tn5250/message/command/order/orders/order_ra_repeat_to_address.h
+    src/network/tn5250/message/command/order/orders/order_sba_set_buffer_address.cpp
+    src/network/tn5250/message/command/order/orders/order_sba_set_buffer_address.h
+    src/network/tn5250/message/command/order/orders/order_sf_start_field.cpp
+    src/network/tn5250/message/command/order/orders/order_sf_start_field.h
+    src/network/tn5250/message/command/order/orders/order_soh_start_of_header.cpp
+    src/network/tn5250/message/command/order/orders/order_soh_start_of_header.h
+)
+
+set(UTILS_SOURCES
+    src/utils/endianness/big_endian.cpp
+    src/utils/endianness/big_endian.h
+    src/utils/endianness/little_endian.cpp
+    src/utils/endianness/little_endian.h
+    src/utils/binary/binary.cpp
+    src/utils/binary/binary.h
+    src/utils/hex/hex.cpp
+    src/utils/hex/hex.h
 )
 
 set(DISPLAY_SOURCES
-    src/display/screen_buffer.cpp
-    src/display/screen_buffer.h
-    src/display/tn5250_widget.cpp
-    src/display/tn5250_widget.h
+    src/ui/widgets/Q5250ScreenWidget/screen_buffer.cpp
+    src/ui/widgets/Q5250ScreenWidget/screen_buffer.h
+    src/ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.cpp
+    src/ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h
+    src/ui/widgets/Q5250ScreenWidget/Q5250Cursor.cpp
+    src/ui/widgets/Q5250ScreenWidget/Q5250Cursor.h
+    src/ui/widgets/Q5250ScreenWidget/Q5250HRule.cpp
+    src/ui/widgets/Q5250ScreenWidget/Q5250HRule.h
+    src/ui/widgets/Q5250ScreenWidget/Q5250TerminalView.cpp
+    src/ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h
+    src/ui/widgets/Q5250ScreenWidget/events.cpp
+    src/ui/widgets/Q5250ScreenWidget/actions.cpp
+    src/ui/widgets/Q5250ScreenWidget/size.cpp
+    src/ui/widgets/Q5250ScreenWidget/cursor.cpp
+    src/ui/widgets/Q5250ScreenWidget/utils.cpp
+    src/ui/widgets/Q5250ScreenWidget/selection.cpp
 )
 
 set(UI_SOURCES
+    # main window
     src/ui/main_window.cpp
     src/ui/main_window.h
-    src/ui/connect_dialog.cpp
-    src/ui/connect_dialog.h
-)
-
-set(AI_SOURCES
-    src/ai/
+    # devices
+    src/ui/device/IBM-3179-2.cpp
+    src/ui/device/IBM-3179-2.h
+    # widgets
+    src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.cpp
+    src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h
+    src/ui/widgets/Frameless/BaseFramelessWindow.cpp
+    src/ui/widgets/Frameless/BaseFramelessWindow.h
+    src/ui/widgets/Frameless/TitleBar.cpp
+    src/ui/widgets/Frameless/TitleBar.h
+    # dialogs
+    src/ui/dialogs/log_viewer.cpp
+    src/ui/dialogs/log_viewer.h
+    src/ui/dialogs/connect_dialog.cpp
+    src/ui/dialogs/connect_dialog.h
+    src/ui/dialogs/settings_dialog.cpp
+    src/ui/dialogs/settings_dialog.h    
+    # themes
+    src/ui/themes/manager.cpp
+    src/ui/themes/manager.h
+    src/ui/themes/themes.qrc
+    # actions
+    src/ui/actions/onAbout.cpp
+    src/ui/actions/onCloseTabRequested.cpp
+    src/ui/actions/onConnect.cpp
+    src/ui/actions/onConnected.cpp
+    src/ui/actions/onConnectRequested.cpp
+    src/ui/actions/onCurrentTabChanged.cpp
+    src/ui/actions/onDataReceived.cpp
+    src/ui/actions/onDisconnect.cpp
+    src/ui/actions/onDisconnected.cpp
+    src/ui/actions/onErrorOccurred.cpp
+    src/ui/actions/onInputReady.cpp
+    src/ui/actions/onLogMessage.cpp
+    src/ui/actions/onNewSession.cpp
+    src/ui/actions/onOpenSettings.cpp
+    src/ui/actions/onQuickOpenChanged.cpp
+    src/ui/actions/onRenameTabRequested.cpp
+    src/ui/actions/onSavedSessionChosen.cpp
+    src/ui/actions/onSessionSettings.cpp
+    src/ui/actions/onTabMoved.cpp
+    src/ui/actions/onTakeScreenshot.cpp
+    # setup
+    src/ui/setup/setupUI.cpp
+    src/ui/setup/setupMenuBar.cpp
+    src/ui/setup/setupStatusBar.cpp
 )
 
 # Main executable
 add_executable(tn5250
     src/main.cpp
     ${UI_SOURCES}
-    ${TRANSPORT_SOURCES}
+    ${TELNET_SOURCES}
+    ${TN5250_CLIENT_SOURCES}
+    ${SESSION_SOURCES}
     ${DISPLAY_SOURCES}
     ${CORE_SOURCES}
+    ${LOGGER_SOURCES}
+    ${UTILS_SOURCES}
 )
 
 target_link_libraries(tn5250
@@ -104,10 +205,7 @@ target_link_libraries(tn5250
 )
 
 if(HAVE_QT6_SSL)
-    # If Qt6::Ssl component exists, link it; otherwise SSL is in Network module
-    if(TARGET Qt6::Ssl)
-        target_link_libraries(tn5250 PRIVATE Qt6::Ssl)
-    endif
+    target_link_libraries(tn5250 PRIVATE Qt6::Ssl)
     target_compile_definitions(tn5250 PRIVATE HAVE_QT6_SSL)
 endif()
 
@@ -127,22 +225,23 @@ if(BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     
     # Unit tests
-    add_executable(test_protocol_parser
-        tests/unit/test_protocol_parser.cpp
-        ${TRANSPORT_SOURCES}
-        src/core/logger.cpp
-        src/core/logger.h
+    add_executable(test_decoder
+        tests/unit/test_decoder.cpp
+        ${TELNET_SOURCES}
+        src/network/tn5250/client/decoder.cpp
+        src/network/tn5250/client/decoder.h
+        ${LOGGER_SOURCES}
     )
-    target_link_libraries(test_protocol_parser
+    target_link_libraries(test_decoder
         PRIVATE
             Qt6::Core
             Qt6::Test
             Qt6::Network
     )
-    target_include_directories(test_protocol_parser PRIVATE
+    target_include_directories(test_decoder PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
-    add_test(NAME ProtocolParser COMMAND test_protocol_parser)
+    add_test(NAME Decoder COMMAND test_decoder)
     
     # EBCDIC conversion tests
     add_executable(test_ebcdic
@@ -196,33 +295,22 @@ if(BUILD_TESTS)
     )
     add_test(NAME KeyboardEncoder COMMAND test_keyboard_encoder)
     
-    # Input handler tests
-    add_executable(test_input_handler
-        tests/unit/test_input_handler.cpp
-        ${CORE_SOURCES}
-        ${DISPLAY_SOURCES}
-    )
-    target_link_libraries(test_input_handler
-        PRIVATE
-            Qt6::Core
-            Qt6::Test
-            Qt6::Widgets
-    )
-    target_include_directories(test_input_handler PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    add_test(NAME InputHandler COMMAND test_input_handler)
+    # (Removed) Input handler tests – functionality moved into Q5250ScreenWidget
     
     # Session config tests
     add_executable(test_session_config
         tests/unit/test_session_config.cpp
-        src/core/session_config.cpp
-        src/core/session_config.h
+        ${SESSION_SOURCES}
+    ${TELNET_SOURCES}
+    ${TN5250_CLIENT_SOURCES}
+    ${LOGGER_SOURCES}
+    ${UTILS_SOURCES}
     )
     target_link_libraries(test_session_config
         PRIVATE
             Qt6::Core
             Qt6::Test
+        Qt6::Network
     )
     target_include_directories(test_session_config PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -232,9 +320,10 @@ if(BUILD_TESTS)
     # Integration tests
     add_executable(test_tn5250_connection
         tests/integration/test_tn5250_connection.cpp
-        ${TRANSPORT_SOURCES}
-        src/core/logger.cpp
-        src/core/logger.h
+        ${TELNET_SOURCES}
+        ${TN5250_CLIENT_SOURCES}
+        ${LOGGER_SOURCES}
+        ${UTILS_SOURCES}
     )
     target_link_libraries(test_tn5250_connection
         PRIVATE
@@ -252,12 +341,6 @@ if(BUILD_TESTS)
     add_test(NAME TN5250Connection COMMAND test_tn5250_connection)
     
     message(STATUS "Testing enabled - unit and integration tests configured")
-endif()
-
-# AI module (optional, disabled by default)
-if(BUILD_AI_MODULE)
-    message(STATUS "AI module enabled")
-    # AI module will be added in Phase 6
 endif()
 
 # Installation (for future phases)

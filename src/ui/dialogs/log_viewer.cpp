@@ -1,0 +1,153 @@
+#include "log_viewer.h"
+#include "logger/logger.h"
+#include "session/worker.h"
+#include <QFile>
+#include <QKeySequence>
+#include <QTextStream>
+
+LogViewerDialog::LogViewerDialog(QWidget *parent)
+    : ui::widgets::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)) {
+    setWindowTitle("Session Logs");
+    resize(800, 600);
+    QVBoxLayout *content = contentLayout();
+    content->setContentsMargins(8, 8, 8, 8);
+    // Find bar (hidden by default)
+    m_findBar = new QWidget(this);
+    QHBoxLayout *findLayout = new QHBoxLayout(m_findBar);
+    findLayout->setContentsMargins(0, 0, 0, 0);
+    findLayout->setSpacing(6);
+    m_findEdit = new QLineEdit(m_findBar);
+    m_findEdit->setPlaceholderText("Find...");
+    m_prevBtn = new QPushButton("Prev", m_findBar);
+    m_nextBtn = new QPushButton("Next", m_findBar);
+    findLayout->addWidget(m_findEdit, 1);
+    findLayout->addWidget(m_prevBtn, 0);
+    findLayout->addWidget(m_nextBtn, 0);
+    m_findBar->setVisible(false);
+    content->addWidget(m_findBar, 0);
+    m_text->setReadOnly(true);
+    content->addWidget(m_text, 1);
+
+    // Shortcuts and find connections
+    m_shortcutFind = new QShortcut(QKeySequence::Find, this);
+    connect(m_shortcutFind, &QShortcut::activated, this, &LogViewerDialog::onFindToggle);
+    connect(m_findEdit, &QLineEdit::returnPressed, this, &LogViewerDialog::onFindReturnPressed);
+    connect(m_nextBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindNext);
+    connect(m_prevBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindPrev);
+
+    loadExisting();
+    connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &LogViewerDialog::onLogMessage);
+}
+
+LogViewerDialog::LogViewerDialog(tn5250::session::Worker *worker, QWidget *parent)
+    : ui::widgets::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)), m_worker(worker) {
+    setWindowTitle("Session Logs");
+    resize(800, 600);
+    QVBoxLayout *content = contentLayout();
+    content->setContentsMargins(8, 8, 8, 8);
+    // Find bar (hidden by default)
+    m_findBar = new QWidget(this);
+    QHBoxLayout *findLayout = new QHBoxLayout(m_findBar);
+    findLayout->setContentsMargins(0, 0, 0, 0);
+    findLayout->setSpacing(6);
+    m_findEdit = new QLineEdit(m_findBar);
+    m_findEdit->setPlaceholderText("Find...");
+    m_prevBtn = new QPushButton("Prev", m_findBar);
+    m_nextBtn = new QPushButton("Next", m_findBar);
+    findLayout->addWidget(m_findEdit, 1);
+    findLayout->addWidget(m_prevBtn, 0);
+    findLayout->addWidget(m_nextBtn, 0);
+    m_findBar->setVisible(false);
+    content->addWidget(m_findBar, 0);
+    m_text->setReadOnly(true);
+    content->addWidget(m_text, 1);
+
+    m_shortcutFind = new QShortcut(QKeySequence::Find, this);
+    connect(m_shortcutFind, &QShortcut::activated, this, &LogViewerDialog::onFindToggle);
+    connect(m_findEdit, &QLineEdit::returnPressed, this, &LogViewerDialog::onFindReturnPressed);
+    connect(m_nextBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindNext);
+    connect(m_prevBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindPrev);
+
+    if (m_worker) {
+        // Load logs from memory
+        const QStringList lines = m_worker->logs();
+        for (const QString &l : lines) {
+            m_text->appendPlainText(l);
+        }
+        m_text->moveCursor(QTextCursor::End);
+        // Subscribe to live session logs
+        connect(m_worker, &tn5250::session::Worker::sessionLogAppended, this, &LogViewerDialog::onSessionLogAppended);
+    } else {
+        loadExisting();
+        connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &LogViewerDialog::onLogMessage);
+    }
+}
+
+void LogViewerDialog::loadExisting() {
+    const QString path = logger::Logger::instance()->logFilePath();
+    if (path.isEmpty()) {
+        return;
+    }
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return;
+    }
+    QTextStream in(&f);
+    while (!in.atEnd()) {
+        m_text->appendPlainText(in.readLine());
+    }
+    m_text->moveCursor(QTextCursor::End);
+}
+
+void LogViewerDialog::onLogMessage(logger::LogLevel /*level*/, const QString &message) {
+    m_text->appendPlainText(message);
+    m_text->moveCursor(QTextCursor::End);
+}
+
+void LogViewerDialog::onSessionLogAppended(const QString &line) {
+    m_text->appendPlainText(line);
+    m_text->moveCursor(QTextCursor::End);
+}
+
+void LogViewerDialog::onFindToggle() {
+    const bool willShow = !m_findBar->isVisible();
+    m_findBar->setVisible(willShow);
+    if (willShow) {
+        m_findEdit->setFocus();
+        m_findEdit->selectAll();
+    } else {
+        m_text->setFocus();
+    }
+}
+
+void LogViewerDialog::onFindReturnPressed() {
+    onFindNext();
+}
+
+void LogViewerDialog::onFindNext() {
+    const QString needle = m_findEdit->text();
+    if (needle.isEmpty()) {
+        return;
+    }
+    // Try find from current cursor; if not found, wrap to start
+    if (!m_text->find(needle)) {
+        QTextCursor cur = m_text->textCursor();
+        cur.movePosition(QTextCursor::Start);
+        m_text->setTextCursor(cur);
+        m_text->find(needle);
+    }
+}
+
+void LogViewerDialog::onFindPrev() {
+    const QString needle = m_findEdit->text();
+    if (needle.isEmpty()) {
+        return;
+    }
+    // Try find backwards from current; if not found, wrap to end
+    if (!m_text->find(needle, QTextDocument::FindBackward)) {
+        QTextCursor cur = m_text->textCursor();
+        cur.movePosition(QTextCursor::End);
+        m_text->setTextCursor(cur);
+        m_text->find(needle, QTextDocument::FindBackward);
+    }
+}

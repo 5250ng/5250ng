@@ -1,12 +1,12 @@
-#include <QtTest/QtTest>
 #include "core/ebcdic.h"
+#include <QtTest/QtTest>
 
 using namespace core;
 
 class TestEBCDIC : public QObject {
     Q_OBJECT
 
-private slots:
+  private slots:
     void testEBCDICToChar();
     void testCharToEBCDIC();
     void testEBCDICToString();
@@ -15,7 +15,7 @@ private slots:
     void testRoundTrip();
     void testCommonCharacters();
 
-private:
+  private:
 };
 
 void TestEBCDIC::testEBCDICToChar() {
@@ -41,7 +41,7 @@ void TestEBCDIC::testEBCDICToString() {
     ebcdic.append(0xC1); // 'A'
     ebcdic.append(0xC2); // 'B'
     ebcdic.append(0xC3); // 'C'
-    
+
     QString result = EBCDIC::ebcdicToString(ebcdic);
     QCOMPARE(result, QString("ABC"));
 }
@@ -49,7 +49,7 @@ void TestEBCDIC::testEBCDICToString() {
 void TestEBCDIC::testStringToEBCDIC() {
     QString str = "ABC";
     QByteArray result = EBCDIC::stringToEBCDIC(str);
-    
+
     QCOMPARE(result.size(), 3);
     QCOMPARE(static_cast<uint8_t>(result[0]), static_cast<uint8_t>(0xC1));
     QCOMPARE(static_cast<uint8_t>(result[1]), static_cast<uint8_t>(0xC2));
@@ -57,9 +57,9 @@ void TestEBCDIC::testStringToEBCDIC() {
 }
 
 void TestEBCDIC::testIsPrintable() {
-    QVERIFY(EBCDIC::isPrintable(0xC1)); // 'A'
-    QVERIFY(EBCDIC::isPrintable(0xF1)); // '1'
-    QVERIFY(EBCDIC::isPrintable(0x40)); // Space
+    QVERIFY(EBCDIC::isPrintable(0xC1));  // 'A'
+    QVERIFY(EBCDIC::isPrintable(0xF1));  // '1'
+    QVERIFY(EBCDIC::isPrintable(0x40));  // Space
     QVERIFY(!EBCDIC::isPrintable(0x00)); // Null
     QVERIFY(!EBCDIC::isPrintable(0x0A)); // Line feed (might be printable in some contexts)
 }
@@ -69,7 +69,7 @@ void TestEBCDIC::testRoundTrip() {
     QString original = "HELLO WORLD 123";
     QByteArray ebcdic = EBCDIC::stringToEBCDIC(original);
     QString converted = EBCDIC::ebcdicToString(ebcdic);
-    
+
     QCOMPARE(converted, original);
 }
 
@@ -79,7 +79,7 @@ void TestEBCDIC::testCommonCharacters() {
     QByteArray ebcdic = EBCDIC::stringToEBCDIC(alphabet);
     QString result = EBCDIC::ebcdicToString(ebcdic);
     QCOMPARE(result, alphabet);
-    
+
     // Test numbers
     QString numbers = "0123456789";
     ebcdic = EBCDIC::stringToEBCDIC(numbers);
@@ -89,4 +89,3 @@ void TestEBCDIC::testCommonCharacters() {
 
 QTEST_MAIN(TestEBCDIC)
 #include "test_ebcdic.moc"
-

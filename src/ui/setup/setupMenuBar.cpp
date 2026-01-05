@@ -1,0 +1,75 @@
+#include "../main_window.h"
+#include <QComboBox>
+#include <QFrame>
+#include <QLabel>
+#include <QPushButton>
+#include <QSizePolicy>
+#include <QTabBar>
+#include <QTabWidget>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <Qt>
+
+/**
+ * Build and initialize the main window menu bar.
+ *
+ * Menus and actions:
+ * - File:
+ *   - Connect... (Ctrl+N): open the connection dialog
+ *   - Disconnect: terminate the current session
+ *   - Settings...: open the application settings dialog
+ *   - Exit (Ctrl+Q): quit the application
+ * - Session:
+ *   - New (Add Tab): create a new session tab
+ *   - Settings: open settings for the active session
+ *   - Open saved session (submenu): dynamically populated on aboutToShow and
+ *     wired so selecting an entry triggers opening that saved session
+ * - Tools:
+ *   - Take a Screenshot: capture the active tab as a PNG
+ * - Help:
+ *   - About: show application information
+ *
+ * Signals:
+ * - The "Open saved session" submenu connects aboutToShow to rebuild the list
+ *   (rebuildQuickOpenMenu) and triggered to open the chosen session
+ *   (onSavedSessionChosen).
+ */
+void MainWindow::setupMenuBar() {
+    QMenuBar *bar = titleBar()->menuBar();
+    // File menu
+    QMenu *fileMenu = bar->addMenu("&File");
+    m_connectAction =
+        fileMenu->addAction("&Connect...", this, &MainWindow::onConnect);
+    m_connectAction->setShortcut(QKeySequence::New);
+    m_disconnectAction =
+        fileMenu->addAction("&Disconnect", this, &MainWindow::onDisconnect);
+    m_disconnectAction->setEnabled(false);
+    fileMenu->addSeparator();
+    fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
+    fileMenu->addSeparator();
+    m_exitAction = fileMenu->addAction("E&xit", this, &QWidget::close);
+    m_exitAction->setShortcut(QKeySequence::Quit);
+
+    // Session menu
+    QMenu *sessionMenu = bar->addMenu("&Session");
+    QAction *newSessionAction =
+        sessionMenu->addAction("&New", this, &MainWindow::onNewSession);
+    newSessionAction->setShortcut(QKeySequence::AddTab);
+    sessionMenu->addAction("&Settings", this, &MainWindow::onSessionSettings);
+    // Quick open saved sessions submenu inside Session menu
+    m_quickOpenMenu = sessionMenu->addMenu("Open saved session");
+    connect(m_quickOpenMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickOpenMenu);
+    connect(m_quickOpenMenu, &QMenu::triggered, this, &MainWindow::onSavedSessionChosen);
+
+    // Tools menu
+    QMenu *toolsMenu = bar->addMenu("&Tools");
+    toolsMenu->addAction("&Take a Screenshot", this, &MainWindow::onTakeScreenshot);
+    toolsMenu->addAction("Toggle &cursor rules", this, &MainWindow::onToggleCursorRules);
+
+    // Help menu
+    QMenu *helpMenu = bar->addMenu("&Help");
+    QMenu *debugMenu = helpMenu->addMenu("&Debug");
+    debugMenu->addAction("&View session logs", this, &MainWindow::onViewSessionLogs);
+    helpMenu->addSeparator();
+    helpMenu->addAction("&About", this, &MainWindow::onAbout);
+}

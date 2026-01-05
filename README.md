@@ -51,7 +51,7 @@ The project follows a layered architecture with clear separation of concerns:
 
 **Basic installation (without TLS support):**
 ```bash
-sudo apt install qt6-base-dev cmake g++
+sudo apt install qt6-base-dev cmake g++ xkb-data libxkbcommon-dev libxkbfile-dev 
 cmake -S . -B build
 cmake --build build
 ./build/bin/tn5250
@@ -59,7 +59,7 @@ cmake --build build
 
 **With TLS/SSL support:**
 ```bash
-sudo apt install qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools libqt6core6 libqt6network6 libssl-dev cmake g++
+sudo apt install qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools libqt6core6 libqt6network6 libssl-dev 
 # Note: Qt6 SSL support may require additional packages depending on your distribution
 cmake -S . -B build
 cmake --build build
@@ -69,6 +69,14 @@ cmake --build build
 **Note:** If you see "TLS not supported - Qt6 SSL not found" error, you need to install Qt6 SSL libraries. On Ubuntu/Debian, try:
 ```bash
 sudo apt install libqt6network6 libssl-dev
+# Then rebuild the project
+cmake -S . -B build
+cmake --build build
+```
+
+**Note:** If you see "Could NOT find XKB" error, you need to install XKB development libraries. On Ubuntu/Debian, try:
+```bash
+sudo apt install libxkbcommon-dev
 # Then rebuild the project
 cmake -S . -B build
 cmake --build build
@@ -91,18 +99,3 @@ cmake --build build --config Release
 ```
 
 The executable will be in `build/bin/` directory.
-
-## Development Status
-
-Currently in **Phase 5 - UX and Sessions** (see [ROADMAP.md](ROADMAP.md) for details).
-
-**Completed Phases:**
-- ✅ Phase 1 - Foundation
-- ✅ Phase 2 - Transport Layer
-- ✅ Phase 3 - Display Engine
-- ✅ Phase 4 - Input Layer
-- ✅ Phase 5 - UX and Sessions
-
-## CI/CD
-
-Continuous Integration is configured for Linux, macOS, and Windows via GitHub Actions.

@@ -3,6 +3,11 @@
 
 .PHONY: all build clean install-deps run help
 
+# Parallel build configuration
+# Override with: make JOBS=8
+JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+PARALLEL := --parallel $(JOBS)
+
 # Detect OS
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -14,7 +19,7 @@ all: build
 build:
 	@echo "Building project..."
 	@cmake -S . -B build
-	@cmake --build build
+	@cmake --build build $(PARALLEL)
 	@echo "Build complete!"
 
 # Clean build artifacts
@@ -70,6 +75,11 @@ help:
 	@echo "  install-deps     - Install dependencies (Linux/macOS)"
 	@echo "  run              - Build and run the application"
 	@echo "  build-windows    - Build for Windows (Visual Studio)"
+	@echo ""
+	@echo "Parallel build:"
+	@echo "  Use all cores (default):  make"
+	@echo "  Specify jobs:             make JOBS=8"
+	@echo "  Internally uses:          cmake --build build --parallel \$$JOBS"
 	@echo "  help             - Show this help message"
 	@echo ""
 	@echo "Examples:"
