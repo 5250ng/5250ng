@@ -1,8 +1,10 @@
 #include "manager.h"
+#include <QColor>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QPalette>
 
 namespace ui {
 namespace themes {
@@ -145,14 +147,15 @@ bool ThemeManager::setCurrentTheme(const QString &name) {
     if (!m_themes.contains(name)) {
         return false;
     }
-    if (m_current == name) {
-        return true;
-    }
+    const bool changed = (m_current != name);
     m_current = name;
     Theme th = m_themes.value(name);
     locker.unlock();
+    // Always (re-)apply so the palette is set even on first call at startup.
     applyToApplication(qApp);
-    emit themeChanged(th);
+    if (changed) {
+        emit themeChanged(th);
+    }
     return true;
 }
 
@@ -177,11 +180,60 @@ Theme ThemeManager::currentTheme() const {
 }
 
 /**
+ * Build a complete QPalette from a theme's colors map.
+ *
+ * Derives foreground/background palette roles from the two key color entries
+ * ("mainwindow.background" and "mainwindow.titlebar.hline").  Detects
+ * dark vs. light by the background luminance and fills all standard roles
+ * so that Qt widgets render correctly without needing an explicit stylesheet.
+ */
+static QPalette buildPaletteFromTheme(const QMap<QString, QString> &colors) {
+    const QColor bg(colors.value("mainwindow.background", "#1e1e1e"));
+    const bool isDark = bg.lightness() < 128;
+
+    const QColor windowText   = isDark ? QColor("#d4d4d4") : QColor("#212121");
+    const QColor base         = isDark ? QColor("#252526") : QColor("#ffffff");
+    const QColor altBase      = isDark ? QColor("#2d2d30") : QColor("#f0f0f0");
+    const QColor button       = isDark ? QColor("#3c3c3c") : QColor("#e0e0e0");
+    const QColor mid          = QColor(colors.value("mainwindow.titlebar.hline",
+                                      isDark ? "#3c3c3c" : "#cccccc"));
+    const QColor highlight    = QColor("#0065ff");
+    const QColor disabledText = isDark ? QColor("#6d6d6d") : QColor("#9e9e9e");
+
+    QPalette pal;
+    for (const auto group : {QPalette::Active, QPalette::Inactive}) {
+        pal.setColor(group, QPalette::Window,          bg);
+        pal.setColor(group, QPalette::WindowText,      windowText);
+        pal.setColor(group, QPalette::Base,            base);
+        pal.setColor(group, QPalette::AlternateBase,   altBase);
+        pal.setColor(group, QPalette::Text,            windowText);
+        pal.setColor(group, QPalette::Button,          button);
+        pal.setColor(group, QPalette::ButtonText,      windowText);
+        pal.setColor(group, QPalette::Highlight,       highlight);
+        pal.setColor(group, QPalette::HighlightedText, QColor("#ffffff"));
+        pal.setColor(group, QPalette::ToolTipBase,     altBase);
+        pal.setColor(group, QPalette::ToolTipText,     windowText);
+        pal.setColor(group, QPalette::Mid,             mid);
+        pal.setColor(group, QPalette::Dark,            bg.darker(150));
+        pal.setColor(group, QPalette::Midlight,        button.lighter(110));
+        pal.setColor(group, QPalette::Light,           button.lighter(160));
+        pal.setColor(group, QPalette::Shadow,          bg.darker(200));
+        pal.setColor(group, QPalette::Link,            QColor("#3794ff"));
+        pal.setColor(group, QPalette::LinkVisited,     QColor("#7f3fbf"));
+        pal.setColor(group, QPalette::PlaceholderText, disabledText);
+    }
+    pal.setColor(QPalette::Disabled, QPalette::WindowText,  disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::Text,        disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::ButtonText,  disabledText);
+    return pal;
+}
+
+/**
  * Apply the active theme's palette and stylesheet to the given application.
  *
- * If the theme has a non-empty stylesheet, it is set on the application;
- * otherwise, any existing application stylesheet is cleared. The application
- * palette is also updated to the theme's palette.
+ * Builds a complete QPalette from the theme's named colors so that all Qt
+ * widgets automatically inherit the correct dark/light appearance.  If the
+ * theme also carries an explicit stylesheet it is applied on top.
  *
  * @param app QApplication pointer (defaults to qApp if not provided elsewhere).
  */
@@ -189,13 +241,9 @@ void ThemeManager::applyToApplication(QApplication *app) {
     if (!app) {
         return;
     }
-    Theme th = currentTheme();
-    if (!th.stylesheet.isEmpty()) {
-        app->setStyleSheet(th.stylesheet);
-    } else {
-        app->setStyleSheet(QString());
-    }
-    app->setPalette(th.palette);
+    const Theme th = currentTheme();
+    app->setPalette(buildPaletteFromTheme(th.colors));
+    app->setStyleSheet(th.stylesheet);
 }
 
 /**

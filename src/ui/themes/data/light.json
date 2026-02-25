@@ -2,9 +2,9 @@
     "name": "light",
     "displayName": "Light",
     "colors": {
-        "mainwindow.background": "#ffffff",
-        "mainwindow.titlebar.hline": "#cfcfcf",
-        "mainwindow.titlebar.background": "#ffffff",
+        "mainwindow.background": "#f5f5f5",
+        "mainwindow.titlebar.background": "#e8e8e8",
+        "mainwindow.titlebar.hline": "#cccccc",
         "status.disconnected": "#d32f2f",
         "status.connecting": "#f57c00",
         "status.negotiating": "#f57c00",

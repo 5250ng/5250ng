@@ -12,17 +12,6 @@
 
 namespace ui::widgets {
 
-/**
- * Draw the visual cursor at the given row/col cell.
- * Currently rendered as an underline block using the foreground color.
- */
-void Q5250ScreenWidget::renderCursor(QPainter &painter, int row, int col) {
-    QRect cellRect = this->cellRect(row, col);
-
-    // Draw cursor as a full block
-    painter.fillRect(cellRect, m_fgColor);
-}
-
 void Q5250ScreenWidget::setCursorBlinkRate(int msec) {
     m_cursorBlinkRate = msec;
     if (m_blinkTimer) {

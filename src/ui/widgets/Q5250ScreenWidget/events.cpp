@@ -22,12 +22,6 @@ void Q5250ScreenWidget::paintEvent(QPaintEvent *event) {
     // Render screen
     renderScreen(painter);
 
-    // Debug: draw red border around the screen widget
-    painter.setBrush(Qt::NoBrush);
-    QPen pen(Qt::red);
-    pen.setWidth(1);
-    painter.setPen(pen);
-    painter.drawRect(rect().adjusted(0, 0, -1, -1));
 }
 
 void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {

@@ -79,9 +79,14 @@ void TestTN5250Connection::onClientDataReceived(const QByteArray &data) {
 }
 
 void TestTN5250Connection::onServerNewConnection() {
+    // This slot is also invoked by QtTest as a test case with no pending connection.
+    if (!m_server->hasPendingConnections()) {
+        return;
+    }
     m_serverSocket = m_server->nextPendingConnection();
-    QVERIFY(m_serverSocket != nullptr);
-
+    if (!m_serverSocket) {
+        return;
+    }
     connect(m_serverSocket, &QTcpSocket::readyRead,
             this, &TestTN5250Connection::onServerReadyRead);
     connect(m_serverSocket, &QTcpSocket::disconnected,

@@ -64,19 +64,9 @@ QWidget *SettingsDialog::buildThemePage() {
     v->addLayout(h);
     v->addStretch();
 
-    // Populate themes
-    QStringList themes = ui::themes::ThemeManager::instance().availableThemes();
-    if (themes.isEmpty()) {
-        // Will get loaded by ensureThemesLoaded; keep placeholder for now
-    } else {
-        m_themeCombo->addItems(themes);
-        QString current = ui::themes::ThemeManager::instance().currentThemeName();
-        int idx = m_themeCombo->findText(current);
-        if (idx >= 0)
-            m_themeCombo->setCurrentIndex(idx);
-    }
-    connect(m_themeCombo, &QComboBox::currentTextChanged, this,
-            &SettingsDialog::onThemeChanged);
+    // Populated by ensureThemesLoaded() which runs immediately after setupUI()
+    connect(m_themeCombo, &QComboBox::currentIndexChanged, this,
+            [this](int) { onThemeChanged(); });
     connect(m_applyThemeBtn, &QPushButton::clicked, this, &SettingsDialog::onApplyThemeClicked);
 
     return page;
@@ -87,13 +77,18 @@ void SettingsDialog::ensureThemesLoaded() {
     if (mgr.availableThemes().isEmpty()) {
         mgr.loadBuiltinThemes();
     }
-    // refresh combo
+    // Populate combo: visible text = displayName, user data = internal name
     m_themeCombo->blockSignals(true);
     m_themeCombo->clear();
-    m_themeCombo->addItems(mgr.availableThemes());
-    int idx = m_themeCombo->findText(mgr.currentThemeName());
-    if (idx >= 0)
-        m_themeCombo->setCurrentIndex(idx);
+    const QString current = mgr.currentThemeName();
+    int selectIdx = 0;
+    for (const QString &name : mgr.availableThemes()) {
+        m_themeCombo->addItem(mgr.theme(name).displayName, name);
+        if (name == current) {
+            selectIdx = m_themeCombo->count() - 1;
+        }
+    }
+    m_themeCombo->setCurrentIndex(selectIdx);
     m_themeCombo->blockSignals(false);
 }
 
@@ -107,23 +102,24 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
     }
 }
 
-void SettingsDialog::onThemeChanged(const QString &themeName) {
-    if (themeName.isEmpty())
+void SettingsDialog::onThemeChanged() {
+    const QString name = m_themeCombo->currentData().toString();
+    if (name.isEmpty())
         return;
     auto &mgr = ui::themes::ThemeManager::instance();
-    if (!mgr.hasTheme(themeName))
+    if (!mgr.hasTheme(name))
         return;
-    mgr.setCurrentTheme(themeName);
+    mgr.setCurrentTheme(name);
 }
 
 void SettingsDialog::onApplyThemeClicked() {
-    const QString themeName = m_themeCombo->currentText();
-    if (themeName.isEmpty())
+    const QString name = m_themeCombo->currentData().toString();
+    if (name.isEmpty())
         return;
     auto &mgr = ui::themes::ThemeManager::instance();
-    if (!mgr.hasTheme(themeName))
+    if (!mgr.hasTheme(name))
         return;
-    mgr.setCurrentTheme(themeName);
+    mgr.setCurrentTheme(name);
 }
 
 void SettingsDialog::onCloseClicked() { accept(); }

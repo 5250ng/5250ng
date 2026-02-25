@@ -22,10 +22,9 @@ void Q5250ScreenWidget::onCursorMoved(const QPoint &pos) {
 
 void Q5250ScreenWidget::onBlinkTimer() {
     m_cursorBlinkState = !m_cursorBlinkState;
+    m_blinkTextState = !m_blinkTextState;
     updateCursorWidget();
-    if (m_screenBuffer->isCursorVisible()) {
-        update();
-    }
+    update();
 }
 
 } // namespace ui::widgets

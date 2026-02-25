@@ -1,13 +1,13 @@
 {
-    "name": "light",
-    "displayName": "Light",
+    "name": "highcontrast",
+    "displayName": "High Contrast",
     "colors": {
-        "mainwindow.background": "#ffffff",
-        "mainwindow.titlebar.hline": "#cfcfcf",
-        "mainwindow.titlebar.background": "#ffffff",
-        "status.disconnected": "#d32f2f",
-        "status.connecting": "#f57c00",
-        "status.negotiating": "#f57c00",
-        "status.connected": "#2e7d32"
+        "mainwindow.background": "#000000",
+        "mainwindow.titlebar.background": "#000000",
+        "mainwindow.titlebar.hline": "#ffffff",
+        "status.disconnected": "#ff4444",
+        "status.connecting": "#ffaa00",
+        "status.negotiating": "#ffaa00",
+        "status.connected": "#44ff44"
     }
 }

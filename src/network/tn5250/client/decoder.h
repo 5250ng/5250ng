@@ -13,7 +13,8 @@ enum class TN5250Command : uint8_t {
     ERASE_WRITE = 0x05,
     ERASE_WRITE_ALTERNATE = 0x0D,
     READ_MODIFY = 0x06,
-    READ_MODIFY_WRITE = 0x07
+    READ_MODIFY_WRITE = 0x07,
+    READ_MDT_FIELDS = 0x52
 };
 
 // TN5250 structured field types
@@ -51,6 +52,7 @@ class Decoder : public QObject {
     void structuredFieldReceived(StructuredFieldType type, const QByteArray &data);
     void rawScreenDataReceived(const QByteArray &data);
     void clearScreenRequested();
+    void keyboardUnlockRequested();
     void parseError(const QString &error);
 
   private:

@@ -24,6 +24,7 @@ namespace telnet {
 // and code sequences have the indicated meaning only when immediately
 // preceded by an IAC.
 enum class TelnetCommand : uint8_t {
+    EOR = 239,  // End of Record (RFC 885). Marks end of a TN5250 GDS record.
     SE = 240,   // End of subnegotiation parameters.
     NOP = 241,  // No operation.
     DM = 242,   // Data Mark: The data stream portion of a Synch.
@@ -67,6 +68,7 @@ enum class TelnetCommand : uint8_t {
  */
 constexpr bool isTelnetCommand(uint8_t byte) {
     switch (byte) {
+    case static_cast<uint8_t>(TelnetCommand::EOR):
     case static_cast<uint8_t>(TelnetCommand::SE):
     case static_cast<uint8_t>(TelnetCommand::NOP):
     case static_cast<uint8_t>(TelnetCommand::DM):
@@ -102,6 +104,7 @@ constexpr bool isTelnetCommand(TelnetCommand cmd) {
  */
 constexpr bool isStandaloneTelnetCommand(uint8_t byte) {
     switch (byte) {
+    case static_cast<uint8_t>(TelnetCommand::EOR):
     case static_cast<uint8_t>(TelnetCommand::SE):
     case static_cast<uint8_t>(TelnetCommand::NOP):
     case static_cast<uint8_t>(TelnetCommand::DM):

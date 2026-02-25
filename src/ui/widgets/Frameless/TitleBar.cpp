@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenuBar>
+#include <QPalette>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QStyle>
@@ -57,16 +58,13 @@ TitleBar::TitleBar(QWidget *parent)
     m_bottomLine = new QFrame(this);
     m_bottomLine->setFrameShape(QFrame::NoFrame);
     m_bottomLine->setFixedHeight(1);
-    {
-        // Use theme color if available; fallback to palette(mid)
-        const QString c = ui::themes::ThemeManager::instance().color("titlebar.hline");
-        if (!c.isEmpty()) {
-            m_bottomLine->setStyleSheet(QString("background-color: %1;").arg(c));
-        } else {
-            m_bottomLine->setStyleSheet("background-color: palette(mid);");
-        }
-    }
     m_bottomLine->raise();
+
+    // Apply initial theme and re-apply whenever the active theme changes
+    connect(&ui::themes::ThemeManager::instance(),
+            &ui::themes::ThemeManager::themeChanged,
+            this, &TitleBar::applyTheme);
+    applyTheme();
 }
 
 bool TitleBar::eventFilter(QObject *obj, QEvent *event) {
@@ -133,6 +131,33 @@ void TitleBar::mouseReleaseEvent(QMouseEvent *event) {
 void TitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
     emit mouseDoubleClicked(event->globalPosition().toPoint());
     QWidget::mouseDoubleClickEvent(event);
+}
+
+void TitleBar::applyTheme() {
+    const auto &mgr = ui::themes::ThemeManager::instance();
+
+    // Title bar background
+    const QString bg = mgr.color("mainwindow.titlebar.background");
+    if (!bg.isEmpty()) {
+        QPalette pal = palette();
+        pal.setColor(QPalette::Window, QColor(bg));
+        setPalette(pal);
+        setAutoFillBackground(true);
+    } else {
+        setAutoFillBackground(false);
+    }
+
+    // Bottom separator line
+    if (m_bottomLine) {
+        const QString hline = mgr.color("mainwindow.titlebar.hline");
+        if (!hline.isEmpty()) {
+            m_bottomLine->setStyleSheet(QString("background-color: %1;").arg(hline));
+        } else {
+            m_bottomLine->setStyleSheet("background-color: palette(mid);");
+        }
+    }
+
+    update();
 }
 
 } // namespace ui::widgets

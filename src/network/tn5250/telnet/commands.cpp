@@ -39,6 +39,8 @@ namespace telnet {
 QString telnetCommandToString(telnet::TelnetCommand cmd) {
     using telnet::TelnetCommand;
     switch (cmd) {
+    case TelnetCommand::EOR:
+        return "EOR";
     case TelnetCommand::SE:
         return "SE";
     case TelnetCommand::NOP:

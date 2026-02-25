@@ -71,19 +71,13 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append(static_cast<uint8_t>(TelnetOption::NEW_ENVIRON));
     negotiation.append(static_cast<uint8_t>(0)); // IS = 0
 
-    // KBDTYPE = BRB (Brazilian keyboard)
-    negotiation.append(static_cast<uint8_t>(0x03)); // VAR
-    negotiation.append("KBDTYPE");
-    negotiation.append(static_cast<uint8_t>(0x01)); // USERVAR
-    negotiation.append("BRB");
-
-    // CODEPAGE = 37
+    // CODEPAGE = 37 (EBCDIC US/Canada)
     negotiation.append(static_cast<uint8_t>(0x03)); // VAR
     negotiation.append("CODEPAGE");
     negotiation.append(static_cast<uint8_t>(0x01)); // USERVAR
     negotiation.append("37");
 
-    // CHARSET = 697
+    // CHARSET = 697 (EBCDIC character set)
     negotiation.append(static_cast<uint8_t>(0x03)); // VAR
     negotiation.append("CHARSET");
     negotiation.append(static_cast<uint8_t>(0x01)); // USERVAR
@@ -95,7 +89,7 @@ void TN5250Client::sendNewEnviron() {
     if (m_socket) {
         m_socket->write(negotiation);
         logger::Logger::instance()->debug("[TN5250->Client]: Sent NEW_ENVIRON: "
-                                          "KBDTYPE=BRB, CODEPAGE=37, CHARSET=697");
+                                          "CODEPAGE=37, CHARSET=697");
     }
 }
 

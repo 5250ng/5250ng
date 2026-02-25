@@ -102,12 +102,22 @@ void Decoder::parseData(const QByteArray &data) {
                         i += 2;
                         continue;
                     }
+                    if (cc == 0x52) { // Read MDT Fields — host requests input fields
+                        // Format: ESC 0x52 ctrl1 ctrl2
+                        emit commandReceived(TN5250Command::READ_MDT_FIELDS, QByteArray());
+                        i += 4; // ESC + cmd + ctrl1 + ctrl2
+                        continue;
+                    }
                     if (cc == 0x11) { // Write To Display
                         // Requires two control bytes after CC
                         if (i + 3 >= payload.size()) {
                             break; // truncated WTD header
                         }
-                        // control1 = payload[i+2], control2 = payload[i+3]
+                        // control byte 2: bit3 (0x08) = unlock keyboard
+                        uint8_t ctrl2 = static_cast<uint8_t>(payload[i + 3]);
+                        if (ctrl2 & 0x08) {
+                            emit keyboardUnlockRequested();
+                        }
                         int j = i + 4; // start of orders/data
                         // Collect until next ESC or end
                         while (j < payload.size()) {

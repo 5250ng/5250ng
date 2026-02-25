@@ -43,6 +43,8 @@
  *   updateEmptyState() to set the proper initial visibility (tabs vs. empty).
  */
 void MainWindow::setupUI() {
+    // Load built-in themes before applying one (must come first)
+    ui::themes::ThemeManager::instance().loadBuiltinThemes();
     // Set the UI theme to dark via ThemeManager
     ui::themes::ThemeManager::instance().setCurrentTheme("dark");
 
@@ -72,7 +74,7 @@ void MainWindow::setupUI() {
     outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->addStretch();
     QWidget *emptyBox = new QWidget(m_emptyPlaceholder);
-    emptyBox->setMaximumWidth(width() * (2 / 5)); // limit to 2/5 of the tab width
+    emptyBox->setMaximumWidth(width() * 2 / 5); // limit to 2/5 of the tab width
     QVBoxLayout *emptyLayout = new QVBoxLayout(emptyBox);
     emptyLayout->setContentsMargins(0, 0, 0, 0);
     emptyLayout->addStretch();

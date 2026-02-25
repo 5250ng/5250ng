@@ -20,7 +20,7 @@ class SettingsDialog : public QDialog {
 
   private slots:
     void onCategoryChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
-    void onThemeChanged(const QString &themeName);
+    void onThemeChanged();
     void onApplyThemeClicked();
     void onCloseClicked();
 

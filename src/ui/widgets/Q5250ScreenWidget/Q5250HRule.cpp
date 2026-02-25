@@ -11,7 +11,7 @@ Q5250HRule::Q5250HRule(QWidget *parent) : QWidget(parent) {
 void Q5250HRule::paintEvent(QPaintEvent *event) {
     Q_UNUSED(event);
     QPainter p(this);
-    p.fillRect(rect(), QColor(0, 102, 204)); // themed blue-like separator
+    p.fillRect(rect(), palette().color(QPalette::Mid));
 }
 
 QSize Q5250HRule::sizeHint() const {

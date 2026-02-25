@@ -192,6 +192,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     connect(m_parser, &tn5250::client::Decoder::structuredFieldReceived, this, &MainWindow::handleStructuredField);
     connect(m_parser, &tn5250::client::Decoder::rawScreenDataReceived, this, &MainWindow::handleRawScreenData);
     connect(m_parser, &tn5250::client::Decoder::clearScreenRequested, this, &MainWindow::onClearScreenRequested);
+    connect(m_parser, &tn5250::client::Decoder::keyboardUnlockRequested, this, &MainWindow::onKeyboardUnlockRequested);
 
     // Start the session thread (which triggers the worker start)
     session->thread->start();
@@ -302,17 +303,17 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
         return hostCol > 0 ? static_cast<int>(hostCol) - 1 : 0;
     };
     auto applyAttrByte = [](ui::widgets::CellAttributes &attr, uint8_t attrByte) {
-        // Attribute encoding used by this emulator:
-        // Bits 0-3: Color (0-15)
-        // Bit 4: Reverse video
-        // Bit 5: Blink
-        // Bit 6: Underline
-        // Bit 7: Protected field
-        attr.color = attrByte & 0x0F;
-        attr.reverse = (attrByte & 0x10) != 0;
-        attr.blink = (attrByte & 0x20) != 0;
-        attr.underline = (attrByte & 0x40) != 0;
-        attr.protected_field = (attrByte & 0x80) != 0;
+        // 5250 field attribute byte (IBM bit numbering, bit0=MSB):
+        // Bits 7-5 (0xE0): 001 = attribute character identifier
+        // Bit 4 (0x10): column separator
+        // Bit 3 (0x08): blink
+        // Bit 2 (0x04): underscore
+        // Bit 1 (0x02): high intensity (white)
+        // Bit 0 (0x01): reverse image
+        attr.blink           = (attrByte & 0x08) != 0;
+        attr.underline       = (attrByte & 0x04) != 0;
+        attr.color           = (attrByte & 0x02) ? 7 : 2; // white (7) or green (2)
+        attr.reverse         = (attrByte & 0x01) != 0;
     };
     logger::Logger::instance()->debug(
         QString("MainWindow: Handling TN5250 command: %1, data size: %2")
@@ -342,36 +343,61 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
             // Erase from cursor position
             screen->eraseWrite(row, col, screenData.size());
 
-            // Write data, parsing Start Field (SF) markers for attributes
+            // Write data, parsing 5250 order codes and EBCDIC characters
             ui::widgets::CellAttributes attr;
             int currentRow = row;
             int currentCol = col;
             for (int i = 0; i < screenData.size(); i++) {
                 uint8_t ch = static_cast<uint8_t>(screenData[i]);
 
-                // Check for Start Field (SF) marker (commonly 0x11 in this emulator;
-                // some 5250 streams use 0x1D)
-                if ((ch == 0x11 || ch == 0x1D) && i + 1 < screenData.size()) {
-                    uint8_t attrByte = static_cast<uint8_t>(screenData[i + 1]);
+                // Set Buffer Address (SBA): 0x11 row col (1-based)
+                if (ch == 0x11 && i + 2 < screenData.size()) {
+                    uint8_t sbaRow = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t sbaCol = static_cast<uint8_t>(screenData[i + 2]);
+                    currentRow = hostRowToIndex(sbaRow);
+                    currentCol = hostColToIndex(sbaCol);
+                    i += 2;
+                    continue;
+                }
 
+                // Repeat to Address (RA): 0x02 endRow endCol char
+                if (ch == 0x02 && i + 3 < screenData.size()) {
+                    uint8_t raRow  = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t raCol  = static_cast<uint8_t>(screenData[i + 2]);
+                    uint8_t raChar = static_cast<uint8_t>(screenData[i + 3]);
+                    int targetRow  = hostRowToIndex(raRow);
+                    int targetCol  = hostColToIndex(raCol);
+                    int targetAddr = targetRow * screen->cols() + targetCol;
+                    int curAddr    = currentRow * screen->cols() + currentCol;
+                    while (curAddr <= targetAddr) {
+                        int r = curAddr / screen->cols();
+                        int c = curAddr % screen->cols();
+                        if (r < screen->rows())
+                            screen->writeChar(r, c, raChar, attr);
+                        curAddr++;
+                    }
+                    currentRow = targetRow;
+                    currentCol = targetCol;
+                    i += 3;
+                    continue;
+                }
+
+                // Start Field (SF): 0x1D FFW1 FFW2 attr len [len bytes]
+                if (ch == 0x1D && i + 4 < screenData.size()) {
+                    uint8_t ffw1     = static_cast<uint8_t>(screenData[i + 1]);
+                    // ffw2 not used for display but consumed
+                    uint8_t attrByte = static_cast<uint8_t>(screenData[i + 3]);
+                    uint8_t fieldLen = static_cast<uint8_t>(screenData[i + 4]);
                     applyAttrByte(attr, attrByte);
-
-                    logger::Logger::instance()->debug(
-                        QString("MainWindow: ERASE_WRITE: Start Field (SF) at offset %1, "
-                                "attribute byte=0x%2, color=%3, reverse=%4, blink=%5, "
-                                "underline=%6, protected=%7")
-                            .arg(i)
-                            .arg(attrByte, 2, 16, QChar('0'))
-                            .arg(attr.color)
-                            .arg(attr.reverse)
-                            .arg(attr.blink)
-                            .arg(attr.underline)
-                            .arg(attr.protected_field)
-                    );
-
-                    // Skip both the SF marker (0x11) and the attribute byte
-                    i++;      // Skip attribute byte
-                    continue; // Don't write these bytes to screen
+                    attr.protected_field = (ffw1 & 0x20) != 0;
+                    screen->setField(currentRow, currentCol, fieldLen, attr.protected_field);
+                    for (int f = 0; f < static_cast<int>(fieldLen); f++) {
+                        if (currentCol + f < screen->cols())
+                            screen->writeChar(currentRow, currentCol + f, 0x40, attr);
+                    }
+                    currentCol += fieldLen;
+                    i += 4 + fieldLen;
+                    continue;
                 }
 
                 // Handle line wrapping
@@ -379,7 +405,6 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
                     currentCol = 0;
                     currentRow++;
                     if (currentRow >= screen->rows()) {
-                        // Screen is full, scroll up
                         screen->scrollUp(1);
                         currentRow = screen->rows() - 1;
                     }
@@ -417,36 +442,60 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
 
             screen->eraseWriteAlternate(row, col, screenData.size());
 
-            // Write data, parsing Start Field (SF) markers for attributes
+            // Write data, parsing 5250 order codes and EBCDIC characters
             ui::widgets::CellAttributes attr;
             int currentRow = row;
             int currentCol = col;
             for (int i = 0; i < screenData.size(); i++) {
                 uint8_t ch = static_cast<uint8_t>(screenData[i]);
 
-                // Check for Start Field (SF) marker (commonly 0x11 in this emulator;
-                // some 5250 streams use 0x1D)
-                if ((ch == 0x11 || ch == 0x1D) && i + 1 < screenData.size()) {
-                    uint8_t attrByte = static_cast<uint8_t>(screenData[i + 1]);
+                // Set Buffer Address (SBA): 0x11 row col (1-based)
+                if (ch == 0x11 && i + 2 < screenData.size()) {
+                    uint8_t sbaRow = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t sbaCol = static_cast<uint8_t>(screenData[i + 2]);
+                    currentRow = hostRowToIndex(sbaRow);
+                    currentCol = hostColToIndex(sbaCol);
+                    i += 2;
+                    continue;
+                }
 
+                // Repeat to Address (RA): 0x02 endRow endCol char
+                if (ch == 0x02 && i + 3 < screenData.size()) {
+                    uint8_t raRow  = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t raCol  = static_cast<uint8_t>(screenData[i + 2]);
+                    uint8_t raChar = static_cast<uint8_t>(screenData[i + 3]);
+                    int targetRow  = hostRowToIndex(raRow);
+                    int targetCol  = hostColToIndex(raCol);
+                    int targetAddr = targetRow * screen->cols() + targetCol;
+                    int curAddr    = currentRow * screen->cols() + currentCol;
+                    while (curAddr <= targetAddr) {
+                        int r = curAddr / screen->cols();
+                        int c = curAddr % screen->cols();
+                        if (r < screen->rows())
+                            screen->writeChar(r, c, raChar, attr);
+                        curAddr++;
+                    }
+                    currentRow = targetRow;
+                    currentCol = targetCol;
+                    i += 3;
+                    continue;
+                }
+
+                // Start Field (SF): 0x1D FFW1 FFW2 attr len [len bytes]
+                if (ch == 0x1D && i + 4 < screenData.size()) {
+                    uint8_t ffw1     = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t attrByte = static_cast<uint8_t>(screenData[i + 3]);
+                    uint8_t fieldLen = static_cast<uint8_t>(screenData[i + 4]);
                     applyAttrByte(attr, attrByte);
-
-                    logger::Logger::instance()->debug(
-                        QString("MainWindow: ERASE_WRITE_ALTERNATE: Start Field (SF) at "
-                                "offset %1, attribute byte=0x%2, color=%3, reverse=%4, "
-                                "blink=%5, underline=%6, protected=%7")
-                            .arg(i)
-                            .arg(attrByte, 2, 16, QChar('0'))
-                            .arg(attr.color)
-                            .arg(attr.reverse)
-                            .arg(attr.blink)
-                            .arg(attr.underline)
-                            .arg(attr.protected_field)
-                    );
-
-                    // Skip both the SF marker (0x11) and the attribute byte
-                    i++;      // Skip attribute byte
-                    continue; // Don't write these bytes to screen
+                    attr.protected_field = (ffw1 & 0x20) != 0;
+                    screen->setField(currentRow, currentCol, fieldLen, attr.protected_field);
+                    for (int f = 0; f < static_cast<int>(fieldLen); f++) {
+                        if (currentCol + f < screen->cols())
+                            screen->writeChar(currentRow, currentCol + f, 0x40, attr);
+                    }
+                    currentCol += fieldLen;
+                    i += 4 + fieldLen;
+                    continue;
                 }
 
                 // Handle line wrapping
@@ -454,7 +503,6 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
                     currentCol = 0;
                     currentRow++;
                     if (currentRow >= screen->rows()) {
-                        // Screen is full, scroll up
                         screen->scrollUp(1);
                         currentRow = screen->rows() - 1;
                     }
@@ -470,9 +518,25 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
         break;
     }
 
+    case tn5250::client::TN5250Command::READ_MDT_FIELDS: {
+        // Host requests all modified input fields be sent back.
+        // Respond with: AID_ENTER + cursor row + cursor col (3-byte response header)
+        // followed by modified field data. For now, send a minimal Enter AID response.
+        if (m_client && m_client->isConnected() && m_displayWidget && m_displayWidget->screenBuffer()) {
+            QPoint curPos = m_displayWidget->screenBuffer()->cursorPosition();
+            QByteArray response;
+            response.append(static_cast<char>(0x7D)); // AID Enter
+            // Cursor address (1-based, encoded as SBA-style 2 bytes)
+            response.append(static_cast<char>(curPos.y() + 1)); // row
+            response.append(static_cast<char>(curPos.x() + 1)); // col
+            m_client->sendData(response);
+            logger::Logger::instance()->debug("MainWindow: READ_MDT_FIELDS - sent Enter AID response");
+        }
+        break;
+    }
+
     case tn5250::client::TN5250Command::READ_MODIFY:
     case tn5250::client::TN5250Command::READ_MODIFY_WRITE: {
-        // These commands are for input fields - handle later
         logger::Logger::instance()->debug(
             QString("MainWindow: READ_MODIFY command (not yet implemented)")
         );
@@ -517,11 +581,13 @@ void MainWindow::handleStructuredField(tn5250::client::StructuredFieldType type,
         return hostCol > 0 ? static_cast<int>(hostCol) - 1 : 0;
     };
     auto applyAttrByte = [](ui::widgets::CellAttributes &attr, uint8_t attrByte) {
-        attr.color = attrByte & 0x0F;
-        attr.reverse = (attrByte & 0x10) != 0;
-        attr.blink = (attrByte & 0x20) != 0;
-        attr.underline = (attrByte & 0x40) != 0;
-        attr.protected_field = (attrByte & 0x80) != 0;
+        // 5250 field attribute byte (IBM bit numbering, bit0=MSB):
+        // Bit 3 (0x08): blink, Bit 2 (0x04): underscore,
+        // Bit 1 (0x02): high intensity (white), Bit 0 (0x01): reverse image
+        attr.blink           = (attrByte & 0x08) != 0;
+        attr.underline       = (attrByte & 0x04) != 0;
+        attr.color           = (attrByte & 0x02) ? 7 : 2;
+        attr.reverse         = (attrByte & 0x01) != 0;
     };
     logger::Logger::instance()->debug(
         QString("MainWindow: Handling structured field type: %1, data size: %2")
@@ -558,7 +624,8 @@ void MainWindow::handleStructuredField(tn5250::client::StructuredFieldType type,
             // Parse the 5250 data stream payload.
             // This emulator understands:
             // - SBA 0x11 + Row + Col (positions write cursor; 1-based)
-            // - SF 0x1D + 1 byte attribute (simplified handling)
+            // - SF 0x1D FFW1 FFW2 attr len [len bytes] (Start Field)
+            // - RA 0x02 endRow endCol char (Repeat to Address)
             // - MC order 0x14 + row + col (cursor target, 1-based per RFC1205)
             // - IC order 0x13 (cursor at current write position)
             for (int i = 0; i < screenData.size(); i++) {
@@ -574,11 +641,42 @@ void MainWindow::handleStructuredField(tn5250::client::StructuredFieldType type,
                     continue;
                 }
 
-                // Start Field marker (simplified): 0x1D + attribute byte
-                if (ch == 0x1D && i + 1 < screenData.size()) {
-                    uint8_t attrByte = static_cast<uint8_t>(screenData[i + 1]);
+                // Repeat to Address (RA): 0x02 endRow endCol char
+                if (ch == 0x02 && i + 3 < screenData.size()) {
+                    uint8_t raRow  = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t raCol  = static_cast<uint8_t>(screenData[i + 2]);
+                    uint8_t raChar = static_cast<uint8_t>(screenData[i + 3]);
+                    int targetRow  = hostRowToIndex(raRow);
+                    int targetCol  = hostColToIndex(raCol);
+                    int targetAddr = targetRow * screen->cols() + targetCol;
+                    int curAddr    = currentRow * screen->cols() + currentCol;
+                    while (curAddr <= targetAddr) {
+                        int r = curAddr / screen->cols();
+                        int c = curAddr % screen->cols();
+                        if (r < screen->rows())
+                            screen->writeChar(r, c, raChar, attr);
+                        curAddr++;
+                    }
+                    currentRow = targetRow;
+                    currentCol = targetCol;
+                    i += 3;
+                    continue;
+                }
+
+                // Start Field (SF): 0x1D FFW1 FFW2 attr len [len bytes]
+                if (ch == 0x1D && i + 4 < screenData.size()) {
+                    uint8_t ffw1     = static_cast<uint8_t>(screenData[i + 1]);
+                    uint8_t attrByte = static_cast<uint8_t>(screenData[i + 3]);
+                    uint8_t fieldLen = static_cast<uint8_t>(screenData[i + 4]);
                     applyAttrByte(attr, attrByte);
-                    i++;
+                    attr.protected_field = (ffw1 & 0x20) != 0;
+                    screen->setField(currentRow, currentCol, fieldLen, attr.protected_field);
+                    for (int f = 0; f < static_cast<int>(fieldLen); f++) {
+                        if (currentCol + f < screen->cols())
+                            screen->writeChar(currentRow, currentCol + f, 0x40, attr);
+                    }
+                    currentCol += fieldLen;
+                    i += 4 + fieldLen;
                     continue;
                 }
 
@@ -651,12 +749,20 @@ void MainWindow::handleRawScreenData(const QByteArray &data) {
     }
 
     ui::widgets::ScreenBuffer *screen = m_displayWidget->screenBuffer();
+    auto hostRowToIndex = [](uint8_t hostRow) -> int {
+        return hostRow > 0 ? static_cast<int>(hostRow) - 1 : 0;
+    };
+    auto hostColToIndex = [](uint8_t hostCol) -> int {
+        return hostCol > 0 ? static_cast<int>(hostCol) - 1 : 0;
+    };
     auto applyAttrByte = [](ui::widgets::CellAttributes &attr, uint8_t attrByte) {
-        attr.color = attrByte & 0x0F;
-        attr.reverse = (attrByte & 0x10) != 0;
-        attr.blink = (attrByte & 0x20) != 0;
-        attr.underline = (attrByte & 0x40) != 0;
-        attr.protected_field = (attrByte & 0x80) != 0;
+        // 5250 field attribute byte (IBM bit numbering, bit0=MSB):
+        // Bit 3 (0x08): blink, Bit 2 (0x04): underscore,
+        // Bit 1 (0x02): high intensity (white), Bit 0 (0x01): reverse image
+        attr.blink           = (attrByte & 0x08) != 0;
+        attr.underline       = (attrByte & 0x04) != 0;
+        attr.color           = (attrByte & 0x02) ? 7 : 2;
+        attr.reverse         = (attrByte & 0x01) != 0;
     };
     logger::Logger::instance()->debug(
         QString("MainWindow: Handling raw screen data - %1 bytes")
@@ -668,48 +774,80 @@ void MainWindow::handleRawScreenData(const QByteArray &data) {
         logger::Logger::instance()->debug(QString::fromStdString(line));
     }
 
-    // Helper to render a TN5250 character stream (handles SBA 0x11, SF 0x1D attributes)
+    // Helper to render a TN5250 order/data stream into the screen buffer.
+    // Handles SBA (0x11), RA (0x02), SF (0x1D), IC (0x13), and EBCDIC data.
     auto renderTN5250Stream = [&](const QByteArray &payload) {
         QPoint cursorPos = screen->cursorPosition();
         int row = cursorPos.y();
         int col = cursorPos.x();
         ui::widgets::CellAttributes attr;
+        QPoint cursorTarget(-1, -1);
 
         for (int i = 0; i < payload.size(); i++) {
             uint8_t ch = static_cast<uint8_t>(payload[i]);
 
             // Set Buffer Address (SBA): 0x11 Row Col (1-based)
             if (ch == 0x11 && i + 2 < payload.size()) {
-                uint8_t hostRow = static_cast<uint8_t>(payload[i + 1]);
-                uint8_t hostCol = static_cast<uint8_t>(payload[i + 2]);
-                row = hostRow > 0 ? static_cast<int>(hostRow) - 1 : 0;
-                col = hostCol > 0 ? static_cast<int>(hostCol) - 1 : 0;
+                uint8_t sbaRow = static_cast<uint8_t>(payload[i + 1]);
+                uint8_t sbaCol = static_cast<uint8_t>(payload[i + 2]);
+                row = hostRowToIndex(sbaRow);
+                col = hostColToIndex(sbaCol);
                 i += 2;
                 continue;
             }
 
-            // TN5250 Start Field (SF) simplified control character (0x1D)
-            if (ch == 0x1D && i + 1 < payload.size()) {
-                uint8_t attrByte = static_cast<uint8_t>(payload[i + 1]);
-                attr.color = attrByte & 0x0F;                  // Lower 4 bits
-                attr.reverse = (attrByte & 0x10) != 0;         // Bit 4
-                attr.blink = (attrByte & 0x20) != 0;           // Bit 5
-                attr.underline = (attrByte & 0x40) != 0;       // Bit 6
-                attr.protected_field = (attrByte & 0x80) != 0; // Bit 7
+            // Repeat to Address (RA): 0x02 endRow endCol char
+            if (ch == 0x02 && i + 3 < payload.size()) {
+                uint8_t raRow  = static_cast<uint8_t>(payload[i + 1]);
+                uint8_t raCol  = static_cast<uint8_t>(payload[i + 2]);
+                uint8_t raChar = static_cast<uint8_t>(payload[i + 3]);
+                int targetRow  = hostRowToIndex(raRow);
+                int targetCol  = hostColToIndex(raCol);
+                int targetAddr = targetRow * screen->cols() + targetCol;
+                int curAddr    = row * screen->cols() + col;
+                while (curAddr <= targetAddr) {
+                    int r = curAddr / screen->cols();
+                    int c = curAddr % screen->cols();
+                    if (r < screen->rows())
+                        screen->writeChar(r, c, raChar, attr);
+                    curAddr++;
+                }
+                row = targetRow;
+                col = targetCol;
+                i += 3;
+                continue;
+            }
 
-                logger::Logger::instance()->debug(
-                    QString("MainWindow: SF(0x1D) at pos %1 attr=0x%2 color=%3 rev=%4 "
-                            "blink=%5 ul=%6 prot=%7")
-                        .arg(i)
-                        .arg(attrByte, 2, 16, QChar('0'))
-                        .arg(attr.color)
-                        .arg(attr.reverse)
-                        .arg(attr.blink)
-                        .arg(attr.underline)
-                        .arg(attr.protected_field)
-                );
-                i++;      // Skip attribute byte
-                continue; // Do not write SF bytes
+            // Start Field (SF): 0x1D FFW1 FFW2 attr len [len bytes]
+            if (ch == 0x1D && i + 4 < payload.size()) {
+                uint8_t ffw1     = static_cast<uint8_t>(payload[i + 1]);
+                uint8_t attrByte = static_cast<uint8_t>(payload[i + 3]);
+                uint8_t fieldLen = static_cast<uint8_t>(payload[i + 4]);
+                applyAttrByte(attr, attrByte);
+                attr.protected_field = (ffw1 & 0x20) != 0;
+                screen->setField(row, col, fieldLen, attr.protected_field);
+                for (int f = 0; f < static_cast<int>(fieldLen); f++) {
+                    if (col + f < screen->cols())
+                        screen->writeChar(row, col + f, 0x40, attr);
+                }
+                col += fieldLen;
+                i += 4 + fieldLen;
+                continue;
+            }
+
+            // Insert Cursor (IC): 0x13 — place cursor at current write position
+            if (ch == 0x13) {
+                cursorTarget = QPoint(col, row);
+                continue;
+            }
+
+            // Move Cursor (MC): 0x14 Row Col (1-based)
+            if (ch == 0x14 && i + 2 < payload.size()) {
+                uint8_t mcRow = static_cast<uint8_t>(payload[i + 1]);
+                uint8_t mcCol = static_cast<uint8_t>(payload[i + 2]);
+                cursorTarget = QPoint(hostColToIndex(mcCol), hostRowToIndex(mcRow));
+                i += 2;
+                continue;
             }
 
             // Line wrapping
@@ -725,7 +863,11 @@ void MainWindow::handleRawScreenData(const QByteArray &data) {
             screen->writeChar(row, col, ch, attr);
             col++;
         }
-        screen->setCursorPosition(row, col);
+        if (cursorTarget.x() >= 0 && cursorTarget.y() >= 0) {
+            screen->setCursorPosition(cursorTarget.y(), cursorTarget.x());
+        } else {
+            screen->setCursorPosition(row, col);
+        }
         logger::Logger::instance()->debug(
             QString("MainWindow: Rendered TN5250 stream, cursor at %1/%2")
                 .arg(row)
@@ -929,6 +1071,7 @@ void MainWindow::connectSessionSignals() {
     connect(m_parser, &tn5250::client::Decoder::structuredFieldReceived, this, &MainWindow::handleStructuredField);
     connect(m_parser, &tn5250::client::Decoder::rawScreenDataReceived, this, &MainWindow::handleRawScreenData);
     connect(m_parser, &tn5250::client::Decoder::clearScreenRequested, this, &MainWindow::onClearScreenRequested);
+    connect(m_parser, &tn5250::client::Decoder::keyboardUnlockRequested, this, &MainWindow::onKeyboardUnlockRequested);
 }
 
 /**
@@ -977,6 +1120,15 @@ void MainWindow::onClearScreenRequested() {
     }
     m_displayWidget->screenBuffer()->clear();
     m_displayWidget->screenBuffer()->notifyCursor();
+}
+
+void MainWindow::onKeyboardUnlockRequested() {
+    // The WTD command signaled that the keyboard should be unlocked.
+    // This means the host has finished sending the screen and the user can type.
+    logger::Logger::instance()->debug("MainWindow: Keyboard unlock requested by host");
+    if (m_displayWidget) {
+        m_displayWidget->setFocus();
+    }
 }
 
 /**

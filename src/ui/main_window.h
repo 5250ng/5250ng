@@ -73,6 +73,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void handleStructuredField(tn5250::client::StructuredFieldType type, const QByteArray &data);
     void handleRawScreenData(const QByteArray &data);
     void onClearScreenRequested();
+    void onKeyboardUnlockRequested();
     QStringList hexdump(const QByteArray &data);
     void connectSessionSignals();
     void disconnectSessionSignals();

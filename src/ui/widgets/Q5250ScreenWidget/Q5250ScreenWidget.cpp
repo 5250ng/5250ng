@@ -187,14 +187,17 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
         painter.setFont(font);
     }
 
+    // Skip text when blinking is active and the blink state is "off"
+    if (cell.attributes.blink && !m_blinkTextState) {
+        painter.setFont(m_font);
+        return;
+    }
+
     // Draw text
     painter.drawText(cellRect, Qt::AlignCenter, ch);
 
     // Reset font
     painter.setFont(m_font);
-
-    // Handle blink (could be implemented with timer, but for now just render)
-    // Blinking is typically handled by the timer updating the screen
 }
 
 /**

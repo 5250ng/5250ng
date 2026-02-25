@@ -27,6 +27,9 @@ class TitleBar : public QWidget {
     void mouseReleased();
     void mouseDoubleClicked(const QPoint &globalPos);
 
+  private slots:
+    void applyTheme();
+
   protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;

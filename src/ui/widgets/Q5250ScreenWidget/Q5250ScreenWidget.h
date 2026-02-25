@@ -93,7 +93,6 @@ class Q5250ScreenWidget : public QWidget {
     // Rendering
     void renderScreen(QPainter &painter);
     void renderCell(QPainter &painter, int row, int col, const ScreenCell &cell);
-    void renderCursor(QPainter &painter, int row, int col);
     void renderCursorRules(QPainter &painter);
     void renderSelectionBorder(QPainter &painter);
     QColor getColorForCode(uint8_t colorCode) const;
@@ -130,6 +129,7 @@ class Q5250ScreenWidget : public QWidget {
     QTimer *m_blinkTimer;
     int m_cursorBlinkRate;
     bool m_cursorBlinkState;
+    bool m_blinkTextState = true;
     bool m_cursorEnabled = true;
 
     // 27×132 mode support

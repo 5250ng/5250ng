@@ -10,9 +10,11 @@ namespace tn5250::message::command::order {
  * @return bytes read on success; 0 on failure.
  */
 uint32_t OrderSfStartField::unmarshal(const std::vector<uint8_t> &buffer, std::string *error) {
-    if (buffer.size() < 3) {
+    // SF order format: 0x1D [FFW1] [FFW2] [attr] [len] [len bytes of field data]
+    // Minimum 5 bytes: order code + FFW1 + FFW2 + attr + len
+    if (buffer.size() < 5) {
         if (error)
-            *error = "OrderSfStartField: buffer too short for order code and attributes";
+            *error = "OrderSfStartField: buffer too short for SF order";
         return 0;
     }
 
@@ -26,33 +28,49 @@ uint32_t OrderSfStartField::unmarshal(const std::vector<uint8_t> &buffer, std::s
     code = OrderCode(buffer[read_bytes]);
     read_bytes++;
 
-    uint8_t b1 = buffer[read_bytes];
+    // Field Format Word 1
+    formatWord1 = buffer[read_bytes];
+    read_bytes++;
 
-    // Field Format Word 1 is present
-    if (b1 & 0b01000000) {
-        formatWord1 = buffer[read_bytes];
-        read_bytes++;
+    // Field Format Word 2
+    formatWord2 = buffer[read_bytes];
+    read_bytes++;
 
-        formatWord1 = buffer[read_bytes];
-        read_bytes++;
-    }
-
-    // Consume control words until we find no more
-    while (read_bytes < buffer.size() && ((buffer[read_bytes] & 0xe0) != 0x20)) {
-        controlWords.push_back(buffer[read_bytes] << 8 | buffer[read_bytes + 1]);
+    // Optional Field Control Words (FCW): 2-byte pairs where the first byte
+    // has bits 7-5 != 001. In practice, FCWs are rare in standard displays.
+    // A byte with bits 7-5 = 001 (0x20..0x3F) is the display attribute byte.
+    controlWords.clear();
+    while (read_bytes + 1 < buffer.size() && (buffer[read_bytes] & 0xE0) != 0x20) {
+        if (read_bytes + 1 >= buffer.size()) break;
+        controlWords.push_back(
+            (static_cast<uint16_t>(buffer[read_bytes]) << 8) |
+            static_cast<uint16_t>(buffer[read_bytes + 1])
+        );
         read_bytes += 2;
     }
 
-    // Attributes are the next byte
+    // Display attribute byte (bits 7-5 = 001)
+    if (read_bytes >= buffer.size()) {
+        if (error)
+            *error = "OrderSfStartField: truncated before attribute byte";
+        return 0;
+    }
     attributes = buffer[read_bytes];
     read_bytes++;
 
-    // Length is the next byte
-    length = utils::endianness::le16_read(buffer[read_bytes], buffer[read_bytes + 1]);
-    read_bytes += 2;
+    // Length (1 byte)
+    if (read_bytes >= buffer.size()) {
+        if (error)
+            *error = "OrderSfStartField: truncated before length byte";
+        return 0;
+    }
+    length = buffer[read_bytes];
+    read_bytes++;
 
-    //
-    for (size_t i = 0; i < length; i++) {
+    // Field data (length bytes)
+    repeatedCharacter.clear();
+    for (uint8_t i = 0; i < length; i++) {
+        if (read_bytes >= buffer.size()) break;
         repeatedCharacter.push_back(static_cast<char>(buffer[read_bytes]));
         read_bytes++;
     }

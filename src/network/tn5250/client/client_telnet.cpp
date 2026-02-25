@@ -54,6 +54,12 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
                         m_subnegotiationBuffer.clear();
                         m_inSubnegotiation = false;
                     }
+                } else if (next == static_cast<uint8_t>(TelnetCommand::EOR)) {
+                    // EOR marks end of a TN5250 GDS record — strip it silently.
+                    // The decoder handles record boundaries via the 2-byte length prefix.
+                    logger::Logger::instance()->debug(
+                        "[TN5250->Client]: Received IAC EOR (end of GDS record)"
+                    );
                 } else {
                     // Other standalone commands - just skip for now
                     logger::Logger::instance()->warning(

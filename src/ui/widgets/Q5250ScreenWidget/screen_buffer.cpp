@@ -126,12 +126,8 @@ void ScreenBuffer::clear() {
         cell.attributes = CellAttributes();
     }
     m_fields.clear();
-    // Reset cursor to top-right by default
-    if (m_cols > 0) {
-        setCursorPosition(0, m_cols - 1);
-    } else {
-        setCursorPosition(0, 0);
-    }
+    // Reset cursor to top-left (row 0, col 0)
+    setCursorPosition(0, 0);
     emit screenChanged();
 }
 
