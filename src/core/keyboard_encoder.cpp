@@ -45,10 +45,10 @@ QByteArray KeyboardEncoder::encodeKeyEvent(QKeyEvent *event, bool shiftPressed, 
         return encodeAction(KeyboardAction::End);
 
     case Qt::Key_PageUp:
-        return encodeAction(KeyboardAction::PageUp);
+        return encodeAction(KeyboardAction::RollUp);
 
     case Qt::Key_PageDown:
-        return encodeAction(KeyboardAction::PageDown);
+        return encodeAction(KeyboardAction::RollDown);
 
     case Qt::Key_Up:
         return encodeAction(KeyboardAction::ArrowUp);
@@ -190,22 +190,25 @@ uint8_t KeyboardEncoder::getAIDForPF(int pfNumber) const {
 }
 
 uint8_t KeyboardEncoder::getAIDForAction(KeyboardAction action) const {
+    // Only return AID codes for keys that should be sent to the host.
+    // Tab, Backspace, Delete, Home, End, Insert, arrows, etc. are handled
+    // locally in block-mode and should NOT produce AID bytes.
     switch (action) {
     case KeyboardAction::Enter:
         return AID_ENTER;
-    case KeyboardAction::Tab:
-        return AID_TAB;
-    case KeyboardAction::BackTab:
-        return AID_BACKTAB;
     case KeyboardAction::Clear:
         return AID_CLEAR;
     case KeyboardAction::Attn:
         return AID_ATTN;
     case KeyboardAction::SysReq:
         return AID_SYSREQ;
+    case KeyboardAction::RollUp:
+        return AID_ROLLUP;
+    case KeyboardAction::RollDown:
+        return AID_ROLLDOWN;
     default:
-        // Many actions don't have direct AID codes
-        // They may need to be encoded differently
+        // Local-only actions (Tab, BackTab, Backspace, Delete, Insert,
+        // Home, End, PageUp, PageDown, arrows) return 0 — handled locally.
         return 0;
     }
 }

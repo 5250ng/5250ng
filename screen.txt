@@ -1,0 +1,24 @@
+                                                                           
+                                                                           
+                                                                    �QBASE 
+                                                                           
+                                                                           
+               �User  . . . . . . . . . . . . . .� ��                      
+               �Password  . . . . . . . . . . . .� ␛                       
+               �Program/procedure . . . . . . . .� ��                      
+               �Menu  . . . . . . . . . . . . . .� ��                      
+               �Current library . . . . . . . . .� ��                      
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+                                                                           
+ -EV0002� . . . :�                    � (C) COPYRIGHT IBM CORP. 1980, 2005.

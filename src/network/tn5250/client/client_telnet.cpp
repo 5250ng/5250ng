@@ -332,7 +332,34 @@ void TN5250Client::sendData(const QByteArray &data) {
         return;
     }
 
-    sendRawData(data);
+    // Wrap payload in a GDS record per RFC 1205:
+    // [recLen(2)] [0x12A0(2)] [0x0000(2)] [varLen=0x04(1)] [flagsHi(1)] [flagsLo(1)] [opcode(1)] [payload]
+    // Then IAC-escape the entire record and append IAC EOR.
+    QByteArray record;
+    int varHdrLen = 4; // flags(2) + opcode(1) + varLen byte itself counted separately
+    int totalLen = 4 + 1 + varHdrLen + data.size(); // recType(2) + reserved(2) + varLen(1) + varHdr(4) + payload
+    // recLen = total bytes after the 2-byte length field
+    int recLen = totalLen;
+
+    // 2-byte big-endian record length
+    record.append(static_cast<char>((recLen >> 8) & 0xFF));
+    record.append(static_cast<char>(recLen & 0xFF));
+    // Record type 0x12A0
+    record.append(static_cast<char>(0x12));
+    record.append(static_cast<char>(0xA0));
+    // Reserved 0x0000
+    record.append(static_cast<char>(0x00));
+    record.append(static_cast<char>(0x00));
+    // Variable header length
+    record.append(static_cast<char>(varHdrLen));
+    // Flags (0x0000) and opcode (0x00 = no-op / general response)
+    record.append(static_cast<char>(0x00));
+    record.append(static_cast<char>(0x00));
+    record.append(static_cast<char>(0x00));
+    // Payload
+    record.append(data);
+
+    sendRawData(record);
 }
 
 void TN5250Client::sendRawData(const QByteArray &data) {
@@ -350,6 +377,10 @@ void TN5250Client::sendRawData(const QByteArray &data) {
             escaped.append(byte);
         }
     }
+
+    // Append IAC EOR to terminate the GDS record
+    escaped.append(static_cast<uint8_t>(TelnetCommand::IAC));
+    escaped.append(static_cast<uint8_t>(TelnetCommand::EOR));
 
     m_socket->write(escaped);
 }

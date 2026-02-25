@@ -94,11 +94,11 @@ class KeyboardEncoder : public QObject {
     static constexpr uint8_t AID_PF23 = 0x4B;
     static constexpr uint8_t AID_PF24 = 0x4C;
 
-    static constexpr uint8_t AID_TAB = 0x05;
-    static constexpr uint8_t AID_BACKTAB = 0xF5; // Sometimes same as PF5
     static constexpr uint8_t AID_CLEAR = 0x6D;
     static constexpr uint8_t AID_ATTN = 0x6C;
     static constexpr uint8_t AID_SYSREQ = 0x6F;
+    static constexpr uint8_t AID_ROLLUP = 0xF5;   // Page Up / Roll Up
+    static constexpr uint8_t AID_ROLLDOWN = 0xF4;  // Page Down / Roll Down
 
     uint8_t getAIDForPF(int pfNumber) const;
     uint8_t getAIDForAction(KeyboardAction action) const;

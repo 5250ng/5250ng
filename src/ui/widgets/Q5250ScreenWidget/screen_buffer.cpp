@@ -74,35 +74,45 @@ void ScreenBuffer::setField(int row, int col, int length, bool protected_field) 
         return;
     }
 
-    // Remove any existing field at this position
+    // Remove any existing field that overlaps this position
+    int newStart = row * m_cols + col;
+    int newEnd = newStart + length; // one past end
     for (int i = m_fields.size() - 1; i >= 0; --i) {
         Field &f = m_fields[i];
-        if (f.startRow == row && f.startCol <= col && col < f.startCol + f.length) {
+        int fStart = f.startRow * m_cols + f.startCol;
+        int fEnd = fStart + f.length;
+        if (fStart < newEnd && fEnd > newStart) {
             m_fields.removeAt(i);
         }
     }
 
-    // Add new field
+    // Add new field (may span multiple rows)
     Field field;
     field.startRow = row;
     field.startCol = col;
-    field.length = qMin(length, m_cols - col);
+    field.length = length;
     field.protected_field = protected_field;
     field.modified = false;
     m_fields.append(field);
 
-    // Update cell attributes
-    for (int i = 0; i < field.length && col + i < m_cols; ++i) {
-        cell(row, col + i).attributes.protected_field = protected_field;
+    // Update cell attributes for all cells in the field (wrapping rows)
+    int addr = row * m_cols + col;
+    int totalCells = m_rows * m_cols;
+    for (int i = 0; i < length && addr + i < totalCells; ++i) {
+        int r = (addr + i) / m_cols;
+        int c = (addr + i) % m_cols;
+        m_buffer[index(r, c)].attributes.protected_field = protected_field;
     }
 
     emit fieldChanged(row, col);
 }
 
 ScreenBuffer::Field ScreenBuffer::getField(int row, int col) const {
+    int addr = row * m_cols + col;
     for (const Field &field : m_fields) {
-        if (field.startRow == row && field.startCol <= col &&
-            col < field.startCol + field.length) {
+        int fStart = field.startRow * m_cols + field.startCol;
+        int fEnd = fStart + field.length;
+        if (addr >= fStart && addr < fEnd) {
             return field;
         }
     }
@@ -154,11 +164,12 @@ void ScreenBuffer::clearRow(int row) {
 void ScreenBuffer::clearField(int row, int col) {
     Field field = getField(row, col);
     if (field.length > 0) {
-        for (int i = 0; i < field.length; ++i) {
-            int c = field.startCol + i;
-            if (c < m_cols) {
-                cell(field.startRow, c).character = 0x40;
-            }
+        int addr = field.startRow * m_cols + field.startCol;
+        int totalCells = m_rows * m_cols;
+        for (int i = 0; i < field.length && addr + i < totalCells; ++i) {
+            int r = (addr + i) / m_cols;
+            int c = (addr + i) % m_cols;
+            m_buffer[index(r, c)].character = 0x40;
         }
         emit screenChanged();
     }
@@ -325,6 +336,40 @@ void ScreenBuffer::updateField(int row, int col) {
             }
         }
     }
+}
+
+void ScreenBuffer::markFieldModified(int row, int col) {
+    for (int i = 0; i < m_fields.size(); ++i) {
+        int fStart = m_fields[i].startRow * m_cols + m_fields[i].startCol;
+        int fEnd = fStart + m_fields[i].length;
+        int addr = row * m_cols + col;
+        if (addr >= fStart && addr < fEnd) {
+            m_fields[i].modified = true;
+            return;
+        }
+    }
+}
+
+QVector<ScreenBuffer::Field> ScreenBuffer::getModifiedFields() const {
+    QVector<Field> result;
+    for (const Field &f : m_fields) {
+        if (f.modified && !f.protected_field) {
+            result.append(f);
+        }
+    }
+    return result;
+}
+
+QByteArray ScreenBuffer::getFieldData(const Field &field) const {
+    QByteArray data;
+    int addr = field.startRow * m_cols + field.startCol;
+    int totalCells = m_rows * m_cols;
+    for (int i = 0; i < field.length && addr + i < totalCells; ++i) {
+        int r = (addr + i) / m_cols;
+        int c = (addr + i) % m_cols;
+        data.append(static_cast<char>(m_buffer[index(r, c)].character));
+    }
+    return data;
 }
 
 } // namespace ui::widgets

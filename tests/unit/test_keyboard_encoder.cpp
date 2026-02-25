@@ -55,15 +55,15 @@ void TestKeyboardEncoder::testPFKeyEncoding() {
 }
 
 void TestKeyboardEncoder::testSpecialKeys() {
-    // Test Enter
+    // Test Enter (AID key — sent to host)
     QByteArray enter = m_encoder->encodeAction(KeyboardAction::Enter);
     QVERIFY(!enter.isEmpty());
 
-    // Test Tab
+    // Test Tab (local-only in block mode — returns empty)
     QByteArray tab = m_encoder->encodeAction(KeyboardAction::Tab);
-    QVERIFY(!tab.isEmpty());
+    QVERIFY(tab.isEmpty());
 
-    // Test Clear
+    // Test Clear (AID key — sent to host)
     QByteArray clear = m_encoder->encodeAction(KeyboardAction::Clear);
     QVERIFY(!clear.isEmpty());
 }
@@ -101,15 +101,15 @@ void TestKeyboardEncoder::testEnterKey() {
 }
 
 void TestKeyboardEncoder::testTabKeys() {
-    // Regular Tab
+    // Regular Tab — local-only in block mode, returns empty from encoder
     QKeyEvent tabEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
     QByteArray tab = m_encoder->encodeKeyEvent(&tabEvent);
-    QVERIFY(!tab.isEmpty());
+    QVERIFY(tab.isEmpty());
 
-    // Shift+Tab (BackTab)
+    // Shift+Tab (BackTab) — local-only in block mode, returns empty
     QKeyEvent backTabEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::ShiftModifier);
     QByteArray backTab = m_encoder->encodeKeyEvent(&backTabEvent);
-    QVERIFY(!backTab.isEmpty());
+    QVERIFY(backTab.isEmpty());
 }
 
 void TestKeyboardEncoder::testArrowKeys() {

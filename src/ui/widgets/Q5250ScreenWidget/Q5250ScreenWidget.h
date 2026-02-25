@@ -113,6 +113,9 @@ class Q5250ScreenWidget : public QWidget {
     ScreenBuffer::Field findNextField(int startRow, int startCol) const;
     ScreenBuffer::Field findPreviousField(int startRow, int startCol) const;
     bool isValidEditPosition(int row, int col) const;
+    QByteArray buildAIDResponse(uint8_t aidByte);
+    void handleBackspace();
+    void handleDelete();
 
     ScreenBuffer *m_screenBuffer;
     core::KeyboardEncoder *m_encoder;

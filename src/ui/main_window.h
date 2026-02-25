@@ -79,6 +79,9 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void disconnectSessionSignals();
     void setActiveSession(int index);
     void openContextMenuForTab(const QPoint &pos);
+    void renderTN5250Stream(const QByteArray &data);
+    QByteArray buildFieldResponse(uint8_t aidByte);
+    void sendToHost(const QByteArray &data);
 
     struct Session {
         QWidget *container;

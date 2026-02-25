@@ -49,7 +49,7 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
         return;
     }
 
-    // Handle arrow keys for cursor movement
+    // Handle local-only keys (block-mode: these never go to the host)
     if (m_screenBuffer) {
         switch (event->key()) {
         case Qt::Key_Left:
@@ -68,12 +68,44 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
             moveCursorDown();
             event->accept();
             return;
+        case Qt::Key_Tab:
+            if (event->modifiers() & Qt::ShiftModifier) {
+                moveToPreviousField();
+            } else {
+                moveToNextField();
+            }
+            event->accept();
+            return;
+        case Qt::Key_Backtab:
+            moveToPreviousField();
+            event->accept();
+            return;
+        case Qt::Key_Home:
+            moveToFieldStart();
+            event->accept();
+            return;
+        case Qt::Key_End:
+            moveToFieldEnd();
+            event->accept();
+            return;
+        case Qt::Key_Backspace:
+            handleBackspace();
+            event->accept();
+            return;
+        case Qt::Key_Delete:
+            handleDelete();
+            event->accept();
+            return;
+        case Qt::Key_Insert:
+            // Toggle insert mode (not yet tracked, just ignore)
+            event->accept();
+            return;
         default:
             break;
         }
     }
 
-    // Pass other keys to input handler
+    // Pass other keys to input handler (AID keys and characters)
     processKeyEvent(event);
     QWidget::keyPressEvent(event);
 }
@@ -161,17 +193,56 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data) {
 
     uint8_t firstByte = static_cast<uint8_t>(data[0]);
 
-    // Check if it's an AID (Attention ID) - special key or PF key
-    bool isAID = (firstByte >= 0x6C && firstByte <= 0xFF) ||
-                 (firstByte >= 0xF1 && firstByte <= 0xF9) ||
-                 (firstByte >= 0x7A && firstByte <= 0x7D) ||
-                 (firstByte >= 0xC1 && firstByte <= 0xC9) ||
-                 (firstByte >= 0x4A && firstByte <= 0x4C);
+    // Check if it's an AID (Attention ID) key that should be sent to host
+    bool isAID = false;
+    switch (firstByte) {
+    case 0x7D: // Enter
+    case 0x6D: // Clear
+    case 0x6C: // Attn
+    case 0x6F: // SysReq
+    case 0xF4: // RollDown (PageDown)
+    case 0xF5: // RollUp (PageUp)
+        isAID = true;
+        break;
+    default:
+        // PF1-PF9: 0xF1-0xF9
+        if (firstByte >= 0xF1 && firstByte <= 0xF9) isAID = true;
+        // PF10-PF12: 0x7A-0x7C
+        else if (firstByte >= 0x7A && firstByte <= 0x7C) isAID = true;
+        // PF13-PF21: 0xC1-0xC9
+        else if (firstByte >= 0xC1 && firstByte <= 0xC9) isAID = true;
+        // PF22-PF24: 0x4A-0x4C
+        else if (firstByte >= 0x4A && firstByte <= 0x4C) isAID = true;
+        break;
+    }
 
-    // Always send input to server. Do not locally modify the buffer here to
-    // avoid double-echo; the server returns the updated screen.
-    Q_UNUSED(isAID);
-    emit inputReady(data);
+    if (isAID) {
+        // AID key: build field response and send to host
+        emit inputReady(buildAIDResponse(firstByte));
+    } else {
+        // Regular EBCDIC character: write locally to screen buffer
+        QPoint cursor = m_screenBuffer->cursorPosition();
+        int row = cursor.y();
+        int col = cursor.x();
+
+        // Only write to unprotected positions
+        if (!m_screenBuffer->isProtected(row, col)) {
+            m_screenBuffer->writeChar(row, col, firstByte);
+            m_screenBuffer->markFieldModified(row, col);
+
+            // Advance cursor
+            col++;
+            if (col >= m_screenBuffer->cols()) {
+                col = 0;
+                row++;
+                if (row >= m_screenBuffer->rows()) {
+                    row = m_screenBuffer->rows() - 1;
+                }
+            }
+            m_screenBuffer->setCursorPosition(row, col);
+            update();
+        }
+    }
 }
 
 void Q5250ScreenWidget::moveToNextField() {
@@ -273,6 +344,92 @@ void Q5250ScreenWidget::moveCursorDown() {
     int col = m_cursorPos.x();
     if (row + 1 < m_screenBuffer->rows()) {
         moveCursor(row + 1, col);
+    }
+}
+
+QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
+    QByteArray response;
+    response.append(static_cast<char>(aidByte));
+
+    if (!m_screenBuffer) {
+        return response;
+    }
+
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    // Cursor position: 1-based row and col
+    response.append(static_cast<char>(cursor.y() + 1));
+    response.append(static_cast<char>(cursor.x() + 1));
+
+    // Append modified fields: SBA(0x11) + row(1-based) + col(1-based) + field data
+    QVector<ScreenBuffer::Field> modFields = m_screenBuffer->getModifiedFields();
+    for (const auto &field : modFields) {
+        response.append(static_cast<char>(0x11)); // SBA order
+        response.append(static_cast<char>(field.startRow + 1));
+        response.append(static_cast<char>(field.startCol + 1));
+        response.append(m_screenBuffer->getFieldData(field));
+    }
+
+    return response;
+}
+
+void Q5250ScreenWidget::handleBackspace() {
+    if (!m_screenBuffer) return;
+
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+
+    // Move cursor back one position
+    if (col > 0) {
+        col--;
+    } else if (row > 0) {
+        row--;
+        col = m_screenBuffer->cols() - 1;
+    } else {
+        return; // At position (0,0), nothing to do
+    }
+
+    // Only delete if position is unprotected
+    if (!m_screenBuffer->isProtected(row, col)) {
+        m_screenBuffer->writeChar(row, col, 0x40); // EBCDIC space
+        m_screenBuffer->markFieldModified(row, col);
+        m_screenBuffer->setCursorPosition(row, col);
+        update();
+    }
+}
+
+void Q5250ScreenWidget::handleDelete() {
+    if (!m_screenBuffer) return;
+
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+
+    // Only delete if position is unprotected
+    if (!m_screenBuffer->isProtected(row, col)) {
+        // Shift field content left from cursor to end of field
+        ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+        if (field.length > 0) {
+            int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+            int fieldEnd = fieldStart + field.length;
+            int curAddr = row * m_screenBuffer->cols() + col;
+
+            for (int addr = curAddr; addr < fieldEnd - 1; ++addr) {
+                int srcR = (addr + 1) / m_screenBuffer->cols();
+                int srcC = (addr + 1) % m_screenBuffer->cols();
+                int dstR = addr / m_screenBuffer->cols();
+                int dstC = addr % m_screenBuffer->cols();
+                uint8_t ch = m_screenBuffer->character(srcR, srcC);
+                m_screenBuffer->writeChar(dstR, dstC, ch);
+            }
+            // Clear last position in field
+            int lastAddr = fieldEnd - 1;
+            int lastR = lastAddr / m_screenBuffer->cols();
+            int lastC = lastAddr % m_screenBuffer->cols();
+            m_screenBuffer->writeChar(lastR, lastC, 0x40); // EBCDIC space
+            m_screenBuffer->markFieldModified(row, col);
+            update();
+        }
     }
 }
 
