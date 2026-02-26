@@ -13,6 +13,20 @@
 
 namespace ui::widgets {
 
+bool Q5250ScreenWidget::event(QEvent *ev) {
+    // Intercept Tab/Backtab before Qt's focus-chain machinery consumes them.
+    // QWidget::event() normally converts these into focus-next/focus-prev and
+    // never calls keyPressEvent, so we must catch them here.
+    if (ev->type() == QEvent::KeyPress) {
+        QKeyEvent *ke = static_cast<QKeyEvent *>(ev);
+        if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
+            keyPressEvent(ke);
+            return true;
+        }
+    }
+    return QWidget::event(ev);
+}
+
 void Q5250ScreenWidget::paintEvent(QPaintEvent *event) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
@@ -303,6 +317,17 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
                 int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
                 int fieldEnd = fieldStart + field.length;
                 int curAddr = row * m_screenBuffer->cols() + col;
+
+                // Check if last position has data — insert would overflow
+                int lastAddr = fieldEnd - 1;
+                int lastR = lastAddr / m_screenBuffer->cols();
+                int lastC = lastAddr % m_screenBuffer->cols();
+                uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
+                if (lastCh != 0x40 && lastCh != 0x00) {
+                    // Field full — cannot insert, reject keystroke
+                    return;
+                }
+
                 // Shift right from end of field to cursor position
                 for (int addr = fieldEnd - 1; addr > curAddr; --addr) {
                     int srcR = (addr - 1) / m_screenBuffer->cols();
@@ -317,7 +342,35 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
             m_screenBuffer->writeChar(row, col, firstByte);
             m_screenBuffer->markFieldModified(row, col);
 
-            // Advance cursor
+            // Field boundary-aware cursor advancement
+            if (field.length > 0) {
+                int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+                int fieldEnd = fieldStart + field.length;
+                int curAddr = row * m_screenBuffer->cols() + col;
+
+                if (curAddr + 1 >= fieldEnd) {
+                    // Reached last position of field
+                    if (field.autoEnter) {
+                        // Auto-enter: send with Auto Enter AID (0x3F per spec)
+                        emit inputReady(buildAIDResponse(0x3F));
+                        setKeyboardState(KeyboardState::Locked);
+                    } else if (field.fieldExitReq) {
+                        // FER: cursor stays on last character;
+                        // operator must press Field Exit key to leave
+                    } else {
+                        // Normal field: advance to next input field
+                        rightAdjustField(row, col);
+                        ScreenBuffer::Field nextField = findNextField(row, col);
+                        if (nextField.length > 0) {
+                            m_screenBuffer->setCursorPosition(nextField.startRow, nextField.startCol);
+                        }
+                    }
+                    update();
+                    return;
+                }
+            }
+
+            // Normal advancement within field
             col++;
             if (col >= m_screenBuffer->cols()) {
                 col = 0;
@@ -328,17 +381,6 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
             }
             m_screenBuffer->setCursorPosition(row, col);
             update();
-
-            // Auto-enter: if cursor has reached end of an auto-enter field, send Enter AID
-            if (field.length > 0 && field.autoEnter) {
-                int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-                int fieldEnd = fieldStart + field.length;
-                int curAddr = row * m_screenBuffer->cols() + col;
-                if (curAddr >= fieldEnd) {
-                    emit inputReady(buildAIDResponse(0x7D)); // Enter AID
-                    setKeyboardState(KeyboardState::Locked);
-                }
-            }
         }
     }
 }
