@@ -226,15 +226,25 @@ void ScreenBuffer::scrollDown(int lines) {
     emit screenChanged();
 }
 
+void ScreenBuffer::writeChar(int row, int col, uint8_t ch) {
+    if (!isValidPosition(row, col)) {
+        return;
+    }
+
+    cell(row, col).character = ch;
+
+    emit screenChanged();
+}
+
 void ScreenBuffer::writeChar(int row, int col, uint8_t ch, const CellAttributes& attr) {
     if (!isValidPosition(row, col)) {
         return;
     }
-    
+
     ScreenCell& c = cell(row, col);
     c.character = ch;
     c.attributes = attr;
-    
+
     emit screenChanged();
 }
 

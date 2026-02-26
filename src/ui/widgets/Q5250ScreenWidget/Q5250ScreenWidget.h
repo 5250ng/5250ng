@@ -91,7 +91,7 @@ class Q5250ScreenWidget : public QWidget {
     void updateScreen();
     // Input processing (integrated)
     void processKeyEvent(QKeyEvent *event);
-    void processEncodedInput(const QByteArray &data);
+    void processEncodedInput(const QByteArray &data, bool isAID = false);
     void moveToNextField();
     void moveToPreviousField();
     void moveToFieldStart();

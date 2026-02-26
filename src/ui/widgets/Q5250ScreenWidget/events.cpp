@@ -221,43 +221,33 @@ void Q5250ScreenWidget::processKeyEvent(QKeyEvent *event) {
     bool ctrlPressed = (event->modifiers() & Qt::ControlModifier) != 0;
     bool altPressed = (event->modifiers() & Qt::AltModifier) != 0;
 
+    // Determine if this is an AID key BEFORE encoding, since AID byte values
+    // overlap with EBCDIC character codes (e.g. PF13-PF21 = 0xC1-0xC9 = 'A'-'I').
+    int key = event->key();
+    bool isAID = m_encoder->isPFKey(key) ||
+                 key == Qt::Key_Return || key == Qt::Key_Enter ||
+                 key == Qt::Key_PageUp || key == Qt::Key_PageDown ||
+                 (key == Qt::Key_Escape && ctrlPressed) ||
+                 key == Qt::Key_SysReq;
+
     QByteArray encoded =
         m_encoder->encodeKeyEvent(event, shiftPressed, ctrlPressed, altPressed);
 
     if (!encoded.isEmpty()) {
-        processEncodedInput(encoded);
+        processEncodedInput(encoded, isAID);
     }
 }
 
-void Q5250ScreenWidget::processEncodedInput(const QByteArray &data) {
+void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) {
     if (data.isEmpty() || !m_screenBuffer) {
         return;
     }
 
     uint8_t firstByte = static_cast<uint8_t>(data[0]);
 
-    // Check if it's an AID (Attention ID) key that should be sent to host
-    bool isAID = false;
-    switch (firstByte) {
-    case 0x7D: // Enter
-    case 0x6D: // Clear
-    case 0x6C: // Attn
-    case 0x6F: // SysReq
-    case 0xF4: // RollDown (PageDown)
-    case 0xF5: // RollUp (PageUp)
-        isAID = true;
-        break;
-    default:
-        // PF1-PF9: 0xF1-0xF9
-        if (firstByte >= 0xF1 && firstByte <= 0xF9) isAID = true;
-        // PF10-PF12: 0x7A-0x7C
-        else if (firstByte >= 0x7A && firstByte <= 0x7C) isAID = true;
-        // PF13-PF21: 0xC1-0xC9
-        else if (firstByte >= 0xC1 && firstByte <= 0xC9) isAID = true;
-        // PF22-PF24: 0x4A-0x4C
-        else if (firstByte >= 0x4A && firstByte <= 0x4C) isAID = true;
-        break;
-    }
+    // AID detection is determined by the caller (processKeyEvent) based on the
+    // original Qt key event, NOT by byte value.  AID byte values overlap with
+    // EBCDIC character codes (e.g. PF13-PF21 0xC1-0xC9 == uppercase A-I).
 
     if (isAID) {
         // AID key: build field response and send to host

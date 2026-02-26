@@ -77,7 +77,8 @@ public:
     void scrollDown(int lines = 1);
     
     // Write operations
-    void writeChar(int row, int col, uint8_t ch, const CellAttributes& attr = CellAttributes());
+    void writeChar(int row, int col, uint8_t ch);
+    void writeChar(int row, int col, uint8_t ch, const CellAttributes& attr);
     void writeString(int row, int col, const QByteArray& data, const CellAttributes& attr = CellAttributes());
     void eraseWrite(int row, int col, int length);
     void eraseWriteAlternate(int row, int col, int length);
