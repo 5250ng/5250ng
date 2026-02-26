@@ -239,6 +239,22 @@ void Decoder::parseData(const QByteArray &data) {
                                 }
                                 continue;
                             }
+                            if (ob == 0x15) {
+                                // WDSF (Write to Display Structured Field): variable length
+                                // Format: 0x15 [lenHi lenLo] [type] [data...]
+                                // Length includes the 2 length bytes themselves.
+                                // Skip entirely — not yet rendered.
+                                if (j + 2 < payload.size()) {
+                                    int wdsfLen = (static_cast<uint8_t>(payload[j + 1]) << 8) |
+                                                   static_cast<uint8_t>(payload[j + 2]);
+                                    if (wdsfLen < 2) wdsfLen = 2;
+                                    j += 1 + wdsfLen; // order byte + structured field
+                                    if (j > payload.size()) j = payload.size();
+                                } else {
+                                    j = payload.size();
+                                }
+                                continue;
+                            }
                             if (ob == 0x1D) {
                                 // SF (Start Field): variable length
                                 // Format: 0x1D FFW1 FFW2 [FCW pairs...] attr lenHi lenLo [fieldData]

@@ -53,6 +53,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onAbout();
     void onTakeScreenshot();
     void onToggleCursorRules();
+    void onToggleFieldProtection();
+    void onToggleInputFields();
     void updateEmptyState();
     void onQuickOpenChanged(const QString &sessionName);
     void rebuildQuickOpenMenu();
@@ -120,6 +122,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_connectAction;
     QAction *m_disconnectAction;
     QAction *m_exitAction;
+    QAction *m_showFieldProtectionAction;
+    QAction *m_showInputFieldsAction;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
 
     bool m_connected;

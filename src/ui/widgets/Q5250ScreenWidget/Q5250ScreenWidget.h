@@ -33,6 +33,16 @@ class Q5250ScreenWidget : public QWidget {
     void toggleCursorRules();
     bool showCursorRules() const { return m_showCursorRules; }
 
+    // Field protection overlay
+    void setShowFieldProtection(bool enabled);
+    void toggleFieldProtection();
+    bool showFieldProtection() const { return m_showFieldProtection; }
+
+    // Input fields overlay
+    void setShowInputFields(bool enabled);
+    void toggleInputFields();
+    bool showInputFields() const { return m_showInputFields; }
+
     // Screen buffer access
     ScreenBuffer *screenBuffer() { return m_screenBuffer; }
     const ScreenBuffer *screenBuffer() const { return m_screenBuffer; }
@@ -173,6 +183,8 @@ class Q5250ScreenWidget : public QWidget {
 
     // Overlay
     bool m_showCursorRules;
+    bool m_showFieldProtection;
+    bool m_showInputFields;
 
     // 5250 terminal state
     KeyboardState m_keyboardState;

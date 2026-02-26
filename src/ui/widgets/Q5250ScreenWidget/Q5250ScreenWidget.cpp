@@ -57,6 +57,8 @@ Q5250ScreenWidget::Q5250ScreenWidget(QWidget *parent)
 
     calculateCellSize();
     m_showCursorRules = false;
+    m_showFieldProtection = false;
+    m_showInputFields = false;
 
     // Initialize terminal state
     m_keyboardState = KeyboardState::Unlocked;
@@ -183,6 +185,20 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
     // Fill background
     painter.fillRect(cellRect, bgColor);
 
+    // Field protection overlay
+    if (m_showFieldProtection) {
+        if (cell.attributes.protected_field) {
+            painter.fillRect(cellRect, QColor(255, 0, 0, 64));   // Light red 25%
+        } else {
+            painter.fillRect(cellRect, QColor(0, 255, 0, 64));   // Light green 25%
+        }
+    }
+
+    // Input fields overlay
+    if (m_showInputFields && m_screenBuffer->isInField(row, col)) {
+        painter.fillRect(cellRect, QColor(0, 128, 255, 64));     // Light blue 25%
+    }
+
     // If selected, overlay semi-transparent yellow (25% opacity)
     if (hasSelection() && isCellSelected(row, col)) {
         QColor selOverlay(255, 255, 0, static_cast<int>(255 * 0.25)); // 25% alpha
@@ -194,8 +210,8 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
         return;
     }
 
-    // Draw character
-    QChar ch = core::EBCDIC::ebcdicToChar(cell.character);
+    // Null bytes (0x00) render as a space so underline/colSep still draw
+    QChar ch = (cell.character == 0x00) ? QChar(' ') : core::EBCDIC::ebcdicToChar(cell.character);
 
     painter.setPen(fgColor);
 
@@ -341,6 +357,32 @@ void Q5250ScreenWidget::setShowCursorRules(bool enabled) {
 
 void Q5250ScreenWidget::toggleCursorRules() {
     m_showCursorRules = !m_showCursorRules;
+    update();
+}
+
+void Q5250ScreenWidget::setShowFieldProtection(bool enabled) {
+    if (m_showFieldProtection == enabled) {
+        return;
+    }
+    m_showFieldProtection = enabled;
+    update();
+}
+
+void Q5250ScreenWidget::toggleFieldProtection() {
+    m_showFieldProtection = !m_showFieldProtection;
+    update();
+}
+
+void Q5250ScreenWidget::setShowInputFields(bool enabled) {
+    if (m_showInputFields == enabled) {
+        return;
+    }
+    m_showInputFields = enabled;
+    update();
+}
+
+void Q5250ScreenWidget::toggleInputFields() {
+    m_showInputFields = !m_showInputFields;
     update();
 }
 

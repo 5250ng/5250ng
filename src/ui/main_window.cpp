@@ -212,6 +212,20 @@ void MainWindow::onToggleCursorRules() {
         m_displayWidget->toggleCursorRules();
     }
 }
+
+void MainWindow::onToggleFieldProtection() {
+    if (m_displayWidget) {
+        m_displayWidget->toggleFieldProtection();
+        m_showFieldProtectionAction->setChecked(m_displayWidget->showFieldProtection());
+    }
+}
+
+void MainWindow::onToggleInputFields() {
+    if (m_displayWidget) {
+        m_displayWidget->toggleInputFields();
+        m_showInputFieldsAction->setChecked(m_displayWidget->showInputFields());
+    }
+}
 /**
  * Update UI widgets that reflect whether a session is connected.
  *
@@ -645,7 +659,21 @@ void MainWindow::onControlCharactersReceived(uint8_t cc1, uint8_t cc2) {
     if (cc2 & 0x10) {
         // Bit 4: Unlock keyboard, move cursor to IC address
         m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
-        screen->setCursorPosition(m_displayWidget->icRow(), m_displayWidget->icCol());
+        int icRow = m_displayWidget->icRow();
+        int icCol = m_displayWidget->icCol();
+        screen->setCursorPosition(icRow, icCol);
+        // If IC address lands on a protected/non-field position (e.g., no IC order
+        // was sent so default 0,0 is used), advance to the first input field.
+        auto field = screen->getField(icRow, icCol);
+        if (field.length <= 0 || field.protected_field || field.bypass) {
+            const auto &fields = screen->fields();
+            for (const auto &f : fields) {
+                if (f.length > 0 && !f.protected_field && !f.bypass) {
+                    screen->setCursorPosition(f.startRow, f.startCol);
+                    break;
+                }
+            }
+        }
         m_displayWidget->setFocus();
     }
     if (cc2 & 0x20) {
@@ -1065,6 +1093,22 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
             currentRow = mcRow;
             currentCol = mcCol;
             i += 3;
+            break;
+        }
+
+        case 0x15: { // WDSF - Write to Display Structured Field
+            // Format: 0x15 [lenHi lenLo] [type] [data...]
+            // Length includes the 2 length bytes themselves.
+            // Skip entirely — advanced feature not yet implemented.
+            if (i + 2 >= data.size()) {
+                i = data.size();
+                break;
+            }
+            int wdsfLen = (static_cast<uint8_t>(data[i + 1]) << 8) |
+                           static_cast<uint8_t>(data[i + 2]);
+            if (wdsfLen < 2) wdsfLen = 2;
+            i += 1 + wdsfLen; // order byte + structured field
+            if (i > data.size()) i = data.size();
             break;
         }
 
