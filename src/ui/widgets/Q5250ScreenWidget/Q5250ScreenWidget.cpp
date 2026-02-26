@@ -57,6 +57,16 @@ Q5250ScreenWidget::Q5250ScreenWidget(QWidget *parent)
 
     calculateCellSize();
     m_showCursorRules = false;
+
+    // Initialize terminal state
+    m_keyboardState = KeyboardState::Unlocked;
+    m_insertMode = false;
+    m_messageWaiting = false;
+    m_icRow = 0;
+    m_icCol = 0;
+    m_errorLineRow = -1; // Default: last row
+    m_cmdKeyMask[0] = m_cmdKeyMask[1] = m_cmdKeyMask[2] = 0;
+
     // Cursor widget overlay
     m_cursorWidget = new Q5250Cursor(this);
     m_cursorWidget->setVisible(false);
@@ -65,6 +75,18 @@ Q5250ScreenWidget::Q5250ScreenWidget(QWidget *parent)
 }
 
 Q5250ScreenWidget::~Q5250ScreenWidget() {}
+
+void Q5250ScreenWidget::setKeyboardState(KeyboardState state) {
+    if (m_keyboardState != state) {
+        m_keyboardState = state;
+        // Exiting insert mode when keyboard locks (per spec)
+        if (state == KeyboardState::Locked || state == KeyboardState::ErrorLocked) {
+            m_insertMode = false;
+        }
+        emit terminalStateChanged();
+        update();
+    }
+}
 
 void Q5250ScreenWidget::setScreenSize(int rows, int cols) {
     m_screenBuffer->resize(rows, cols);
@@ -146,18 +168,10 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
     QColor fgColor = m_fgColor;
 
     // Apply color from cell attributes
-    // Default CellAttributes has color=2 (green), which should be visible
     uint8_t colorCode = cell.attributes.color;
     if (colorCode < m_colorScheme.size() && m_colorScheme.size() > 0) {
         fgColor = m_colorScheme[colorCode];
-        // Safety check: if color is black (0) on black background, use default
-        // foreground This prevents invisible text
-        if (colorCode == 0 && bgColor == Qt::black) {
-            fgColor = m_fgColor; // Use default green instead of black
-        }
     } else {
-        // Fallback: if color code is out of range or color scheme is empty,
-        // use default foreground color (green) to ensure visibility
         fgColor = m_fgColor;
     }
 
@@ -173,6 +187,11 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
     if (hasSelection() && isCellSelected(row, col)) {
         QColor selOverlay(255, 255, 0, static_cast<int>(255 * 0.25)); // 25% alpha
         painter.fillRect(cellRect, selOverlay);
+    }
+
+    // Non-display fields: draw background only, no text (e.g. password fields)
+    if (cell.attributes.nonDisplay) {
+        return;
     }
 
     // Draw character
@@ -195,6 +214,12 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
 
     // Draw text
     painter.drawText(cellRect, Qt::AlignCenter, ch);
+
+    // Column separator: 1px vertical line on left edge of cell
+    if (cell.attributes.colSep) {
+        painter.setPen(fgColor);
+        painter.drawLine(cellRect.left(), cellRect.top(), cellRect.left(), cellRect.bottom());
+    }
 
     // Reset font
     painter.setFont(m_font);

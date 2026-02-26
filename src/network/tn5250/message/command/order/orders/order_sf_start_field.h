@@ -53,7 +53,7 @@ struct OrderSfStartField : OrderBase {
     // described in the screen attributes text.
     uint8_t attributes;
 
-    uint8_t length;
+    uint16_t length;
 
     std::string repeatedCharacter;
 

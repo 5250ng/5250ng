@@ -12,6 +12,14 @@
 
 namespace ui::widgets {
 
+// 5250 keyboard state machine (per IBM SA21-9247-6 "States and Modes")
+enum class KeyboardState : uint8_t {
+    Unlocked,       // Normal data entry (data mode, insert mode, command mode)
+    Locked,         // After AID key press or host command; waiting for host unlock
+    ErrorLocked,    // Operator error or Write Error Code; only Error Reset/Help/Attn work
+    SystemRequest   // System request state; keyboard unlocked for SysReq message entry
+};
+
 // Custom QWidget for TN5250 display rendering
 class Q5250ScreenWidget : public QWidget {
     Q_OBJECT
@@ -53,6 +61,22 @@ class Q5250ScreenWidget : public QWidget {
     void setSelectionEnabled(bool enabled) { m_selectionEnabled = enabled; update(); }
     bool isSelectionEnabled() const { return m_selectionEnabled; }
 
+    // 5250 terminal state (keyboard lock, insert mode, etc.)
+    KeyboardState keyboardState() const { return m_keyboardState; }
+    void setKeyboardState(KeyboardState state);
+    bool insertMode() const { return m_insertMode; }
+    void setInsertMode(bool enabled) { m_insertMode = enabled; update(); }
+    bool messageWaiting() const { return m_messageWaiting; }
+    void setMessageWaiting(bool on) { m_messageWaiting = on; emit terminalStateChanged(); }
+    int icRow() const { return m_icRow; }
+    int icCol() const { return m_icCol; }
+    void setICAddress(int row, int col) { m_icRow = row; m_icCol = col; }
+    int errorLineRow() const { return m_errorLineRow; }
+    void setErrorLineRow(int row) { m_errorLineRow = row; }
+    const uint8_t *cmdKeyMask() const { return m_cmdKeyMask; }
+    void setCmdKeyMask(uint8_t m1, uint8_t m2, uint8_t m3) { m_cmdKeyMask[0]=m1; m_cmdKeyMask[1]=m2; m_cmdKeyMask[2]=m3; }
+    void setSavedErrorLine(const QVector<ScreenCell> &line) { m_savedErrorLine = line; }
+
   public slots:
     void updateScreen();
     // Input processing (integrated)
@@ -71,6 +95,7 @@ class Q5250ScreenWidget : public QWidget {
   signals:
     void screenSizeChanged(int rows, int cols);
     void inputReady(const QByteArray &data);
+    void terminalStateChanged();
 
   protected:
     void paintEvent(QPaintEvent *event) override;
@@ -116,6 +141,8 @@ class Q5250ScreenWidget : public QWidget {
     QByteArray buildAIDResponse(uint8_t aidByte);
     void handleBackspace();
     void handleDelete();
+    void handleEraseInput();
+    void rightAdjustField(int row, int col);
 
     ScreenBuffer *m_screenBuffer;
     core::KeyboardEncoder *m_encoder;
@@ -146,6 +173,16 @@ class Q5250ScreenWidget : public QWidget {
 
     // Overlay
     bool m_showCursorRules;
+
+    // 5250 terminal state
+    KeyboardState m_keyboardState;
+    bool m_insertMode;
+    bool m_messageWaiting;
+    int m_icRow;
+    int m_icCol;
+    int m_errorLineRow;                // Error line row from SOH (default: last row)
+    uint8_t m_cmdKeyMask[3];           // SOH command key masks
+    QVector<ScreenCell> m_savedErrorLine; // Saved error line contents for Error Reset
 };
 
 } // namespace ui::widgets

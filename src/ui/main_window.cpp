@@ -193,6 +193,13 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     connect(m_parser, &tn5250::client::Decoder::rawScreenDataReceived, this, &MainWindow::handleRawScreenData);
     connect(m_parser, &tn5250::client::Decoder::clearScreenRequested, this, &MainWindow::onClearScreenRequested);
     connect(m_parser, &tn5250::client::Decoder::keyboardUnlockRequested, this, &MainWindow::onKeyboardUnlockRequested);
+    connect(m_parser, &tn5250::client::Decoder::controlCharactersReceived, this, &MainWindow::onControlCharactersReceived);
+    connect(m_parser, &tn5250::client::Decoder::sohReceived, this, &MainWindow::onSohReceived);
+    connect(m_parser, &tn5250::client::Decoder::rollRequested, this, &MainWindow::onRollRequested);
+    connect(m_parser, &tn5250::client::Decoder::writeErrorCodeRequested, this, &MainWindow::onWriteErrorCode);
+    connect(m_parser, &tn5250::client::Decoder::saveScreenRequested, this, &MainWindow::onSaveScreenRequested);
+    connect(m_parser, &tn5250::client::Decoder::clearScreenAlternateRequested, this, &MainWindow::onClearScreenAlternateRequested);
+    connect(m_parser, &tn5250::client::Decoder::clearFormatTableRequested, this, &MainWindow::onClearFormatTableRequested);
 
     // Start the session thread (which triggers the worker start)
     session->thread->start();
@@ -301,10 +308,9 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
 
     switch (cmd) {
     case tn5250::client::TN5250Command::READ_MDT_FIELDS: {
-        // Host requests all modified input fields.
-        // Build response: AID + cursor(row,col) + modified field data
-        sendToHost(buildFieldResponse(0x7D)); // AID Enter
-        logger::Logger::instance()->debug("MainWindow: READ_MDT_FIELDS - sent field response");
+        // Host sets up for input: send modified fields when user presses an AID key.
+        // Do NOT respond immediately — the user's AID key press triggers the response.
+        logger::Logger::instance()->debug("MainWindow: READ_MDT_FIELDS - awaiting user AID key");
         break;
     }
 
@@ -323,6 +329,20 @@ void MainWindow::handleTN5250Command(tn5250::client::TN5250Command cmd, const QB
         logger::Logger::instance()->debug(
             QString("MainWindow: READ_MODIFY command (not yet implemented)")
         );
+        break;
+    }
+
+    case tn5250::client::TN5250Command::READ_INPUT_FIELDS: {
+        // Host sets up for input: send ALL input fields when user presses an AID key.
+        // Do NOT respond immediately — the user's AID key press triggers the response.
+        logger::Logger::instance()->debug("MainWindow: READ_INPUT_FIELDS - awaiting user AID key");
+        break;
+    }
+
+    case tn5250::client::TN5250Command::READ_IMMEDIATE: {
+        // Host requests immediate response without waiting for AID
+        sendToHost(buildFieldResponse(0x7D));
+        logger::Logger::instance()->debug("MainWindow: READ_IMMEDIATE - sent immediate response");
         break;
     }
 
@@ -504,6 +524,13 @@ void MainWindow::connectSessionSignals() {
     connect(m_parser, &tn5250::client::Decoder::rawScreenDataReceived, this, &MainWindow::handleRawScreenData);
     connect(m_parser, &tn5250::client::Decoder::clearScreenRequested, this, &MainWindow::onClearScreenRequested);
     connect(m_parser, &tn5250::client::Decoder::keyboardUnlockRequested, this, &MainWindow::onKeyboardUnlockRequested);
+    connect(m_parser, &tn5250::client::Decoder::controlCharactersReceived, this, &MainWindow::onControlCharactersReceived);
+    connect(m_parser, &tn5250::client::Decoder::sohReceived, this, &MainWindow::onSohReceived);
+    connect(m_parser, &tn5250::client::Decoder::rollRequested, this, &MainWindow::onRollRequested);
+    connect(m_parser, &tn5250::client::Decoder::writeErrorCodeRequested, this, &MainWindow::onWriteErrorCode);
+    connect(m_parser, &tn5250::client::Decoder::saveScreenRequested, this, &MainWindow::onSaveScreenRequested);
+    connect(m_parser, &tn5250::client::Decoder::clearScreenAlternateRequested, this, &MainWindow::onClearScreenAlternateRequested);
+    connect(m_parser, &tn5250::client::Decoder::clearFormatTableRequested, this, &MainWindow::onClearFormatTableRequested);
 }
 
 /**
@@ -563,6 +590,186 @@ void MainWindow::onKeyboardUnlockRequested() {
     }
 }
 
+void MainWindow::onControlCharactersReceived(uint8_t cc1, uint8_t cc2) {
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return;
+    }
+    auto *screen = m_displayWidget->screenBuffer();
+
+    // CC byte 1: bits 0-2 control MDT and field clearing
+    // Per IBM SA21-9247-6 "Control Characters, Display"
+    uint8_t combo = cc1 & 0x07;
+
+    if (combo == 0x05 || combo == 0x06 || combo == 0x07) {
+        // Null all non-bypass input fields
+        for (const auto &field : screen->fields()) {
+            if (!field.protected_field) {
+                int addr = field.startRow * screen->cols() + field.startCol;
+                for (int j = 0; j < field.length; ++j) {
+                    int r = (addr + j) / screen->cols();
+                    int c = (addr + j) % screen->cols();
+                    screen->writeChar(r, c, 0x00);
+                }
+            }
+        }
+    }
+
+    if (combo & 0x04) {
+        // Bit 2: Reset MDT flags on all fields
+        QVector<ui::widgets::ScreenBuffer::Field> &fields =
+            const_cast<QVector<ui::widgets::ScreenBuffer::Field> &>(screen->fields());
+        for (auto &field : fields) {
+            field.modified = false;
+        }
+    }
+
+    if (combo & 0x01) {
+        // Bit 0: Reset pending aid, lock keyboard
+        m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Locked);
+    }
+
+    if (combo == 0x07) {
+        // Clear format table as well
+        const_cast<QVector<ui::widgets::ScreenBuffer::Field> &>(screen->fields()).clear();
+    }
+
+    // CC byte 2 processing
+    if (cc2 & 0x04) {
+        // Bit 2: Reset blinking cursor
+        m_displayWidget->setCursorBlinkRate(0);
+    }
+    if (cc2 & 0x08) {
+        // Bit 3: Set blinking cursor
+        m_displayWidget->setCursorBlinkRate(250);
+    }
+    if (cc2 & 0x10) {
+        // Bit 4: Unlock keyboard, move cursor to IC address
+        m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
+        screen->setCursorPosition(m_displayWidget->icRow(), m_displayWidget->icCol());
+        m_displayWidget->setFocus();
+    }
+    if (cc2 & 0x20) {
+        // Bit 5: Sound alarm
+        QApplication::beep();
+    }
+    if (cc2 & 0x40) {
+        // Bit 6: Set Message Waiting indicator OFF
+        m_displayWidget->setMessageWaiting(false);
+    }
+    if (cc2 & 0x80) {
+        // Bit 7: Set Message Waiting indicator ON
+        m_displayWidget->setMessageWaiting(true);
+    }
+}
+
+void MainWindow::onSohReceived(uint8_t errorRow, uint8_t ckm1, uint8_t ckm2, uint8_t ckm3) {
+    if (!m_displayWidget) {
+        return;
+    }
+    // Store SOH fields in the terminal state
+    if (errorRow > 0) {
+        m_displayWidget->setErrorLineRow(errorRow - 1); // Convert to 0-based
+    }
+    m_displayWidget->setCmdKeyMask(ckm1, ckm2, ckm3);
+    logger::Logger::instance()->debug(
+        QString("MainWindow: SOH received - errorRow=%1 cmdKeyMask=%2,%3,%4")
+            .arg(errorRow).arg(ckm1, 2, 16, QChar('0'))
+            .arg(ckm2, 2, 16, QChar('0')).arg(ckm3, 2, 16, QChar('0')));
+}
+
+void MainWindow::onRollRequested(uint8_t topRow, uint8_t botRow, uint8_t lines, bool up) {
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return;
+    }
+    m_displayWidget->screenBuffer()->scrollRegion(topRow, botRow, lines, up);
+    logger::Logger::instance()->debug(
+        QString("MainWindow: Roll %1 rows=%2-%3 lines=%4")
+            .arg(up ? "up" : "down").arg(topRow).arg(botRow).arg(lines));
+}
+
+void MainWindow::onWriteErrorCode(const QByteArray &errorData) {
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return;
+    }
+    auto *screen = m_displayWidget->screenBuffer();
+    int errRow = m_displayWidget->errorLineRow();
+    if (errRow < 0) errRow = screen->rows() - 1;
+
+    // Save error line contents for Error Reset
+    QVector<ui::widgets::ScreenCell> savedLine;
+    for (int c = 0; c < screen->cols(); ++c) {
+        savedLine.append(screen->cell(errRow, c));
+    }
+    m_displayWidget->setSavedErrorLine(savedLine);
+
+    // Clear the error line first
+    for (int c = 0; c < screen->cols(); ++c) {
+        screen->writeChar(errRow, c, 0x40); // EBCDIC space
+    }
+
+    // Write error data to error line — contains orders/data for the error line
+    int col = 0;
+    ui::widgets::CellAttributes errAttr;
+    errAttr.color = 12; // Red/high-intensity for error messages
+    for (int i = 0; i < errorData.size();) {
+        uint8_t byte = static_cast<uint8_t>(errorData[i]);
+        if (byte == 0x13 && i + 2 < errorData.size()) {
+            // IC order within WEC: move cursor (but don't change system IC address)
+            int icRow = static_cast<uint8_t>(errorData[i + 1]) - 1;
+            int icCol = static_cast<uint8_t>(errorData[i + 2]) - 1;
+            if (icRow >= 0 && icRow < screen->rows() && icCol >= 0 && icCol < screen->cols()) {
+                screen->setCursorPosition(icRow, icCol);
+            }
+            i += 3;
+            continue;
+        }
+        if (byte >= 0x40 && col < screen->cols()) {
+            // EBCDIC printable character — write to error line
+            screen->writeChar(errRow, col, byte, errAttr);
+            col++;
+        } else if (byte >= 0x20 && byte <= 0x3F) {
+            // Attribute byte — occupies a position as blank
+            screen->writeChar(errRow, col, 0x40, errAttr);
+            col++;
+        }
+        i++;
+    }
+
+    // Lock keyboard in ErrorLocked state
+    m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::ErrorLocked);
+    logger::Logger::instance()->debug("MainWindow: Write Error Code received");
+}
+
+void MainWindow::onSaveScreenRequested() {
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return;
+    }
+    if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
+        m_sessions[m_activeIndex]->savedScreen = m_displayWidget->screenBuffer()->saveState();
+        logger::Logger::instance()->debug("MainWindow: Screen saved");
+    }
+}
+
+void MainWindow::onClearScreenAlternateRequested() {
+    if (!m_displayWidget) {
+        return;
+    }
+    // Switch to 27x132 mode and clear
+    m_displayWidget->setScreenSize(27, 132);
+    if (m_displayWidget->screenBuffer()) {
+        m_displayWidget->screenBuffer()->clear();
+    }
+    logger::Logger::instance()->debug("MainWindow: Clear Unit Alternate (27x132)");
+}
+
+void MainWindow::onClearFormatTableRequested() {
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return;
+    }
+    m_displayWidget->screenBuffer()->clearFields();
+    logger::Logger::instance()->debug("MainWindow: Format table cleared");
+}
+
 /**
  * Show or hide the empty-state placeholder when there are no tabs.
  *
@@ -616,64 +823,84 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
     int currentCol = 0;
     ui::widgets::CellAttributes currentAttr;
     int i = 0;
+    int totalCells = screen->rows() * screen->cols();
 
     while (i < data.size()) {
         uint8_t byte = static_cast<uint8_t>(data[i]);
 
+        // 5250 display orders are in the 0x00-0x3F range.
+        // EBCDIC printable characters are 0x40-0xFF.
+        if (byte >= 0x40) {
+            // Regular EBCDIC character data — write to screen
+            screen->writeChar(currentRow, currentCol, byte, currentAttr);
+            currentCol++;
+            if (currentCol >= screen->cols()) {
+                currentCol = 0;
+                currentRow++;
+                if (currentRow >= screen->rows()) {
+                    currentRow = screen->rows() - 1;
+                }
+            }
+            i++;
+            continue;
+        }
+
+        // Handle display orders (0x00-0x3F range)
         switch (byte) {
         case 0x11: { // SBA - Set Buffer Address
             if (i + 2 >= data.size()) {
                 i = data.size();
                 break;
             }
-            // Address bytes are 1-based row and col
             currentRow = static_cast<uint8_t>(data[i + 1]) - 1;
             currentCol = static_cast<uint8_t>(data[i + 2]) - 1;
             if (currentRow < 0) currentRow = 0;
             if (currentCol < 0) currentCol = 0;
+            if (currentRow >= screen->rows()) currentRow = screen->rows() - 1;
+            if (currentCol >= screen->cols()) currentCol = screen->cols() - 1;
+            // Reset current attributes to default (green, visible).
+            // In the 5250 protocol, field attributes apply only within the field.
+            // Text outside any field uses default attributes. SBA starts a new
+            // positioning context; if the next bytes are field content, the SF
+            // order preceding them will re-set currentAttr appropriately.
+            currentAttr = ui::widgets::CellAttributes();
             i += 3;
             break;
         }
 
         case 0x1D: { // SF - Start Field
-            // Format: 0x1D FFW1 FFW2 [FCW pairs...] attr len
+            // Format: 0x1D FFW1 FFW2 [FCW pairs...] attr fieldLen
             if (i + 4 >= data.size()) {
                 i = data.size();
                 break;
             }
             uint8_t ffw1 = static_cast<uint8_t>(data[i + 1]);
-            // uint8_t ffw2 = static_cast<uint8_t>(data[i + 2]);
-            int idx = i + 3;
+            uint8_t ffw2 = static_cast<uint8_t>(data[i + 2]);
+            int idx = i + 3; // past 0x1D, FFW1, FFW2
 
-            // Skip FCW (Field Control Word) pairs: bytes with high 3 bits != 001 (0x20-0x3F range)
+            // Skip optional FCW (Field Control Word) pairs.
+            // FCW bytes have high 3 bits != 001. The attribute byte has bits 7-5 = 001 (0x20-0x3F).
             while (idx + 1 < data.size()) {
                 uint8_t b = static_cast<uint8_t>(data[idx]);
                 if ((b & 0xE0) == 0x20) {
-                    // This is the attribute byte (range 0x20-0x3F)
-                    break;
+                    break; // Found attribute byte
                 }
-                // Skip FCW pair (2 bytes)
-                idx += 2;
+                idx += 2; // Skip FCW pair
             }
 
-            if (idx >= data.size()) {
-                i = data.size();
-                break;
-            }
-
+            if (idx >= data.size()) { i = data.size(); break; }
             uint8_t attrByte = static_cast<uint8_t>(data[idx]);
             idx++;
 
-            if (idx >= data.size()) {
-                i = data.size();
-                break;
-            }
+            if (idx + 1 >= data.size()) { i = data.size(); break; }
+            int fieldLen = (static_cast<uint8_t>(data[idx]) << 8) | static_cast<uint8_t>(data[idx + 1]);
+            idx += 2;
 
-            uint8_t fieldLen = static_cast<uint8_t>(data[idx]);
-            idx++;
-
-            // Write attribute byte at current position (non-displayable marker)
-            screen->writeChar(currentRow, currentCol, attrByte, currentAttr);
+            // Write BLANK at attribute byte position (it occupies a cell but is not displayed)
+            ui::widgets::CellAttributes attrPosAttr;
+            attrPosAttr.protected_field = true;
+            attrPosAttr.nonDisplay = true;
+            screen->writeChar(currentRow, currentCol, 0x40, attrPosAttr);
 
             // Advance past attribute byte position
             int nextAddr = currentRow * screen->cols() + currentCol + 1;
@@ -683,24 +910,64 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
             // Register the field
             bool isProtected = (ffw1 & 0x20) != 0;
             screen->setField(fieldStartRow, fieldStartCol, fieldLen, isProtected);
+            screen->setFieldFFW(fieldStartRow, fieldStartCol, ffw1, ffw2);
 
-            // Set current attributes from attr byte for subsequent data
+            // IBM 3179-2 full color attribute table (SA21-9247-6, Table 2-3)
+            // Attribute byte format: 001X XXXX (0x20-0x3F), indexed by (attrByte & 0x1F)
+            //
+            // Each entry: { colorIndex, reverse, blink, underline, nonDisplay, colSep }
+            // Color indices: 2=Green, 9=Blue, 11=Cyan, 12=Red, 13=Pink, 14=Yellow, 15=White
+            struct AttrEntry { uint8_t color; bool rev; bool blk; bool ul; bool nd; bool cs; };
+            static const AttrEntry attrTable[32] = {
+                /* 0x20 */ { 2, false,false,false,false,false}, // Green
+                /* 0x21 */ { 2,  true,false,false,false,false}, // Green, reverse
+                /* 0x22 */ {15, false,false,false,false,false}, // White
+                /* 0x23 */ {15,  true,false,false,false,false}, // White, reverse
+                /* 0x24 */ { 2, false,false, true,false,false}, // Green, underline
+                /* 0x25 */ { 2,  true,false, true,false,false}, // Green, reverse+underline
+                /* 0x26 */ {15, false,false, true,false,false}, // White, underline
+                /* 0x27 */ { 2, false,false,false, true,false}, // Non-display
+                /* 0x28 */ {12, false,false,false,false,false}, // Red
+                /* 0x29 */ {12,  true,false,false,false,false}, // Red, reverse
+                /* 0x2A */ {12, false, true,false,false,false}, // Red, blink
+                /* 0x2B */ {12,  true, true,false,false,false}, // Red, reverse+blink
+                /* 0x2C */ {12, false,false, true,false,false}, // Red, underline
+                /* 0x2D */ {12,  true,false, true,false,false}, // Red, reverse+underline
+                /* 0x2E */ {12, false, true, true,false,false}, // Red, blink+underline
+                /* 0x2F */ {12, false,false,false, true,false}, // Non-display
+                /* 0x30 */ {11, false,false,false,false, true}, // Cyan, col-sep
+                /* 0x31 */ {11,  true,false,false,false, true}, // Cyan, reverse, col-sep
+                /* 0x32 */ {14, false,false,false,false, true}, // Yellow, col-sep
+                /* 0x33 */ {14,  true,false,false,false, true}, // Yellow, reverse, col-sep
+                /* 0x34 */ {11, false,false, true,false, true}, // Cyan, underline, col-sep
+                /* 0x35 */ {11,  true,false, true,false, true}, // Cyan, reverse+underline, col-sep
+                /* 0x36 */ {14, false,false, true,false, true}, // Yellow, underline, col-sep
+                /* 0x37 */ {14, false,false,false, true,false}, // Non-display
+                /* 0x38 */ {13, false,false,false,false,false}, // Pink
+                /* 0x39 */ {13,  true,false,false,false,false}, // Pink, reverse
+                /* 0x3A */ { 9, false,false,false,false,false}, // Blue
+                /* 0x3B */ { 9,  true,false,false,false,false}, // Blue, reverse
+                /* 0x3C */ {13, false,false, true,false,false}, // Pink, underline
+                /* 0x3D */ {13,  true,false, true,false,false}, // Pink, reverse+underline
+                /* 0x3E */ { 9, false,false, true,false,false}, // Blue, underline
+                /* 0x3F */ { 9, false,false,false, true,false}, // Non-display
+            };
+
             currentAttr = ui::widgets::CellAttributes();
             currentAttr.protected_field = isProtected;
-            // Decode display attributes: blink=bit3, underscore=bit2, high-intensity=bit1, reverse=bit0
-            currentAttr.blink = (attrByte & 0x08) != 0;
-            currentAttr.underline = (attrByte & 0x04) != 0;
-            currentAttr.reverse = (attrByte & 0x01) != 0;
-            if (attrByte & 0x02) {
-                // High intensity — use bright color
-                currentAttr.color = 7; // white/bright
-            }
 
-            // Advance write cursor by 1 only (past the attribute byte)
+            uint8_t tableIdx = attrByte & 0x1F;
+            const AttrEntry &ae = attrTable[tableIdx];
+            currentAttr.color = ae.color;
+            currentAttr.reverse = ae.rev;
+            currentAttr.blink = ae.blk;
+            currentAttr.underline = ae.ul;
+            currentAttr.nonDisplay = ae.nd;
+            currentAttr.colSep = ae.cs;
+
             currentRow = fieldStartRow;
             currentCol = fieldStartCol;
-
-            i = idx; // Advance past SF header only (NOT by fieldLen)
+            i = idx;
             break;
         }
 
@@ -709,7 +976,6 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
                 i = data.size();
                 break;
             }
-            // Target address (1-based)
             int targetRow = static_cast<uint8_t>(data[i + 1]) - 1;
             int targetCol = static_cast<uint8_t>(data[i + 2]) - 1;
             uint8_t fillChar = static_cast<uint8_t>(data[i + 3]);
@@ -717,10 +983,8 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
             if (targetCol < 0) targetCol = 0;
             i += 4;
 
-            // Fill from current position to target (inclusive)
             int currentAddr = currentRow * screen->cols() + currentCol;
             int targetAddr = targetRow * screen->cols() + targetCol;
-            int totalCells = screen->rows() * screen->cols();
 
             for (int addr = currentAddr; addr <= targetAddr && addr < totalCells; ++addr) {
                 int r = addr / screen->cols();
@@ -729,6 +993,37 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
             }
 
             // Advance cursor past the last filled position
+            int nextAddr = targetAddr + 1;
+            if (nextAddr < totalCells) {
+                currentRow = nextAddr / screen->cols();
+                currentCol = nextAddr % screen->cols();
+            } else {
+                currentRow = screen->rows() - 1;
+                currentCol = screen->cols() - 1;
+            }
+            break;
+        }
+
+        case 0x03: { // EA - Erase to Address
+            if (i + 2 >= data.size()) {
+                i = data.size();
+                break;
+            }
+            int targetRow = static_cast<uint8_t>(data[i + 1]) - 1;
+            int targetCol = static_cast<uint8_t>(data[i + 2]) - 1;
+            if (targetRow < 0) targetRow = 0;
+            if (targetCol < 0) targetCol = 0;
+            i += 3;
+
+            int currentAddr = currentRow * screen->cols() + currentCol;
+            int targetAddr = targetRow * screen->cols() + targetCol;
+
+            for (int addr = currentAddr; addr <= targetAddr && addr < totalCells; ++addr) {
+                int r = addr / screen->cols();
+                int c = addr % screen->cols();
+                screen->writeChar(r, c, 0x40, ui::widgets::CellAttributes());
+            }
+
             int nextAddr = targetAddr + 1;
             if (nextAddr < totalCells) {
                 currentRow = nextAddr / screen->cols();
@@ -750,6 +1045,10 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
             if (icRow < 0) icRow = 0;
             if (icCol < 0) icCol = 0;
             screen->setCursorPosition(icRow, icCol);
+            // Store IC address for CC "unlock + move to IC" processing
+            if (m_displayWidget) {
+                m_displayWidget->setICAddress(icRow, icCol);
+            }
             i += 3;
             break;
         }
@@ -769,23 +1068,118 @@ void MainWindow::renderTN5250Stream(const QByteArray &data) {
             break;
         }
 
+        case 0x10: { // TD - Transparent Data
+            // Format: 0x10 [count_hi count_lo] [count bytes of transparent data]
+            // Transparent data bytes are written to the screen as-is without
+            // interpreting them as display orders.
+            if (i + 2 >= data.size()) {
+                i = data.size();
+                break;
+            }
+            uint16_t tdLen = (static_cast<uint16_t>(static_cast<uint8_t>(data[i + 1])) << 8) |
+                              static_cast<uint16_t>(static_cast<uint8_t>(data[i + 2]));
+            i += 3;
+            for (uint16_t t = 0; t < tdLen && i < data.size(); t++) {
+                uint8_t tdByte = static_cast<uint8_t>(data[i]);
+                screen->writeChar(currentRow, currentCol, tdByte, currentAttr);
+                currentCol++;
+                if (currentCol >= screen->cols()) {
+                    currentCol = 0;
+                    currentRow++;
+                    if (currentRow >= screen->rows()) {
+                        currentRow = screen->rows() - 1;
+                    }
+                }
+                i++;
+            }
+            break;
+        }
+
         case 0x04: { // ESC - should not appear here (already stripped by Decoder)
-            // Skip ESC + next byte
             i += 2;
             break;
         }
 
         default: {
-            // Regular EBCDIC character data — write to screen
-            screen->writeChar(currentRow, currentCol, byte, currentAttr);
-            currentCol++;
-            if (currentCol >= screen->cols()) {
-                currentCol = 0;
-                currentRow++;
-                if (currentRow >= screen->rows()) {
-                    currentRow = screen->rows() - 1;
+            if (byte == 0x00) {
+                // Null character — write to screen (marks unused field positions)
+                screen->writeChar(currentRow, currentCol, 0x00, currentAttr);
+                currentCol++;
+                if (currentCol >= screen->cols()) {
+                    currentCol = 0;
+                    currentRow++;
+                    if (currentRow >= screen->rows()) {
+                        currentRow = screen->rows() - 1;
+                    }
                 }
+                i++;
+                break;
             }
+            if (byte >= 0x20 && byte <= 0x3F) {
+                // Attribute indicator byte — occupies a display position (shown as blank)
+                // and sets display attributes for subsequent characters.
+                struct AttrEntry { uint8_t color; bool rev; bool blk; bool ul; bool nd; bool cs; };
+                static const AttrEntry attrTable[32] = {
+                    /* 0x20 */ { 2, false,false,false,false,false},
+                    /* 0x21 */ { 2,  true,false,false,false,false},
+                    /* 0x22 */ {15, false,false,false,false,false},
+                    /* 0x23 */ {15,  true,false,false,false,false},
+                    /* 0x24 */ { 2, false,false, true,false,false},
+                    /* 0x25 */ { 2,  true,false, true,false,false},
+                    /* 0x26 */ {15, false,false, true,false,false},
+                    /* 0x27 */ { 2, false,false,false, true,false},
+                    /* 0x28 */ {12, false,false,false,false,false},
+                    /* 0x29 */ {12,  true,false,false,false,false},
+                    /* 0x2A */ {12, false, true,false,false,false},
+                    /* 0x2B */ {12,  true, true,false,false,false},
+                    /* 0x2C */ {12, false,false, true,false,false},
+                    /* 0x2D */ {12,  true,false, true,false,false},
+                    /* 0x2E */ {12, false, true, true,false,false},
+                    /* 0x2F */ {12, false,false,false, true,false},
+                    /* 0x30 */ {11, false,false,false,false, true},
+                    /* 0x31 */ {11,  true,false,false,false, true},
+                    /* 0x32 */ {14, false,false,false,false, true},
+                    /* 0x33 */ {14,  true,false,false,false, true},
+                    /* 0x34 */ {11, false,false, true,false, true},
+                    /* 0x35 */ {11,  true,false, true,false, true},
+                    /* 0x36 */ {14, false,false, true,false, true},
+                    /* 0x37 */ {14, false,false,false, true,false},
+                    /* 0x38 */ {13, false,false,false,false,false},
+                    /* 0x39 */ {13,  true,false,false,false,false},
+                    /* 0x3A */ { 9, false,false,false,false,false},
+                    /* 0x3B */ { 9,  true,false,false,false,false},
+                    /* 0x3C */ {13, false,false, true,false,false},
+                    /* 0x3D */ {13,  true,false, true,false,false},
+                    /* 0x3E */ { 9, false,false, true,false,false},
+                    /* 0x3F */ { 9, false,false,false, true,false},
+                };
+                // Write blank at attribute position (not displayed)
+                ui::widgets::CellAttributes attrPosAttr;
+                attrPosAttr.protected_field = true;
+                attrPosAttr.nonDisplay = true;
+                screen->writeChar(currentRow, currentCol, 0x40, attrPosAttr);
+                // Update current attributes from the attribute table
+                uint8_t tableIdx = byte & 0x1F;
+                const AttrEntry &ae = attrTable[tableIdx];
+                currentAttr = ui::widgets::CellAttributes();
+                currentAttr.color = ae.color;
+                currentAttr.reverse = ae.rev;
+                currentAttr.blink = ae.blk;
+                currentAttr.underline = ae.ul;
+                currentAttr.nonDisplay = ae.nd;
+                currentAttr.colSep = ae.cs;
+                currentCol++;
+                if (currentCol >= screen->cols()) {
+                    currentCol = 0;
+                    currentRow++;
+                    if (currentRow >= screen->rows()) {
+                        currentRow = screen->rows() - 1;
+                    }
+                }
+                i++;
+                break;
+            }
+            // Truly unrecognized control byte — skip silently
             i++;
             break;
         }

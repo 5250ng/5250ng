@@ -74,6 +74,13 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void handleRawScreenData(const QByteArray &data);
     void onClearScreenRequested();
     void onKeyboardUnlockRequested();
+    void onControlCharactersReceived(uint8_t cc1, uint8_t cc2);
+    void onSohReceived(uint8_t errorRow, uint8_t ckm1, uint8_t ckm2, uint8_t ckm3);
+    void onRollRequested(uint8_t topRow, uint8_t botRow, uint8_t lines, bool up);
+    void onWriteErrorCode(const QByteArray &errorCode);
+    void onSaveScreenRequested();
+    void onClearScreenAlternateRequested();
+    void onClearFormatTableRequested();
     QStringList hexdump(const QByteArray &data);
     void connectSessionSignals();
     void disconnectSessionSignals();
@@ -93,6 +100,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         ui::widgets::QConnectionStatusWidget *connectionStatus;
         QLabel *coordinatesLabel;
         session::SessionConfig config;
+        ui::widgets::ScreenBuffer::SavedState savedScreen; // For Save/Restore Screen
     };
 
     QTabWidget *m_tabWidget;

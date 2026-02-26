@@ -14,7 +14,9 @@ enum class TN5250Command : uint8_t {
     ERASE_WRITE_ALTERNATE = 0x0D,
     READ_MODIFY = 0x06,
     READ_MODIFY_WRITE = 0x07,
-    READ_MDT_FIELDS = 0x52
+    READ_MDT_FIELDS = 0x52,
+    READ_INPUT_FIELDS = 0x42,
+    READ_IMMEDIATE = 0x72
 };
 
 // TN5250 structured field types
@@ -52,7 +54,14 @@ class Decoder : public QObject {
     void structuredFieldReceived(StructuredFieldType type, const QByteArray &data);
     void rawScreenDataReceived(const QByteArray &data);
     void clearScreenRequested();
+    void clearScreenAlternateRequested();
     void keyboardUnlockRequested();
+    void controlCharactersReceived(uint8_t cc1, uint8_t cc2);
+    void sohReceived(uint8_t errorRow, uint8_t cmdKeyMask1, uint8_t cmdKeyMask2, uint8_t cmdKeyMask3);
+    void rollRequested(uint8_t topRow, uint8_t botRow, uint8_t lines, bool up);
+    void writeErrorCodeRequested(const QByteArray &errorCode);
+    void saveScreenRequested();
+    void clearFormatTableRequested();
     void parseError(const QString &error);
 
   private:

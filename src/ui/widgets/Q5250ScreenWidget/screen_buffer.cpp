@@ -107,6 +107,25 @@ void ScreenBuffer::setField(int row, int col, int length, bool protected_field) 
     emit fieldChanged(row, col);
 }
 
+void ScreenBuffer::setFieldFFW(int row, int col, uint8_t ffw1, uint8_t ffw2) {
+    int addr = row * m_cols + col;
+    for (Field &field : m_fields) {
+        int fStart = field.startRow * m_cols + field.startCol;
+        if (fStart == addr) {
+            field.ffw1 = ffw1;
+            field.ffw2 = ffw2;
+            field.shiftType = (ffw1 >> 5) & 0x07;
+            field.bypass = (ffw1 & 0x04) != 0;
+            field.autoEnter = (ffw2 & 0x01) != 0;
+            field.fieldExitReq = (ffw2 & 0x02) != 0;
+            field.monocase = (ffw2 & 0x04) != 0;
+            field.mandatoryEnter = (ffw2 & 0x10) != 0;
+            field.rightAdjust = (ffw2 >> 5) & 0x07;
+            return;
+        }
+    }
+}
+
 ScreenBuffer::Field ScreenBuffer::getField(int row, int col) const {
     int addr = row * m_cols + col;
     for (const Field &field : m_fields) {
@@ -370,6 +389,64 @@ QByteArray ScreenBuffer::getFieldData(const Field &field) const {
         data.append(static_cast<char>(m_buffer[index(r, c)].character));
     }
     return data;
+}
+
+void ScreenBuffer::scrollRegion(int topRow, int botRow, int lines, bool up) {
+    if (topRow < 0) topRow = 0;
+    if (botRow >= m_rows) botRow = m_rows - 1;
+    if (topRow > botRow || lines <= 0) return;
+
+    if (up) {
+        // Scroll up: move rows upward, clear vacated rows at bottom
+        for (int row = topRow; row <= botRow - lines; ++row) {
+            for (int col = 0; col < m_cols; ++col) {
+                m_buffer[index(row, col)] = m_buffer[index(row + lines, col)];
+            }
+        }
+        for (int row = botRow - lines + 1; row <= botRow; ++row) {
+            for (int col = 0; col < m_cols; ++col) {
+                m_buffer[index(row, col)] = ScreenCell();
+            }
+        }
+    } else {
+        // Scroll down: move rows downward, clear vacated rows at top
+        for (int row = botRow; row >= topRow + lines; --row) {
+            for (int col = 0; col < m_cols; ++col) {
+                m_buffer[index(row, col)] = m_buffer[index(row - lines, col)];
+            }
+        }
+        for (int row = topRow; row < topRow + lines; ++row) {
+            for (int col = 0; col < m_cols; ++col) {
+                m_buffer[index(row, col)] = ScreenCell();
+            }
+        }
+    }
+    emit screenChanged();
+}
+
+void ScreenBuffer::clearFields() {
+    m_fields.clear();
+}
+
+ScreenBuffer::SavedState ScreenBuffer::saveState() const {
+    SavedState state;
+    state.buffer = m_buffer;
+    state.fields = m_fields;
+    state.cursorPos = m_cursorPos;
+    state.rows = m_rows;
+    state.cols = m_cols;
+    return state;
+}
+
+void ScreenBuffer::restoreState(const SavedState &state) {
+    if (state.rows != m_rows || state.cols != m_cols) {
+        resize(state.rows, state.cols);
+    }
+    m_buffer = state.buffer;
+    m_fields = state.fields;
+    m_cursorPos = state.cursorPos;
+    emit screenChanged();
+    emit cursorMoved(m_cursorPos);
 }
 
 } // namespace ui::widgets

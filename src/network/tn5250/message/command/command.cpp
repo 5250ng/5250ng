@@ -49,10 +49,12 @@ uint32_t unmarshalCommand(const std::vector<uint8_t> &buffer, Command &out, std:
     }
 
     default:
-        if (error) {
-            *error = "5250Command: unsupported command code 0x" + utils::hex::to_hex_string_padded_2(cmd);
-        }
-        return 0;
+        // Commands without full structured parsers: consume remaining bytes
+        // so the caller can continue parsing subsequent commands.
+        // This covers: 0x20 (Clear Unit Alternate), 0x21 (Write Error Code),
+        // 0x23 (Roll), 0x42 (Read Input Fields), 0x50 (Clear Format Table),
+        // 0x72 (Read Immediate), and any future commands.
+        return static_cast<uint32_t>(buffer.size());
     }
 }
 

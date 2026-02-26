@@ -111,7 +111,8 @@ QByteArray TestDecoder::makeGDS(uint8_t opcode, const QByteArray &payload) {
     body.append(static_cast<char>(opcode)); // opcode
     body.append(payload);
 
-    uint16_t recLen = static_cast<uint16_t>(body.size());
+    // Record length includes the 2-byte length field itself
+    uint16_t recLen = static_cast<uint16_t>(body.size() + 2);
     QByteArray rec;
     rec.append(static_cast<char>((recLen >> 8) & 0xFF));
     rec.append(static_cast<char>(recLen & 0xFF));
@@ -206,7 +207,8 @@ void TestDecoder::testInvalidLength() {
     body.append('\x01');
     body.append('\x02');
 
-    uint16_t recLen = static_cast<uint16_t>(body.size());
+    // Record length includes the 2-byte length field itself
+    uint16_t recLen = static_cast<uint16_t>(body.size() + 2);
     QByteArray rec;
     rec.append(static_cast<char>((recLen >> 8) & 0xFF));
     rec.append(static_cast<char>(recLen & 0xFF));

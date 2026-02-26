@@ -19,6 +19,7 @@ class Q5250TerminalView : public QWidget {
 
     void setScreenSize(int rows, int cols);
     void setFont(const QFont &font);
+    void updateStatusIndicators();
 
   private slots:
     void onScreenSizeChanged(int rows, int cols);

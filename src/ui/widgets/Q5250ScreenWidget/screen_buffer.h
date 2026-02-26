@@ -16,10 +16,12 @@ struct CellAttributes {
     bool underline : 1;       // Underline
     bool protected_field : 1; // Protected field (read-only)
     bool modified : 1;        // Field has been modified
+    bool nonDisplay : 1;      // Non-display (hidden, e.g. password fields)
+    bool colSep : 1;          // Column separator (vertical line on left edge)
 
     CellAttributes()
         : color(2), reverse(false), blink(false), underline(false),
-          protected_field(false), modified(false) {}
+          protected_field(false), modified(false), nonDisplay(false), colSep(false) {}
 };
 
 // Screen cell containing character and attributes
@@ -58,14 +60,26 @@ class ScreenBuffer : public QObject {
 
     // Field management
     struct Field {
-        int startRow;
-        int startCol;
-        int length;
-        bool protected_field;
-        bool modified;
+        int startRow = 0;
+        int startCol = 0;
+        int length = 0;
+        bool protected_field = false;
+        bool modified = false;
+
+        // FFW (Field Format Word) — parsed from SF order
+        uint8_t ffw1 = 0;           // Raw FFW byte 1
+        uint8_t ffw2 = 0;           // Raw FFW byte 2
+        uint8_t shiftType = 0;      // FFW1 bits 5-7: field shift/data type
+        bool bypass = false;        // FFW1 bit 2: tab skips this field
+        bool autoEnter = false;     // FFW2 bit 0: auto-enter when field full
+        bool fieldExitReq = false;  // FFW2 bit 1: field exit required
+        bool monocase = false;      // FFW2 bit 2: uppercase only
+        bool mandatoryEnter = false;// FFW2 bit 4: mandatory enter
+        uint8_t rightAdjust = 0;    // FFW2 bits 5-7: right-adjust type
     };
 
     void setField(int row, int col, int length, bool protected_field);
+    void setFieldFFW(int row, int col, uint8_t ffw1, uint8_t ffw2);
     Field getField(int row, int col) const;
     bool isInField(int row, int col) const;
     bool isProtected(int row, int col) const;
@@ -80,6 +94,19 @@ class ScreenBuffer : public QObject {
     void clearField(int row, int col);
     void scrollUp(int lines = 1);
     void scrollDown(int lines = 1);
+    void scrollRegion(int topRow, int botRow, int lines, bool up);
+    void clearFields();
+
+    // Save/restore entire screen state
+    struct SavedState {
+        QVector<ScreenCell> buffer;
+        QVector<Field> fields;
+        QPoint cursorPos;
+        int rows;
+        int cols;
+    };
+    SavedState saveState() const;
+    void restoreState(const SavedState &state);
 
     // Write operations
     void writeChar(int row, int col, uint8_t ch, const CellAttributes &attr = CellAttributes());

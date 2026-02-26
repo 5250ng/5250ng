@@ -58,14 +58,14 @@ uint32_t OrderSfStartField::unmarshal(const std::vector<uint8_t> &buffer, std::s
     attributes = buffer[read_bytes];
     read_bytes++;
 
-    // Length (1 byte)
-    if (read_bytes >= buffer.size()) {
+    // Length (2 bytes, big-endian)
+    if (read_bytes + 1 >= buffer.size()) {
         if (error)
-            *error = "OrderSfStartField: truncated before length byte";
+            *error = "OrderSfStartField: truncated before length bytes";
         return 0;
     }
-    length = buffer[read_bytes];
-    read_bytes++;
+    length = (static_cast<uint16_t>(buffer[read_bytes]) << 8) | static_cast<uint16_t>(buffer[read_bytes + 1]);
+    read_bytes += 2;
 
     // Field data (length bytes)
     repeatedCharacter.clear();
@@ -99,8 +99,9 @@ std::vector<uint8_t> OrderSfStartField::marshal(std::string *error) const {
 
     buffer.push_back(attributes);
 
-    uint8_t realLength = repeatedCharacter.size();
-    buffer.push_back(realLength);
+    uint16_t realLength = repeatedCharacter.size();
+    buffer.push_back(static_cast<uint8_t>((realLength >> 8) & 0xFF));
+    buffer.push_back(static_cast<uint8_t>(realLength & 0xFF));
 
     for (const auto &ch : repeatedCharacter) {
         buffer.push_back(static_cast<uint8_t>(ch));
@@ -145,7 +146,7 @@ void OrderSfStartField::describe(std::ostream &out, int indent) const {
     }
     out << "]\n";
     out << indentPrompt << "  │ attributes      : 0x" << utils::hex::to_hex_string_padded_2(attributes) << " (" << utils::binary::to_binary_string_padded_8(attributes) << ")" << "\n";
-    out << indentPrompt << "  │ length          : 0x" << utils::hex::to_hex_string_padded_2(length) << " (" << static_cast<int>(length) << ")" << "\n";
+    out << indentPrompt << "  │ length          : 0x" << utils::hex::to_hex_string_padded_2(length >> 8) << utils::hex::to_hex_string_padded_2(length & 0xFF) << " (" << static_cast<int>(length) << ")" << "\n";
     out << indentPrompt << "  │ repeatedCharacter : [" << repeatedCharacter << "]" << "\n";
     out << indentPrompt << "  └───\n";
 }
