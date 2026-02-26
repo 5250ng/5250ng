@@ -35,7 +35,7 @@
  */
 MainWindow::MainWindow(QWidget *parent)
     : ui::widgets::BaseFramelessWindow(parent), m_displayWidget(nullptr), m_client(nullptr),
-      m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
+      m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false), m_pendingCC2(0) {
     setWindowTitle("5250ng");
     resize(1128, 836);
 
@@ -445,6 +445,13 @@ void MainWindow::handleRawScreenData(const QByteArray &data) {
 
     // Data is already extracted display orders — render directly
     renderTN5250Stream(data);
+
+    // Process deferred CC2 now that display data (including IC order) has been rendered.
+    // Per spec: CC2 is processed after all display orders.
+    if (m_pendingCC2) {
+        processDeferredCC2(m_pendingCC2);
+        m_pendingCC2 = 0;
+    }
 }
 
 /**
@@ -593,6 +600,8 @@ void MainWindow::onClearScreenRequested() {
     }
     m_displayWidget->screenBuffer()->clear();
     m_displayWidget->screenBuffer()->notifyCursor();
+    // Per spec: "If the cursor is blinking, it is reset."
+    m_displayWidget->setCursorBlinkRate(0);
 }
 
 void MainWindow::onKeyboardUnlockRequested() {
@@ -648,6 +657,18 @@ void MainWindow::onControlCharactersReceived(uint8_t cc1, uint8_t cc2) {
     }
 
     // CC byte 2 processing
+    // Per spec (SA21-9247-6 p2-39): "the second CC is not processed until all
+    // the other information associated with the command has been processed."
+    // Store CC2 for deferred processing after display data (rawScreenDataReceived).
+    m_pendingCC2 = cc2;
+}
+
+void MainWindow::processDeferredCC2(uint8_t cc2) {
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return;
+    }
+    auto *screen = m_displayWidget->screenBuffer();
+
     if (cc2 & 0x04) {
         // Bit 2: Reset blinking cursor
         m_displayWidget->setCursorBlinkRate(0);
@@ -765,6 +786,8 @@ void MainWindow::onWriteErrorCode(const QByteArray &errorData) {
 
     // Lock keyboard in ErrorLocked state
     m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::ErrorLocked);
+    // Per spec: "The cursor is blinking."
+    m_displayWidget->setCursorBlinkRate(250);
     logger::Logger::instance()->debug("MainWindow: Write Error Code received");
 }
 
@@ -787,6 +810,8 @@ void MainWindow::onClearScreenAlternateRequested() {
     if (m_displayWidget->screenBuffer()) {
         m_displayWidget->screenBuffer()->clear();
     }
+    // Per spec: "Blinking cursor is reset."
+    m_displayWidget->setCursorBlinkRate(0);
     logger::Logger::instance()->debug("MainWindow: Clear Unit Alternate (27x132)");
 }
 
@@ -795,6 +820,8 @@ void MainWindow::onClearFormatTableRequested() {
         return;
     }
     m_displayWidget->screenBuffer()->clearFields();
+    // Per spec: "A blinking cursor ... is reset."
+    m_displayWidget->setCursorBlinkRate(0);
     logger::Logger::instance()->debug("MainWindow: Format table cleared");
 }
 

@@ -91,6 +91,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void renderTN5250Stream(const QByteArray &data);
     QByteArray buildFieldResponse(uint8_t aidByte);
     void sendToHost(const QByteArray &data);
+    void processDeferredCC2(uint8_t cc2);
 
     struct Session {
         QWidget *container;
@@ -127,6 +128,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
 
     bool m_connected;
+    uint8_t m_pendingCC2;  // Deferred CC2 byte (spec: CC2 processed after display data)
 
     void updateCursorCoordinates();     // Update cursor position display
     void updateCursorCoordinatesFont(); // Update cursor coordinates font to match
