@@ -231,13 +231,31 @@ void Q5250ScreenWidget::processKeyEvent(QKeyEvent *event) {
         return;
     }
 
+    // Local-only keys handled in keyPressEvent — never encode as characters
+    int key = event->key();
+    switch (key) {
+    case Qt::Key_Tab:
+    case Qt::Key_Backtab:
+    case Qt::Key_Backspace:
+    case Qt::Key_Delete:
+    case Qt::Key_Insert:
+    case Qt::Key_Home:
+    case Qt::Key_End:
+    case Qt::Key_Left:
+    case Qt::Key_Right:
+    case Qt::Key_Up:
+    case Qt::Key_Down:
+        return;
+    default:
+        break;
+    }
+
     bool shiftPressed = (event->modifiers() & Qt::ShiftModifier) != 0;
     bool ctrlPressed = (event->modifiers() & Qt::ControlModifier) != 0;
     bool altPressed = (event->modifiers() & Qt::AltModifier) != 0;
 
     // Determine if this is an AID key BEFORE encoding, since AID byte values
     // overlap with EBCDIC character codes (e.g. PF13-PF21 = 0xC1-0xC9 = 'A'-'I').
-    int key = event->key();
     bool isAID = m_encoder->isPFKey(key) ||
                  key == Qt::Key_Return || key == Qt::Key_Enter ||
                  key == Qt::Key_PageUp || key == Qt::Key_PageDown ||
@@ -264,10 +282,20 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
     // EBCDIC character codes (e.g. PF13-PF21 0xC1-0xC9 == uppercase A-I).
 
     if (isAID) {
+        // Right-adjust the current field before sending (per spec)
+        QPoint cursor = m_screenBuffer->cursorPosition();
+        rightAdjustField(cursor.y(), cursor.x());
+
         // AID key: build field response and send to host
         emit inputReady(buildAIDResponse(firstByte));
         // Lock keyboard after sending AID — host must unlock via CC bytes
         setKeyboardState(KeyboardState::Locked);
+
+        // Reset insert mode on AID key press
+        if (m_insertMode) {
+            m_insertMode = false;
+            emit terminalStateChanged();
+        }
     } else {
         // Regular EBCDIC character: write locally to screen buffer
         QPoint cursor = m_screenBuffer->cursorPosition();
