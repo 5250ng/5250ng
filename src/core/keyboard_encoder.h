@@ -67,38 +67,46 @@ class KeyboardEncoder : public QObject {
     void keyEncoded(const QByteArray &data);
 
   private:
-    // TN5250 AID (Attention ID) codes
-    static constexpr uint8_t AID_ENTER = 0x7D;
-    static constexpr uint8_t AID_PF1 = 0xF1;
-    static constexpr uint8_t AID_PF2 = 0xF2;
-    static constexpr uint8_t AID_PF3 = 0xF3;
-    static constexpr uint8_t AID_PF4 = 0xF4;
-    static constexpr uint8_t AID_PF5 = 0xF5;
-    static constexpr uint8_t AID_PF6 = 0xF6;
-    static constexpr uint8_t AID_PF7 = 0xF7;
-    static constexpr uint8_t AID_PF8 = 0xF8;
-    static constexpr uint8_t AID_PF9 = 0xF9;
-    static constexpr uint8_t AID_PF10 = 0x7A;
-    static constexpr uint8_t AID_PF11 = 0x7B;
-    static constexpr uint8_t AID_PF12 = 0x7C;
-    static constexpr uint8_t AID_PF13 = 0xC1;
-    static constexpr uint8_t AID_PF14 = 0xC2;
-    static constexpr uint8_t AID_PF15 = 0xC3;
-    static constexpr uint8_t AID_PF16 = 0xC4;
-    static constexpr uint8_t AID_PF17 = 0xC5;
-    static constexpr uint8_t AID_PF18 = 0xC6;
-    static constexpr uint8_t AID_PF19 = 0xC7;
-    static constexpr uint8_t AID_PF20 = 0xC8;
-    static constexpr uint8_t AID_PF21 = 0xC9;
-    static constexpr uint8_t AID_PF22 = 0x4A;
-    static constexpr uint8_t AID_PF23 = 0x4B;
-    static constexpr uint8_t AID_PF24 = 0x4C;
+    // 5250 AID (Attention ID) codes — per SA21-9247-6 page 2-2
+    static constexpr uint8_t AID_ENTER = 0xF1;    // Enter/Rec Adv
+    static constexpr uint8_t AID_PF1 = 0x31;      // Command Function 1
+    static constexpr uint8_t AID_PF2 = 0x32;      // Command Function 2
+    static constexpr uint8_t AID_PF3 = 0x33;      // Command Function 3
+    static constexpr uint8_t AID_PF4 = 0x34;      // Command Function 4
+    static constexpr uint8_t AID_PF5 = 0x35;      // Command Function 5
+    static constexpr uint8_t AID_PF6 = 0x36;      // Command Function 6
+    static constexpr uint8_t AID_PF7 = 0x37;      // Command Function 7
+    static constexpr uint8_t AID_PF8 = 0x38;      // Command Function 8
+    static constexpr uint8_t AID_PF9 = 0x39;      // Command Function 9
+    static constexpr uint8_t AID_PF10 = 0x3A;     // Command Function 10
+    static constexpr uint8_t AID_PF11 = 0x3B;     // Command Function 11
+    static constexpr uint8_t AID_PF12 = 0x3C;     // Command Function 12
+    static constexpr uint8_t AID_PF13 = 0xB1;     // Command Function 13
+    static constexpr uint8_t AID_PF14 = 0xB2;     // Command Function 14
+    static constexpr uint8_t AID_PF15 = 0xB3;     // Command Function 15
+    static constexpr uint8_t AID_PF16 = 0xB4;     // Command Function 16
+    static constexpr uint8_t AID_PF17 = 0xB5;     // Command Function 17
+    static constexpr uint8_t AID_PF18 = 0xB6;     // Command Function 18
+    static constexpr uint8_t AID_PF19 = 0xB7;     // Command Function 19
+    static constexpr uint8_t AID_PF20 = 0xB8;     // Command Function 20
+    static constexpr uint8_t AID_PF21 = 0xB9;     // Command Function 21
+    static constexpr uint8_t AID_PF22 = 0xBA;     // Command Function 22
+    static constexpr uint8_t AID_PF23 = 0xBB;     // Command Function 23
+    static constexpr uint8_t AID_PF24 = 0xBC;     // Command Function 24
 
-    static constexpr uint8_t AID_CLEAR = 0x6D;
-    static constexpr uint8_t AID_ATTN = 0x6C;
-    static constexpr uint8_t AID_SYSREQ = 0x6F;
-    static constexpr uint8_t AID_ROLLUP = 0xF5;   // Page Up / Roll Up
-    static constexpr uint8_t AID_ROLLDOWN = 0xF4;  // Page Down / Roll Down
+    static constexpr uint8_t AID_CLEAR = 0xBD;
+    static constexpr uint8_t AID_HELP = 0xF3;
+    static constexpr uint8_t AID_ROLLDOWN = 0xF4;  // Roll Down / Page Up
+    static constexpr uint8_t AID_ROLLUP = 0xF5;    // Roll Up / Page Down
+    static constexpr uint8_t AID_PRINT = 0xF6;
+    static constexpr uint8_t AID_RECBS = 0xF8;     // Record Backspace
+    static constexpr uint8_t AID_AUTOENTER = 0x3F;  // Auto Enter (Selector Light Pen)
+
+    // Attn and SysReq are Telnet-level signals, not 5250 AID codes.
+    // These placeholders keep the existing routing working until
+    // proper Telnet-level handling is implemented.
+    static constexpr uint8_t AID_ATTN = 0x70;
+    static constexpr uint8_t AID_SYSREQ = 0x71;
 
     uint8_t getAIDForPF(int pfNumber) const;
     uint8_t getAIDForAction(KeyboardAction action) const;

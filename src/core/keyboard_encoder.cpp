@@ -1,6 +1,6 @@
 #include "keyboard_encoder.h"
 #include "ebcdic.h"
-#include <QDebug>
+#include "logger/logger.h"
 #include <QKeyEvent>
 
 namespace core {
@@ -83,7 +83,7 @@ QByteArray KeyboardEncoder::encodeKeyEvent(QKeyEvent *event, bool shiftPressed, 
 
 QByteArray KeyboardEncoder::encodePFKey(int pfNumber) {
     if (pfNumber < 1 || pfNumber > 24) {
-        qWarning() << "KeyboardEncoder: Invalid PF key number:" << pfNumber;
+        logger::Logger::instance()->warning(QString("KeyboardEncoder: Invalid PF key number: %1").arg(pfNumber));
         return QByteArray();
     }
 
@@ -101,7 +101,7 @@ QByteArray KeyboardEncoder::encodeAction(KeyboardAction action) {
     uint8_t aid = getAIDForAction(action);
 
     if (aid == 0) {
-        qWarning() << "KeyboardEncoder: Unsupported action";
+        logger::Logger::instance()->warning("KeyboardEncoder: Unsupported action");
         return QByteArray();
     }
 

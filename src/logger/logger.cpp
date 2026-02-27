@@ -6,8 +6,6 @@
 
 namespace logger {
 
-Logger *Logger::s_instance = nullptr;
-
 /**
  * Construct a Logger with defaults:
  * - Appends to a log file in the platform AppDataLocation
@@ -42,12 +40,11 @@ Logger::~Logger() {
 
 /**
  * Return the singleton logger instance, creating it on first use.
+ * Uses Meyers singleton pattern for thread-safe initialization.
  */
 Logger *Logger::instance() {
-    if (!s_instance) {
-        s_instance = new Logger();
-    }
-    return s_instance;
+    static Logger instance;
+    return &instance;
 }
 
 /**

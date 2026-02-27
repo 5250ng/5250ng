@@ -1,5 +1,6 @@
 #include "decoder.h"
 #include "logger/logger.h"
+#include "network/tn5250/protocol_constants.h"
 
 namespace tn5250::client {
 
@@ -18,8 +19,9 @@ void Decoder::parseData(const QByteArray &data) {
     //   [6]      Variable header length (n >= 4 when flags/opcode present)
     //   [7..]    Variable header (flags hi, flags lo, opcode, ... optional)
     //   [..]     Payload
+    using namespace tn5250::protocol;
     while (true) {
-        if (m_buffer.size() < 6) {
+        if (m_buffer.size() < GDS_MIN_RECORD_LEN) {
             // Need at least fixed header
             break;
         }
@@ -28,7 +30,7 @@ void Decoder::parseData(const QByteArray &data) {
         const int recLen = (static_cast<int>(b0) << 8) | static_cast<int>(b1);
 
         // Defensive checks
-        if (recLen < 6) {
+        if (recLen < GDS_MIN_RECORD_LEN) {
             // Corrupt stream: drop one byte to resynchronize
             m_buffer.remove(0, 1);
             continue;
@@ -49,7 +51,7 @@ void Decoder::parseData(const QByteArray &data) {
 
         const uint8_t r2 = static_cast<uint8_t>(rec[2]);
         const uint8_t r3 = static_cast<uint8_t>(rec[3]);
-        if (!(r2 == 0x12 && r3 == 0xA0)) {
+        if (!(r2 == GDS_RECORD_TYPE_HI && r3 == GDS_RECORD_TYPE_LO)) {
             // Not a 0x12A0 GDS; fallback: forward as-is for legacy handlers
             emit rawScreenDataReceived(rec);
             continue;
@@ -83,11 +85,11 @@ void Decoder::parseData(const QByteArray &data) {
         // For opcodes that carry display data, consume ESC sequences and emit display stream
         // Opcodes seen:
         //   0x02 Output Only, 0x03 Put/Get, 0x05 Restore Screen
-        if (opcode == 0x04) { // Save Screen
+        if (opcode == GDS_OPCODE_SAVE_SCREEN) {
             emit saveScreenRequested();
             continue;
         }
-        if (opcode == 0x02 || opcode == 0x03 || opcode == 0x05) {
+        if (opcode == GDS_OPCODE_OUTPUT_ONLY || opcode == GDS_OPCODE_PUT_GET || opcode == GDS_OPCODE_RESTORE) {
             QByteArray display;
             // Parse payload: sequences of ESC 0x04 CC (command code), where
             //   CC=0x40 -> Clear Unit
@@ -95,29 +97,29 @@ void Decoder::parseData(const QByteArray &data) {
             // Orders may include SOH 0x01 [len] [len bytes] that we should skip
             for (int i = 0; i < payload.size();) {
                 uint8_t ch = static_cast<uint8_t>(payload[i]);
-                if (ch == 0x04) { // ESC
+                if (ch == ESC) {
                     if (i + 1 >= payload.size()) {
                         break; // truncated ESC; stop
                     }
                     uint8_t cc = static_cast<uint8_t>(payload[i + 1]);
-                    if (cc == 0x40) { // Clear Unit
+                    if (cc == CC_CLEAR_UNIT) {
                         emit clearScreenRequested();
                         i += 2;
                         continue;
                     }
-                    if (cc == 0x20) { // Clear Unit Alternate (27x132 mode)
+                    if (cc == CC_CLEAR_UNIT_ALTERNATE) {
                         emit clearScreenAlternateRequested();
                         i += 2;
                         continue;
                     }
-                    if (cc == 0x21) { // Write Error Code
+                    if (cc == CC_WRITE_ERROR_CODE) { // Write Error Code
                         // Format: ESC 0x21 [orders/data until next ESC or end]
                         // All data between the command and the next ESC is written to the error line.
                         int j = i + 2; // skip ESC + cmd
                         QByteArray errData;
                         while (j < payload.size()) {
                             uint8_t ob = static_cast<uint8_t>(payload[j]);
-                            if (ob == 0x04) break; // next ESC begins new command
+                            if (ob == ESC) break; // next ESC begins new command
                             errData.append(static_cast<char>(ob));
                             j++;
                         }
@@ -125,7 +127,7 @@ void Decoder::parseData(const QByteArray &data) {
                         i = j;
                         continue;
                     }
-                    if (cc == 0x23) { // Roll
+                    if (cc == CC_ROLL) { // Roll
                         // Format: ESC 0x23 ctrl1 ctrl2
                         if (i + 3 < payload.size()) {
                             uint8_t ctrl1 = static_cast<uint8_t>(payload[i + 2]);
@@ -150,28 +152,27 @@ void Decoder::parseData(const QByteArray &data) {
                         }
                         continue;
                     }
-                    if (cc == 0x42) { // Read Input Fields
+                    if (cc == CC_READ_INPUT_FIELDS) {
                         emit commandReceived(TN5250Command::READ_INPUT_FIELDS, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
                         continue;
                     }
-                    if (cc == 0x50) { // Clear Format Table
+                    if (cc == CC_CLEAR_FORMAT_TABLE) {
                         emit clearFormatTableRequested();
                         i += 2;
                         continue;
                     }
-                    if (cc == 0x52) { // Read MDT Fields — host requests input fields
-                        // Format: ESC 0x52 ctrl1 ctrl2
+                    if (cc == CC_READ_MDT_FIELDS) {
                         emit commandReceived(TN5250Command::READ_MDT_FIELDS, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
                         continue;
                     }
-                    if (cc == 0x72) { // Read Immediate
+                    if (cc == CC_READ_IMMEDIATE) {
                         emit commandReceived(TN5250Command::READ_IMMEDIATE, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
                         continue;
                     }
-                    if (cc == 0x11) { // Write To Display
+                    if (cc == CC_WRITE_TO_DISPLAY) { // Write To Display
                         // Requires two control bytes after CC
                         if (i + 3 >= payload.size()) {
                             break; // truncated WTD header
@@ -190,10 +191,10 @@ void Decoder::parseData(const QByteArray &data) {
                         // (which may be 0x01) are not mistaken for SOH markers.
                         while (j < payload.size()) {
                             uint8_t ob = static_cast<uint8_t>(payload[j]);
-                            if (ob == 0x04) { // next ESC begins new command
+                            if (ob == ESC) { // next ESC begins new command
                                 break;
                             }
-                            if (ob == 0x01) {
+                            if (ob == SOH) {
                                 // SOH: parse header block and emit data
                                 if (j + 1 >= payload.size()) {
                                     j = payload.size();
@@ -212,21 +213,21 @@ void Decoder::parseData(const QByteArray &data) {
                             }
                             // Known fixed-length display orders: copy order + operands
                             // to display without checking operand bytes for SOH.
-                            if (ob == 0x11 || ob == 0x13 || ob == 0x14) {
-                                // SBA (0x11), IC (0x13), MC (0x14): 3 bytes (order + row + col)
+                            if (ob == ORDER_SBA || ob == ORDER_IC || ob == ORDER_MC) {
+                                // SBA, IC, MC: 3 bytes (order + row + col)
                                 int n = qMin(3, payload.size() - j);
                                 display.append(payload.mid(j, n));
                                 j += n;
                                 continue;
                             }
-                            if (ob == 0x02 || ob == 0x03) {
-                                // RA (0x02), EA (0x03): 4 bytes (order + row + col + char)
+                            if (ob == ORDER_RA || ob == ORDER_EA) {
+                                // RA, EA: 4 bytes (order + row + col + char)
                                 int n = qMin(4, payload.size() - j);
                                 display.append(payload.mid(j, n));
                                 j += n;
                                 continue;
                             }
-                            if (ob == 0x10) {
+                            if (ob == ORDER_TD) {
                                 // TD (Transparent Data): 2 + count bytes
                                 if (j + 1 < payload.size()) {
                                     int tdLen = static_cast<uint8_t>(payload[j + 1]);
@@ -239,7 +240,7 @@ void Decoder::parseData(const QByteArray &data) {
                                 }
                                 continue;
                             }
-                            if (ob == 0x15) {
+                            if (ob == ORDER_WDSF) {
                                 // WDSF (Write to Display Structured Field): variable length
                                 // Format: 0x15 [lenHi lenLo] [type] [data...]
                                 // Length includes the 2 length bytes themselves.
@@ -255,7 +256,7 @@ void Decoder::parseData(const QByteArray &data) {
                                 }
                                 continue;
                             }
-                            if (ob == 0x1D) {
+                            if (ob == ORDER_SF) {
                                 // SF (Start Field): variable length
                                 // Format: 0x1D FFW1 FFW2 [FCW pairs...] attr lenHi lenLo [fieldData]
                                 int k = j + 1; // past order code
@@ -293,7 +294,7 @@ void Decoder::parseData(const QByteArray &data) {
                     continue;
                 }
                 // Not in an ESC-command context; copy-through anything that looks like orders/data
-                if (ch == 0x01) {
+                if (ch == SOH) {
                     // SOH outside WTD: parse and skip block
                     if (i + 1 >= payload.size()) {
                         break;

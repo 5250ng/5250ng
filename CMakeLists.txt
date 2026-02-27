@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Compiler warning flags
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
+endif()
+
 # Build options
 option(BUILD_TESTS "Build unit and integration tests" ON)
 
@@ -136,6 +141,12 @@ set(UI_SOURCES
     # main window
     src/ui/main_window.cpp
     src/ui/main_window.h
+    # rendering (extracted from main_window)
+    src/ui/rendering/tn5250_stream_renderer.cpp
+    src/ui/rendering/tn5250_stream_renderer.h
+    src/ui/rendering/tn5250_command_handler.cpp
+    src/ui/rendering/tn5250_command_handler.h
+    src/ui/rendering/display_attributes.h
     # devices
     src/ui/device/IBM-3179-2.cpp
     src/ui/device/IBM-3179-2.h
@@ -223,123 +234,48 @@ set_target_properties(tn5250 PROPERTIES
 if(BUILD_TESTS)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)
-    
-    # Unit tests
-    add_executable(test_decoder
-        tests/unit/test_decoder.cpp
-        ${TELNET_SOURCES}
-        src/network/tn5250/client/decoder.cpp
-        src/network/tn5250/client/decoder.h
-        ${LOGGER_SOURCES}
-    )
-    target_link_libraries(test_decoder
-        PRIVATE
-            Qt6::Core
-            Qt6::Test
-            Qt6::Network
-    )
-    target_include_directories(test_decoder PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    add_test(NAME Decoder COMMAND test_decoder)
-    
-    # EBCDIC conversion tests
-    add_executable(test_ebcdic
-        tests/unit/test_ebcdic.cpp
-        src/core/ebcdic.cpp
-        src/core/ebcdic.h
-    )
-    target_link_libraries(test_ebcdic
-        PRIVATE
-            Qt6::Core
-            Qt6::Test
-    )
-    target_include_directories(test_ebcdic PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    add_test(NAME EBCDIC COMMAND test_ebcdic)
-    
-    # Screen buffer tests
-    add_executable(test_screen_buffer
-        tests/unit/test_screen_buffer.cpp
-        ${DISPLAY_SOURCES}
+
+    # Shared static library — compiled once, linked by all test targets
+    add_library(tn5250_core STATIC
         ${CORE_SOURCES}
-    )
-    target_link_libraries(test_screen_buffer
-        PRIVATE
-            Qt6::Core
-            Qt6::Test
-            Qt6::Widgets
-    )
-    target_include_directories(test_screen_buffer PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    add_test(NAME ScreenBuffer COMMAND test_screen_buffer)
-    
-    # Keyboard encoder tests
-    add_executable(test_keyboard_encoder
-        tests/unit/test_keyboard_encoder.cpp
-        src/core/keyboard_encoder.cpp
-        src/core/keyboard_encoder.h
-        src/core/ebcdic.cpp
-        src/core/ebcdic.h
-    )
-    target_link_libraries(test_keyboard_encoder
-        PRIVATE
-            Qt6::Core
-            Qt6::Test
-            Qt6::Widgets
-    )
-    target_include_directories(test_keyboard_encoder PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    add_test(NAME KeyboardEncoder COMMAND test_keyboard_encoder)
-    
-    # (Removed) Input handler tests – functionality moved into Q5250ScreenWidget
-    
-    # Session config tests
-    add_executable(test_session_config
-        tests/unit/test_session_config.cpp
         ${SESSION_SOURCES}
-    ${TELNET_SOURCES}
-    ${TN5250_CLIENT_SOURCES}
-    ${LOGGER_SOURCES}
-    ${UTILS_SOURCES}
-    )
-    target_link_libraries(test_session_config
-        PRIVATE
-            Qt6::Core
-            Qt6::Test
-        Qt6::Network
-    )
-    target_include_directories(test_session_config PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    add_test(NAME SessionConfig COMMAND test_session_config)
-    
-    # Integration tests
-    add_executable(test_tn5250_connection
-        tests/integration/test_tn5250_connection.cpp
         ${TELNET_SOURCES}
         ${TN5250_CLIENT_SOURCES}
         ${LOGGER_SOURCES}
         ${UTILS_SOURCES}
+        ${DISPLAY_SOURCES}
     )
-    target_link_libraries(test_tn5250_connection
-        PRIVATE
+    target_link_libraries(tn5250_core
+        PUBLIC
             Qt6::Core
-            Qt6::Test
             Qt6::Network
+            Qt6::Widgets
     )
     if(HAVE_QT6_SSL)
-        target_link_libraries(test_tn5250_connection PRIVATE Qt6::Ssl)
-        target_compile_definitions(test_tn5250_connection PRIVATE HAVE_QT6_SSL)
+        target_link_libraries(tn5250_core PUBLIC Qt6::Ssl)
+        target_compile_definitions(tn5250_core PUBLIC HAVE_QT6_SSL)
     endif()
-    target_include_directories(test_tn5250_connection PRIVATE
+    target_include_directories(tn5250_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
-    add_test(NAME TN5250Connection COMMAND test_tn5250_connection)
-    
+
+    # Helper macro to define a test target
+    macro(add_tn5250_test TEST_NAME TEST_SOURCE)
+        add_executable(${TEST_NAME} ${TEST_SOURCE})
+        target_link_libraries(${TEST_NAME} PRIVATE tn5250_core Qt6::Test)
+        add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    endmacro()
+
+    # Unit tests
+    add_tn5250_test(test_decoder tests/unit/test_decoder.cpp)
+    add_tn5250_test(test_ebcdic tests/unit/test_ebcdic.cpp)
+    add_tn5250_test(test_screen_buffer tests/unit/test_screen_buffer.cpp)
+    add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
+    add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
+
+    # Integration tests
+    add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
+
     message(STATUS "Testing enabled - unit and integration tests configured")
 endif()
 

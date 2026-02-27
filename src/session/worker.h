@@ -36,7 +36,7 @@ class Worker : public QObject {
     ::session::SessionConfig m_config;
     tn5250::client::TN5250Client *m_client;
     QStringList m_logs;
-    QMutex m_logsMutex;
+    mutable QMutex m_logsMutex;
 
     void onClientData(const QByteArray &data);
     void onGlobalLogMessage(logger::LogLevel level, const QString &message);
@@ -44,7 +44,7 @@ class Worker : public QObject {
   public:
     // Access a snapshot of current logs
     QStringList logs() const {
-        QMutexLocker locker(&const_cast<Worker *>(this)->m_logsMutex);
+        QMutexLocker locker(&m_logsMutex);
         return m_logs;
     }
 };

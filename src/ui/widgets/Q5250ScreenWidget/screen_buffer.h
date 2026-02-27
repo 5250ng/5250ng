@@ -84,6 +84,8 @@ class ScreenBuffer : public QObject {
     bool isInField(int row, int col) const;
     bool isProtected(int row, int col) const;
     const QVector<Field> &fields() const { return m_fields; }
+    QVector<Field> &mutableFields() { return m_fields; }
+    void resetAllMDTFlags();
     QVector<Field> getModifiedFields() const;
     QByteArray getFieldData(const Field &field) const;
     void markFieldModified(int row, int col);

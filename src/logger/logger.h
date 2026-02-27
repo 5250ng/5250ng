@@ -171,7 +171,6 @@ class Logger : public QObject {
      */
     void writeLog(LogLevel level, const QString &message);
 
-    static Logger *s_instance;
     QFile *m_logFile;
     QTextStream *m_logStream;
     QMutex m_mutex;

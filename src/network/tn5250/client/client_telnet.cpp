@@ -2,6 +2,7 @@
 #include "../telnet/options.h"
 #include "client.h"
 #include "logger/logger.h"
+#include "network/tn5250/protocol_constants.h"
 #include <QChar>
 
 namespace tn5250::client {
@@ -332,26 +333,25 @@ void TN5250Client::sendData(const QByteArray &data) {
         return;
     }
 
-    // Wrap payload in a GDS record per RFC 1205:
+    // Wrap payload in a GDS record per RFC 1205 / SA21-9247-6:
     // [recLen(2)] [0x12A0(2)] [0x0000(2)] [varLen=0x04(1)] [flagsHi(1)] [flagsLo(1)] [opcode(1)] [payload]
+    // recLen includes itself (total record size).
     // Then IAC-escape the entire record and append IAC EOR.
+    using namespace tn5250::protocol;
     QByteArray record;
-    int varHdrLen = 4; // flags(2) + opcode(1) + varLen byte itself counted separately
-    int totalLen = 4 + 1 + varHdrLen + data.size(); // recType(2) + reserved(2) + varLen(1) + varHdr(4) + payload
-    // recLen = total bytes after the 2-byte length field
-    int recLen = totalLen;
+    int recLen = GDS_HEADER_SIZE + data.size();
 
     // 2-byte big-endian record length
     record.append(static_cast<char>((recLen >> 8) & 0xFF));
     record.append(static_cast<char>(recLen & 0xFF));
     // Record type 0x12A0
-    record.append(static_cast<char>(0x12));
-    record.append(static_cast<char>(0xA0));
+    record.append(static_cast<char>(GDS_RECORD_TYPE_HI));
+    record.append(static_cast<char>(GDS_RECORD_TYPE_LO));
     // Reserved 0x0000
     record.append(static_cast<char>(0x00));
     record.append(static_cast<char>(0x00));
-    // Variable header length
-    record.append(static_cast<char>(varHdrLen));
+    // Variable header length (includes itself: 1 + 2 flags + 1 opcode = 4)
+    record.append(static_cast<char>(GDS_VAR_HDR_LEN));
     // Flags (0x0000) and opcode (0x00 = no-op / general response)
     record.append(static_cast<char>(0x00));
     record.append(static_cast<char>(0x00));

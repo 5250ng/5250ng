@@ -6,6 +6,7 @@
 #include "session/config.h"
 #include "session/worker.h"
 #include "ui/dialogs/connect_dialog.h"
+#include "ui/rendering/tn5250_command_handler.h"
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h"
@@ -71,27 +72,12 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void updateConnectionStatus(bool connected);
     void
     updateStatusIndicator(tn5250::client::TN5250Client::ConnectionState state);
-    void handleTN5250Command(tn5250::client::TN5250Command cmd, const QByteArray &data);
-    void handleStructuredField(tn5250::client::StructuredFieldType type, const QByteArray &data);
-    void handleRawScreenData(const QByteArray &data);
-    void onClearScreenRequested();
-    void onKeyboardUnlockRequested();
-    void onControlCharactersReceived(uint8_t cc1, uint8_t cc2);
-    void onSohReceived(uint8_t errorRow, uint8_t ckm1, uint8_t ckm2, uint8_t ckm3);
-    void onRollRequested(uint8_t topRow, uint8_t botRow, uint8_t lines, bool up);
-    void onWriteErrorCode(const QByteArray &errorCode);
     void onSaveScreenRequested();
-    void onClearScreenAlternateRequested();
-    void onClearFormatTableRequested();
-    QStringList hexdump(const QByteArray &data);
     void connectSessionSignals();
     void disconnectSessionSignals();
     void setActiveSession(int index);
     void openContextMenuForTab(const QPoint &pos);
-    void renderTN5250Stream(const QByteArray &data);
-    QByteArray buildFieldResponse(uint8_t aidByte);
     void sendToHost(const QByteArray &data);
-    void processDeferredCC2(uint8_t cc2);
 
     struct Session {
         QWidget *container;
@@ -103,7 +89,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         ui::widgets::QConnectionStatusWidget *connectionStatus;
         QLabel *coordinatesLabel;
         session::SessionConfig config;
-        ui::widgets::ScreenBuffer::SavedState savedScreen; // For Save/Restore Screen
+        ui::widgets::ScreenBuffer::SavedState savedScreen;
+        ui::rendering::TN5250CommandHandler *commandHandler;
     };
 
     QTabWidget *m_tabWidget;
@@ -128,7 +115,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
 
     bool m_connected;
-    uint8_t m_pendingCC2;  // Deferred CC2 byte (spec: CC2 processed after display data)
 
     void updateCursorCoordinates();     // Update cursor position display
     void updateCursorCoordinatesFont(); // Update cursor coordinates font to match

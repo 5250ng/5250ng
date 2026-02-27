@@ -58,7 +58,7 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     }
 
     emit changed();
-    return true;
+    return isValid();
 }
 
 bool SessionConfig::isValid() const {

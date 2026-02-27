@@ -254,8 +254,7 @@ void Q5250ScreenWidget::processKeyEvent(QKeyEvent *event) {
     bool ctrlPressed = (event->modifiers() & Qt::ControlModifier) != 0;
     bool altPressed = (event->modifiers() & Qt::AltModifier) != 0;
 
-    // Determine if this is an AID key BEFORE encoding, since AID byte values
-    // overlap with EBCDIC character codes (e.g. PF13-PF21 = 0xC1-0xC9 = 'A'-'I').
+    // Determine if this is an AID key from the Qt key type, not the encoded byte.
     bool isAID = m_encoder->isPFKey(key) ||
                  key == Qt::Key_Return || key == Qt::Key_Enter ||
                  key == Qt::Key_PageUp || key == Qt::Key_PageDown ||
@@ -278,8 +277,7 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
     uint8_t firstByte = static_cast<uint8_t>(data[0]);
 
     // AID detection is determined by the caller (processKeyEvent) based on the
-    // original Qt key event, NOT by byte value.  AID byte values overlap with
-    // EBCDIC character codes (e.g. PF13-PF21 0xC1-0xC9 == uppercase A-I).
+    // original Qt key event, NOT by the encoded byte value.
 
     if (isAID) {
         // Right-adjust the current field before sending (per spec)
@@ -707,7 +705,11 @@ void Q5250ScreenWidget::handleEraseInput() {
 void Q5250ScreenWidget::rightAdjustField(int row, int col) {
     if (!m_screenBuffer) return;
     ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
-    if (field.length <= 0 || field.rightAdjust == 0) return;
+    // Per SA21-9247-6 p.2-69, rightAdjust values (FFW2 bits 5-7):
+    //   5 (101) = right adjust, zero fill
+    //   6 (110) = right adjust, blank fill
+    //   7 (111) = mandatory fill (not right-adjust)
+    if (field.length <= 0 || (field.rightAdjust != 5 && field.rightAdjust != 6)) return;
 
     int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
     int fieldEnd = fieldStart + field.length;
@@ -727,8 +729,8 @@ void Q5250ScreenWidget::rightAdjustField(int row, int col) {
     int dataLen = lastData - fieldStart + 1;
     if (dataLen <= 0 || dataLen >= field.length) return; // Nothing to adjust or already full
 
-    // Fill character: 0x00 (null) for type 5 (zero-fill), 0x40 (blank) otherwise
-    uint8_t fillChar = (field.rightAdjust == 5) ? 0xF0 : 0x40; // type 5 = zero-fill (EBCDIC '0')
+    // Fill character: EBCDIC '0' (0xF0) for zero-fill, EBCDIC space (0x40) for blank-fill
+    uint8_t fillChar = (field.rightAdjust == 5) ? 0xF0 : 0x40;
 
     // Shift data to the right
     int shift = field.length - dataLen;

@@ -114,13 +114,26 @@ void ScreenBuffer::setFieldFFW(int row, int col, uint8_t ffw1, uint8_t ffw2) {
         if (fStart == addr) {
             field.ffw1 = ffw1;
             field.ffw2 = ffw2;
-            field.shiftType = (ffw1 >> 5) & 0x07;
-            field.bypass = (ffw1 & 0x04) != 0;
-            field.autoEnter = (ffw2 & 0x01) != 0;
-            field.fieldExitReq = (ffw2 & 0x02) != 0;
-            field.monocase = (ffw2 & 0x04) != 0;
-            field.mandatoryEnter = (ffw2 & 0x10) != 0;
-            field.rightAdjust = (ffw2 >> 5) & 0x07;
+            // FFW1 (SA21-9247-6 p.2-68): IBM bit 0 = MSB = 0x80
+            //   Bits 0-1 (0xC0): Must be 01 (FFW marker)
+            //   Bit  2   (0x20): Bypass
+            //   Bit  3   (0x10): Dup enable
+            //   Bit  4   (0x08): MDT
+            //   Bits 5-7 (0x07): Shift/data type
+            field.shiftType = ffw1 & 0x07;
+            field.bypass = (ffw1 & 0x20) != 0;
+            // FFW2 (SA21-9247-6 p.2-69): IBM bit 0 = MSB = 0x80
+            //   Bit  0   (0x80): Auto enter
+            //   Bit  1   (0x40): Field exit required
+            //   Bit  2   (0x20): Monocase
+            //   Bit  3   (0x10): Reserved
+            //   Bit  4   (0x08): Mandatory enter
+            //   Bits 5-7 (0x07): Right-adjust / mandatory fill
+            field.autoEnter = (ffw2 & 0x80) != 0;
+            field.fieldExitReq = (ffw2 & 0x40) != 0;
+            field.monocase = (ffw2 & 0x20) != 0;
+            field.mandatoryEnter = (ffw2 & 0x08) != 0;
+            field.rightAdjust = ffw2 & 0x07;
             return;
         }
     }
@@ -432,6 +445,12 @@ void ScreenBuffer::scrollRegion(int topRow, int botRow, int lines, bool up) {
         }
     }
     emit screenChanged();
+}
+
+void ScreenBuffer::resetAllMDTFlags() {
+    for (auto &field : m_fields) {
+        field.modified = false;
+    }
 }
 
 void ScreenBuffer::clearFields() {

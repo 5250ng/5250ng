@@ -1,6 +1,6 @@
 #include "session/manager.h"
+#include "logger/logger.h"
 #include "session/config.h"
-#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -54,7 +54,7 @@ void SessionManager::ensureSessionsDirectory() const {
 
 bool SessionManager::saveSession(const SessionConfig &config) {
     if (!config.isValid()) {
-        qWarning() << "SessionManager: Cannot save invalid session";
+        logger::Logger::instance()->warning("SessionManager: Cannot save invalid session");
         return false;
     }
 
@@ -62,7 +62,7 @@ bool SessionManager::saveSession(const SessionConfig &config) {
     QFile file(filePath);
 
     if (!file.open(QIODevice::WriteOnly)) {
-        qWarning() << "SessionManager: Cannot open file for writing:" << filePath;
+        logger::Logger::instance()->warning(QString("SessionManager: Cannot open file for writing: %1").arg(filePath));
         return false;
     }
 
@@ -86,7 +86,7 @@ bool SessionManager::loadSession(const QString &name, SessionConfig &config) {
     }
 
     if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "SessionManager: Cannot open file for reading:" << filePath;
+        logger::Logger::instance()->warning(QString("SessionManager: Cannot open file for reading: %1").arg(filePath));
         return false;
     }
 
@@ -95,7 +95,7 @@ bool SessionManager::loadSession(const QString &name, SessionConfig &config) {
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull() || !doc.isObject()) {
-        qWarning() << "SessionManager: Invalid JSON in session file:" << filePath;
+        logger::Logger::instance()->warning(QString("SessionManager: Invalid JSON in session file: %1").arg(filePath));
         return false;
     }
 
@@ -108,7 +108,7 @@ bool SessionManager::deleteSession(const QString &name) {
 
     if (file.exists()) {
         if (!file.remove()) {
-            qWarning() << "SessionManager: Cannot delete session file:" << filePath;
+            logger::Logger::instance()->warning(QString("SessionManager: Cannot delete session file: %1").arg(filePath));
             return false;
         }
     }
