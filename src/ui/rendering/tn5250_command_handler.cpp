@@ -357,11 +357,18 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     response.append(static_cast<char>(cursor.y() + 1));
     response.append(static_cast<char>(cursor.x() + 1));
 
+    // SBA address must point to the attribute byte (one cell before field data)
+    int cols = screen->cols();
     QVector<ui::widgets::ScreenBuffer::Field> modFields = screen->getModifiedFields();
     for (const auto &field : modFields) {
+        int dataAddr = field.startRow * cols + field.startCol;
+        int attrAddr = dataAddr - 1;
+        if (attrAddr < 0) attrAddr = 0;
+        int attrRow = attrAddr / cols;
+        int attrCol = attrAddr % cols;
         response.append(static_cast<char>(0x11));
-        response.append(static_cast<char>(field.startRow + 1));
-        response.append(static_cast<char>(field.startCol + 1));
+        response.append(static_cast<char>(attrRow + 1));
+        response.append(static_cast<char>(attrCol + 1));
         response.append(screen->getFieldData(field));
     }
 

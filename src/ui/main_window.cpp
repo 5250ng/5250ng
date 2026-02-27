@@ -143,27 +143,24 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
         } }, Qt::QueuedConnection);
     session->config = config;
 
-    int newIndex = m_tabWidget->addTab(
-        session->container,
-        QString("%1:%2").arg(config.hostname()).arg(config.port())
-    );
-    // Custom tab header with title + close button
+    // Use session name for saved sessions, ip:port for CLI/unsaved
+    QString tabDisplayName;
+    if (!config.name().isEmpty()
+        && config.name() != "Current Session"
+        && config.name() != "Command Line Session") {
+        tabDisplayName = config.name();
+    } else {
+        tabDisplayName = QString("%1:%2").arg(config.hostname()).arg(config.port());
+    }
+
+    int newIndex = m_tabWidget->addTab(session->container, tabDisplayName);
+    // Close button on the right side of the tab
     {
-        QWidget *tabHeader = new QWidget(this);
-        QHBoxLayout *h = new QHBoxLayout(tabHeader);
-        h->setContentsMargins(8, 0, 4, 0);
-        h->setSpacing(6);
-        QLabel *title = new QLabel(QString("%1:%2").arg(config.hostname()).arg(config.port()), tabHeader);
-        title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        QPushButton *closeBtn = new QPushButton(QString::fromUtf8("✕"), tabHeader);
+        QPushButton *closeBtn = new QPushButton(QString::fromUtf8("\xe2\x9c\x95"), this);
         closeBtn->setFlat(true);
         closeBtn->setFixedSize(16, 16);
         closeBtn->setToolTip("Close");
-        h->addWidget(title, 1);
-        h->addWidget(closeBtn, 0, Qt::AlignRight | Qt::AlignVCenter);
-        m_tabWidget->tabBar()->setTabButton(newIndex, QTabBar::RightSide, nullptr);
-        m_tabWidget->setTabText(newIndex, QString()); // remove default text
-        m_tabWidget->tabBar()->setTabButton(newIndex, QTabBar::LeftSide, tabHeader);
+        m_tabWidget->tabBar()->setTabButton(newIndex, QTabBar::RightSide, closeBtn);
         QWidget *page = session->container;
         connect(closeBtn, &QPushButton::clicked, this, [this, page]() {
             int idx = m_tabWidget->indexOf(page);

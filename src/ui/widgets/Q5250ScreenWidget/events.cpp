@@ -533,11 +533,19 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     response.append(static_cast<char>(cursor.x() + 1));
 
     // Append modified fields: SBA(0x11) + row(1-based) + col(1-based) + field data
+    // The SBA address must point to the attribute byte position (one cell before
+    // the field data start), because the host identifies fields by attribute address.
+    int cols = m_screenBuffer->cols();
     QVector<ScreenBuffer::Field> modFields = m_screenBuffer->getModifiedFields();
     for (const auto &field : modFields) {
+        int dataAddr = field.startRow * cols + field.startCol;
+        int attrAddr = dataAddr - 1;
+        if (attrAddr < 0) attrAddr = 0;
+        int attrRow = attrAddr / cols;
+        int attrCol = attrAddr % cols;
         response.append(static_cast<char>(0x11)); // SBA order
-        response.append(static_cast<char>(field.startRow + 1));
-        response.append(static_cast<char>(field.startCol + 1));
+        response.append(static_cast<char>(attrRow + 1));
+        response.append(static_cast<char>(attrCol + 1));
         response.append(m_screenBuffer->getFieldData(field));
     }
 
