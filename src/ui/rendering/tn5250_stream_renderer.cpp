@@ -1,5 +1,6 @@
 #include "tn5250_stream_renderer.h"
 #include "display_attributes.h"
+#include "logger/logger.h"
 #include "network/tn5250/protocol_constants.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
 
@@ -12,6 +13,8 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
     if (!m_widget || !m_widget->screenBuffer()) {
         return;
     }
+
+    LOG_DEBUG(QString("[StreamRenderer] render: %1 bytes of display data").arg(data.size()));
 
     auto *screen = m_widget->screenBuffer();
     int currentRow = 0;
@@ -53,6 +56,7 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             if (currentCol < 0) currentCol = 0;
             if (currentRow >= screen->rows()) currentRow = screen->rows() - 1;
             if (currentCol >= screen->cols()) currentCol = screen->cols() - 1;
+            LOG_DEBUG(QString("[StreamRenderer] SBA: row=%1 col=%2").arg(currentRow).arg(currentCol));
             currentAttr = ui::widgets::CellAttributes();
             i += 3;
             break;
@@ -97,6 +101,12 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
 
             // Register the field
             bool isProtected = (ffw1 & 0x20) != 0;
+            LOG_DEBUG(QString("[StreamRenderer] SF: attrPos=(%1,%2) fieldStart=(%3,%4) len=%5"
+                " ffw1=0x%6 ffw2=0x%7 prot=%8 bypass=%9 attr=0x%10")
+                .arg(currentRow).arg(currentCol).arg(fieldStartRow).arg(fieldStartCol)
+                .arg(fieldLen).arg(ffw1, 2, 16, QChar('0')).arg(ffw2, 2, 16, QChar('0'))
+                .arg(isProtected).arg((ffw1 & 0x20) != 0)
+                .arg(attrByte, 2, 16, QChar('0')));
             screen->setField(fieldStartRow, fieldStartCol, fieldLen, isProtected);
             screen->setFieldFFW(fieldStartRow, fieldStartCol, ffw1, ffw2);
 
@@ -128,6 +138,9 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             uint8_t fillChar = static_cast<uint8_t>(data[i + 3]);
             if (targetRow < 0) targetRow = 0;
             if (targetCol < 0) targetCol = 0;
+            LOG_DEBUG(QString("[StreamRenderer] RA: from=(%1,%2) to=(%3,%4) fillChar=0x%5")
+                .arg(currentRow).arg(currentCol).arg(targetRow).arg(targetCol)
+                .arg(fillChar, 2, 16, QChar('0')));
             i += 4;
 
             int currentAddr = currentRow * screen->cols() + currentCol;
@@ -159,6 +172,8 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             int targetCol = static_cast<uint8_t>(data[i + 2]) - 1;
             if (targetRow < 0) targetRow = 0;
             if (targetCol < 0) targetCol = 0;
+            LOG_DEBUG(QString("[StreamRenderer] EA: from=(%1,%2) to=(%3,%4)")
+                .arg(currentRow).arg(currentCol).arg(targetRow).arg(targetCol));
             i += 3;
 
             int currentAddr = currentRow * screen->cols() + currentCol;
@@ -190,6 +205,7 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             int icCol = static_cast<uint8_t>(data[i + 2]) - 1;
             if (icRow < 0) icRow = 0;
             if (icCol < 0) icCol = 0;
+            LOG_DEBUG(QString("[StreamRenderer] IC: row=%1 col=%2").arg(icRow).arg(icCol));
             screen->setCursorPosition(icRow, icCol);
             if (m_widget) {
                 m_widget->setICAddress(icRow, icCol);
@@ -207,6 +223,7 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             int mcCol = static_cast<uint8_t>(data[i + 2]) - 1;
             if (mcRow < 0) mcRow = 0;
             if (mcCol < 0) mcCol = 0;
+            LOG_DEBUG(QString("[StreamRenderer] MC: row=%1 col=%2").arg(mcRow).arg(mcCol));
             currentRow = mcRow;
             currentCol = mcCol;
             i += 3;
@@ -221,6 +238,7 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             int wdsfLen = (static_cast<uint8_t>(data[i + 1]) << 8) |
                            static_cast<uint8_t>(data[i + 2]);
             if (wdsfLen < 2) wdsfLen = 2;
+            LOG_DEBUG(QString("[StreamRenderer] WDSF: len=%1 (skipped)").arg(wdsfLen));
             i += 1 + wdsfLen;
             if (i > data.size()) i = data.size();
             break;
@@ -233,6 +251,8 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             }
             uint16_t tdLen = (static_cast<uint16_t>(static_cast<uint8_t>(data[i + 1])) << 8) |
                               static_cast<uint16_t>(static_cast<uint8_t>(data[i + 2]));
+            LOG_DEBUG(QString("[StreamRenderer] TD: %1 transparent bytes at (%2,%3)")
+                .arg(tdLen).arg(currentRow).arg(currentCol));
             i += 3;
             for (uint16_t t = 0; t < tdLen && i < data.size(); t++) {
                 uint8_t tdByte = static_cast<uint8_t>(data[i]);
@@ -285,6 +305,9 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
                 currentAttr.underline = ae.underline;
                 currentAttr.nonDisplay = ae.nonDisplay;
                 currentAttr.colSep = ae.colSep;
+                LOG_DEBUG(QString("[StreamRenderer] AttrByte: 0x%1 at (%2,%3) color=%4 rev=%5 ul=%6 nonDisp=%7")
+                    .arg(byte, 2, 16, QChar('0')).arg(currentRow).arg(currentCol)
+                    .arg(ae.color).arg(ae.reverse).arg(ae.underline).arg(ae.nonDisplay));
                 currentCol++;
                 if (currentCol >= screen->cols()) {
                     currentCol = 0;

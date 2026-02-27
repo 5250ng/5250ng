@@ -31,7 +31,7 @@ void TestSessionConfig::testInitialization() {
     QCOMPARE(m_config->name(), QString("New Session"));
     QCOMPARE(m_config->port(), static_cast<quint16>(23));
     QCOMPARE(m_config->useTLS(), false);
-    QCOMPARE(m_config->deviceName(), QString("QT5250"));
+    QCOMPARE(m_config->deviceName(), QString("IBM-3179-2"));
     QCOMPARE(m_config->screenRows(), 24);
     QCOMPARE(m_config->screenCols(), 80);
 }

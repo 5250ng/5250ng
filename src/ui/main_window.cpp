@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTabBar>
 #include <QTimer>
 #include <QWidgetAction>
@@ -88,6 +89,33 @@ MainWindow::~MainWindow() {
 void MainWindow::connectToServer(const session::SessionConfig &config) {
     m_currentSession = config;
 
+    // Ensure a unique device name per host so the AS/400 doesn't reject the
+    // session.  Collect device names already in use for the same host:port,
+    // then append a numeric suffix if there is a collision.
+    QString deviceName = config.deviceName();
+    {
+        QSet<QString> usedNames;
+        for (const Session *s : m_sessions) {
+            if (s->config.hostname() == config.hostname()
+                && s->config.port() == config.port()) {
+                usedNames.insert(s->config.deviceName().toUpper());
+            }
+        }
+        if (usedNames.contains(deviceName.toUpper())) {
+            QString base = deviceName;
+            // IBM device names are max 10 chars; trim base to leave room for suffix
+            if (base.size() > 7) base.truncate(7);
+            for (int i = 1; i <= 99; ++i) {
+                QString candidate = QString("%1%2").arg(base).arg(i);
+                if (!usedNames.contains(candidate.toUpper())) {
+                    deviceName = candidate;
+                    break;
+                }
+            }
+        }
+        m_currentSession.setDeviceName(deviceName);
+    }
+
     // Create a new session tab
     Session *session = new Session();
     session->container = new QWidget(this);
@@ -126,7 +154,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     session->parser = new tn5250::client::Decoder(session->container);
     session->thread = new QThread(this);
     session->worker = new tn5250::session::Worker();
-    session->worker->setConfig(config);
+    session->worker->setConfig(m_currentSession);
     session->worker->moveToThread(session->thread);
     connect(session->thread, &QThread::started, session->worker, &tn5250::session::Worker::start);
     connect(session->thread, &QThread::finished, session->worker, &QObject::deleteLater);
@@ -174,7 +202,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
         if (session->parser) {
             session->parser->parseData(bytes);
         } }, Qt::QueuedConnection);
-    session->config = config;
+    session->config = m_currentSession;
 
     // Use session name for saved sessions, ip:port for CLI/unsaved
     QString tabDisplayName;

@@ -332,6 +332,10 @@ void TN5250Client::sendData(const QByteArray &data) {
         );
         return;
     }
+    logger::Logger::instance()->debug(
+        QString("[TN5250->Client]: sendData: %1 bytes payload, hex=%2")
+            .arg(data.size())
+            .arg(QString::fromLatin1(data.left(64).toHex())));
 
     // Wrap payload in a GDS record per RFC 1205 / SA21-9247-6:
     // [recLen(2)] [0x12A0(2)] [0x0000(2)] [varLen=0x04(1)] [flagsHi(1)] [flagsLo(1)] [opcode(1)] [payload]
@@ -366,6 +370,9 @@ void TN5250Client::sendRawData(const QByteArray &data) {
     if (!m_socket) {
         return;
     }
+    logger::Logger::instance()->debug(
+        QString("[TN5250->Client]: sendRawData: %1 bytes (before IAC escaping)")
+            .arg(data.size()));
 
     // Escape IAC bytes in data
     QByteArray escaped;

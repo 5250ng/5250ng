@@ -10,6 +10,8 @@ Decoder::Decoder(QObject *parent)
 void Decoder::parseData(const QByteArray &data) {
     // Accumulate data (records may arrive fragmented)
     m_buffer.append(data);
+    LOG_DEBUG(QString("[Decoder] parseData: received %1 bytes, buffer now %2 bytes")
+        .arg(data.size()).arg(m_buffer.size()));
 
     // Parse zero or more RFC1205 GDS records
     // Record layout:
@@ -43,6 +45,8 @@ void Decoder::parseData(const QByteArray &data) {
         // We have a full record (recLen includes the 2-byte length field)
         QByteArray rec = m_buffer.mid(0, recLen);
         m_buffer.remove(0, recLen);
+        LOG_DEBUG(QString("[Decoder] GDS record: len=%1 hex=%2")
+            .arg(recLen).arg(QString::fromLatin1(rec.left(20).toHex())));
 
         if (rec.size() < 7) {
             emit parseError("TN5250: record too short");
@@ -71,6 +75,10 @@ void Decoder::parseData(const QByteArray &data) {
         const uint8_t flagsHi = static_cast<uint8_t>(rec[varHdrStart + 1]);
         const uint8_t flagsLo = static_cast<uint8_t>(rec[varHdrStart + 2]);
         const uint8_t opcode = static_cast<uint8_t>(rec[varHdrStart + 3]);
+        LOG_DEBUG(QString("[Decoder] GDS header: recLen=%1 varLen=%2 flags=0x%3%4 opcode=0x%5")
+            .arg(recLen).arg(varLen)
+            .arg(flagsHi, 2, 16, QChar('0')).arg(flagsLo, 2, 16, QChar('0'))
+            .arg(opcode, 2, 16, QChar('0')));
         Q_UNUSED(flagsHi);
         Q_UNUSED(flagsLo);
 
@@ -86,10 +94,15 @@ void Decoder::parseData(const QByteArray &data) {
         // Opcodes seen:
         //   0x02 Output Only, 0x03 Put/Get, 0x05 Restore Screen
         if (opcode == GDS_OPCODE_SAVE_SCREEN) {
+            LOG_DEBUG("[Decoder] opcode=0x04 SAVE_SCREEN");
             emit saveScreenRequested();
             continue;
         }
         if (opcode == GDS_OPCODE_OUTPUT_ONLY || opcode == GDS_OPCODE_PUT_GET || opcode == GDS_OPCODE_RESTORE) {
+            const char *opName = (opcode == GDS_OPCODE_OUTPUT_ONLY) ? "OUTPUT_ONLY" :
+                                 (opcode == GDS_OPCODE_PUT_GET) ? "PUT_GET" : "RESTORE";
+            LOG_DEBUG(QString("[Decoder] opcode=0x%1 %2, payload=%3 bytes")
+                .arg(opcode, 2, 16, QChar('0')).arg(opName).arg(payload.size()));
             QByteArray display;
             // Parse payload: sequences of ESC 0x04 CC (command code), where
             //   CC=0x40 -> Clear Unit
@@ -103,11 +116,13 @@ void Decoder::parseData(const QByteArray &data) {
                     }
                     uint8_t cc = static_cast<uint8_t>(payload[i + 1]);
                     if (cc == CC_CLEAR_UNIT) {
+                        LOG_DEBUG("[Decoder] ESC 0x40 CLEAR_UNIT");
                         emit clearScreenRequested();
                         i += 2;
                         continue;
                     }
                     if (cc == CC_CLEAR_UNIT_ALTERNATE) {
+                        LOG_DEBUG("[Decoder] ESC 0x20 CLEAR_UNIT_ALTERNATE (27x132)");
                         emit clearScreenAlternateRequested();
                         i += 2;
                         continue;
@@ -123,6 +138,8 @@ void Decoder::parseData(const QByteArray &data) {
                             errData.append(static_cast<char>(ob));
                             j++;
                         }
+                        LOG_DEBUG(QString("[Decoder] ESC 0x21 WRITE_ERROR_CODE: %1 bytes")
+                            .arg(errData.size()));
                         emit writeErrorCodeRequested(errData);
                         i = j;
                         continue;
@@ -134,6 +151,9 @@ void Decoder::parseData(const QByteArray &data) {
                             uint8_t ctrl2 = static_cast<uint8_t>(payload[i + 3]);
                             bool up = (ctrl1 & 0x80) != 0; // bit 0 = direction (1=up, 0=down)
                             uint8_t lineCount = ctrl2 & 0x1F; // bits 3-7 = number of lines
+                            LOG_DEBUG(QString("[Decoder] ESC 0x23 ROLL: dir=%1 lines=%2 ctrl1=0x%3 ctrl2=0x%4")
+                                .arg(up ? "up" : "down").arg(lineCount)
+                                .arg(ctrl1, 2, 16, QChar('0')).arg(ctrl2, 2, 16, QChar('0')));
                             // Top and bottom row operands follow in some variants,
                             // but typically ctrl1 bits 1-7 = top line, ctrl2 bits 0-4 = count
                             // IBM spec: after ESC 0x23, two operand bytes follow
@@ -153,21 +173,25 @@ void Decoder::parseData(const QByteArray &data) {
                         continue;
                     }
                     if (cc == CC_READ_INPUT_FIELDS) {
+                        LOG_DEBUG("[Decoder] ESC 0x42 READ_INPUT_FIELDS");
                         emit commandReceived(TN5250Command::READ_INPUT_FIELDS, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
                         continue;
                     }
                     if (cc == CC_CLEAR_FORMAT_TABLE) {
+                        LOG_DEBUG("[Decoder] ESC 0x50 CLEAR_FORMAT_TABLE");
                         emit clearFormatTableRequested();
                         i += 2;
                         continue;
                     }
                     if (cc == CC_READ_MDT_FIELDS) {
+                        LOG_DEBUG("[Decoder] ESC 0x52 READ_MDT_FIELDS");
                         emit commandReceived(TN5250Command::READ_MDT_FIELDS, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
                         continue;
                     }
                     if (cc == CC_READ_IMMEDIATE) {
+                        LOG_DEBUG("[Decoder] ESC 0x72 READ_IMMEDIATE");
                         emit commandReceived(TN5250Command::READ_IMMEDIATE, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
                         continue;
@@ -179,6 +203,16 @@ void Decoder::parseData(const QByteArray &data) {
                         }
                         uint8_t ctrl1 = static_cast<uint8_t>(payload[i + 2]);
                         uint8_t ctrl2 = static_cast<uint8_t>(payload[i + 3]);
+                        LOG_DEBUG(QString("[Decoder] ESC 0x11 WRITE_TO_DISPLAY: CC1=0x%1 CC2=0x%2"
+                            " [CC1: resetMDT=%3 clrInput=%4 lockKbd=%5]"
+                            " [CC2: unlockKbd=%6 beep=%7 msgWait=%8]")
+                            .arg(ctrl1, 2, 16, QChar('0')).arg(ctrl2, 2, 16, QChar('0'))
+                            .arg((ctrl1 & 0x04) ? "Y" : "N")
+                            .arg((ctrl1 & 0x02) ? "Y" : "N")
+                            .arg((ctrl1 & 0x01) ? "Y" : "N")
+                            .arg((ctrl2 & 0x08) ? "Y" : "N")
+                            .arg((ctrl2 & 0x20) ? "Y" : "N")
+                            .arg((ctrl2 & 0x80) ? "Y" : "N"));
                         // Emit full CC bytes for processing
                         emit controlCharactersReceived(ctrl1, ctrl2);
                         // Keep legacy signal for backward compat
@@ -201,11 +235,15 @@ void Decoder::parseData(const QByteArray &data) {
                                     break;
                                 }
                                 uint8_t sohLen = static_cast<uint8_t>(payload[j + 1]);
+                                LOG_DEBUG(QString("[Decoder] SOH block: len=%1").arg(sohLen));
                                 if (sohLen >= 4) {
                                     uint8_t errorRow = (j + 5 < payload.size()) ? static_cast<uint8_t>(payload[j + 5]) : 0;
                                     uint8_t ckm1 = (sohLen >= 5 && j + 6 < payload.size()) ? static_cast<uint8_t>(payload[j + 6]) : 0;
                                     uint8_t ckm2 = (sohLen >= 6 && j + 7 < payload.size()) ? static_cast<uint8_t>(payload[j + 7]) : 0;
                                     uint8_t ckm3 = (sohLen >= 7 && j + 8 < payload.size()) ? static_cast<uint8_t>(payload[j + 8]) : 0;
+                                    LOG_DEBUG(QString("[Decoder] SOH: errorRow=%1 cmdKeyMask=0x%2,0x%3,0x%4")
+                                        .arg(errorRow).arg(ckm1, 2, 16, QChar('0'))
+                                        .arg(ckm2, 2, 16, QChar('0')).arg(ckm3, 2, 16, QChar('0')));
                                     emit sohReceived(errorRow, ckm1, ckm2, ckm3);
                                 }
                                 j += 2 + sohLen;
@@ -290,6 +328,8 @@ void Decoder::parseData(const QByteArray &data) {
                         continue;
                     }
                     // Unknown ESC command: skip ESC + code
+                    LOG_DEBUG(QString("[Decoder] Unknown ESC command: 0x%1")
+                        .arg(cc, 2, 16, QChar('0')));
                     i += 2;
                     continue;
                 }
@@ -314,6 +354,8 @@ void Decoder::parseData(const QByteArray &data) {
                 i++;
             }
             if (!display.isEmpty()) {
+                LOG_DEBUG(QString("[Decoder] emitting rawScreenDataReceived: %1 bytes of display data")
+                    .arg(display.size()));
                 emit rawScreenDataReceived(display);
             }
             continue;

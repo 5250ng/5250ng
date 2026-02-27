@@ -1,4 +1,5 @@
 #include "Q5250ScreenWidget.h"
+#include "logger/logger.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QDebug>
@@ -80,6 +81,12 @@ Q5250ScreenWidget::~Q5250ScreenWidget() {}
 
 void Q5250ScreenWidget::setKeyboardState(KeyboardState state) {
     if (m_keyboardState != state) {
+        const char *names[] = {"Unlocked", "Locked", "ErrorLocked", "SystemRequest"};
+        int oldIdx = static_cast<int>(m_keyboardState);
+        int newIdx = static_cast<int>(state);
+        LOG_DEBUG(QString("[Q5250Widget] setKeyboardState: %1 -> %2")
+            .arg(oldIdx < 4 ? names[oldIdx] : "?")
+            .arg(newIdx < 4 ? names[newIdx] : "?"));
         m_keyboardState = state;
         // Exiting insert mode when keyboard locks (per spec)
         if (state == KeyboardState::Locked || state == KeyboardState::ErrorLocked) {
@@ -91,6 +98,7 @@ void Q5250ScreenWidget::setKeyboardState(KeyboardState state) {
 }
 
 void Q5250ScreenWidget::setScreenSize(int rows, int cols) {
+    LOG_DEBUG(QString("[Q5250Widget] setScreenSize: %1x%2").arg(rows).arg(cols));
     m_screenBuffer->resize(rows, cols);
     calculateCellSize();
     updateGeometry();

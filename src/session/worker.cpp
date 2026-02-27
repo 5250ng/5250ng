@@ -54,8 +54,13 @@ void Worker::stop() {
 
 void Worker::sendInput(const QByteArray &data) {
     if (!m_client) {
+        logger::Logger::instance()->warning("[Worker] sendInput: no client, dropping data");
         return;
     }
+    logger::Logger::instance()->debug(
+        QString("[Worker] sendInput: %1 bytes, hex=%2")
+            .arg(data.size())
+            .arg(QString::fromLatin1(data.left(64).toHex())));
     m_client->sendData(data);
 }
 

@@ -1,4 +1,5 @@
 #include "Q5250ScreenWidget.h"
+#include "logger/logger.h"
 #include <climits>
 #include <QApplication>
 #include <QClipboard>
@@ -163,6 +164,9 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
     }
 
     // Pass other keys to input handler (AID keys and characters)
+    LOG_DEBUG(QString("[Q5250Widget] keyPressEvent: key=0x%1 mod=0x%2 text='%3'")
+        .arg(event->key(), 0, 16).arg(static_cast<int>(event->modifiers()), 0, 16)
+        .arg(event->text()));
     processKeyEvent(event);
     QWidget::keyPressEvent(event);
 }
@@ -265,6 +269,9 @@ void Q5250ScreenWidget::processKeyEvent(QKeyEvent *event) {
         m_encoder->encodeKeyEvent(event, shiftPressed, ctrlPressed, altPressed);
 
     if (!encoded.isEmpty()) {
+        LOG_DEBUG(QString("[Q5250Widget] processKeyEvent: encoded=%1 bytes, isAID=%2, hex=%3")
+            .arg(encoded.size()).arg(isAID)
+            .arg(QString::fromLatin1(encoded.toHex())));
         processEncodedInput(encoded, isAID);
     }
 }
@@ -285,7 +292,12 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
         rightAdjustField(cursor.y(), cursor.x());
 
         // AID key: build field response and send to host
-        emit inputReady(buildAIDResponse(firstByte));
+        QByteArray aidResponse = buildAIDResponse(firstByte);
+        LOG_DEBUG(QString("[Q5250Widget] AID key pressed: aid=0x%1 cursor=(%2,%3) response=%4 bytes, hex=%5")
+            .arg(firstByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
+            .arg(aidResponse.size())
+            .arg(QString::fromLatin1(aidResponse.left(64).toHex())));
+        emit inputReady(aidResponse);
         // Lock keyboard after sending AID — host must unlock via CC bytes
         setKeyboardState(KeyboardState::Locked);
 
@@ -422,6 +434,9 @@ void Q5250ScreenWidget::moveToNextField() {
 
     ScreenBuffer::Field nextField = findNextField(m_cursorPos.y(), m_cursorPos.x());
     if (nextField.length > 0) {
+        LOG_DEBUG(QString("[Q5250Widget] Tab: moveToNextField from (%1,%2) -> field at (%3,%4) len=%5")
+            .arg(m_cursorPos.y()).arg(m_cursorPos.x())
+            .arg(nextField.startRow).arg(nextField.startCol).arg(nextField.length));
         moveCursor(nextField.startRow, nextField.startCol);
     }
 }
@@ -437,6 +452,9 @@ void Q5250ScreenWidget::moveToPreviousField() {
 
     ScreenBuffer::Field prevField = findPreviousField(m_cursorPos.y(), m_cursorPos.x());
     if (prevField.length > 0) {
+        LOG_DEBUG(QString("[Q5250Widget] Backtab: moveToPreviousField from (%1,%2) -> field at (%3,%4) len=%5")
+            .arg(m_cursorPos.y()).arg(m_cursorPos.x())
+            .arg(prevField.startRow).arg(prevField.startCol).arg(prevField.length));
         moveCursor(prevField.startRow, prevField.startCol);
     }
 }
@@ -537,6 +555,9 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     // the field data start), because the host identifies fields by attribute address.
     int cols = m_screenBuffer->cols();
     QVector<ScreenBuffer::Field> modFields = m_screenBuffer->getModifiedFields();
+    LOG_DEBUG(QString("[Q5250Widget] buildAIDResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
+        .arg(aidByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
+        .arg(modFields.size()));
     for (const auto &field : modFields) {
         int dataAddr = field.startRow * cols + field.startCol;
         int attrAddr = dataAddr - 1;
@@ -690,6 +711,8 @@ ScreenBuffer::Field Q5250ScreenWidget::findPreviousField(int startRow, int start
 
 void Q5250ScreenWidget::handleEraseInput() {
     if (!m_screenBuffer) return;
+    LOG_DEBUG(QString("[Q5250Widget] handleEraseInput: clearing all input fields, moving cursor to IC=(%1,%2)")
+        .arg(m_icRow).arg(m_icCol));
 
     // Clear all non-protected fields to nulls, reset MDT flags
     const auto &fields = m_screenBuffer->fields();

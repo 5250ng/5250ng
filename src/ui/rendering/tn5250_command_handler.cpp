@@ -173,6 +173,20 @@ void TN5250CommandHandler::onControlCharactersReceived(uint8_t cc1, uint8_t cc2)
     auto *screen = m_displayWidget->screenBuffer();
 
     uint8_t combo = cc1 & 0x07;
+    LOG_DEBUG(QString("CommandHandler: CC1=0x%1 CC2=0x%2 combo=%3"
+        " [clearInput=%4 resetMDT=%5 lockKbd=%6 clearFmtTbl=%7]"
+        " [nullKbd=%8 blinkOff=%9 unlockKbd=%10 beep=%11 msgOff=%12 msgOn=%13]")
+        .arg(cc1, 2, 16, QChar('0')).arg(cc2, 2, 16, QChar('0')).arg(combo)
+        .arg((combo >= 5) ? "Y" : "N")
+        .arg((combo & 0x04) ? "Y" : "N")
+        .arg((combo & 0x01) ? "Y" : "N")
+        .arg((combo == 0x07) ? "Y" : "N")
+        .arg((cc2 & 0x02) ? "Y" : "N")
+        .arg((cc2 & 0x04) ? "Y" : "N")
+        .arg((cc2 & 0x08) ? "Y" : "N")
+        .arg((cc2 & 0x20) ? "Y" : "N")
+        .arg((cc2 & 0x40) ? "Y" : "N")
+        .arg((cc2 & 0x80) ? "Y" : "N"));
 
     if (combo == 0x05 || combo == 0x06 || combo == 0x07) {
         for (const auto &field : screen->fields()) {
@@ -206,6 +220,14 @@ void TN5250CommandHandler::processDeferredCC2(uint8_t cc2) {
     if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
         return;
     }
+    LOG_DEBUG(QString("CommandHandler: processDeferredCC2: 0x%1"
+        " [blinkOff=%2 unlockKbd=%3 beep=%4 msgOff=%5 msgOn=%6]")
+        .arg(cc2, 2, 16, QChar('0'))
+        .arg((cc2 & 0x04) ? "Y" : "N")
+        .arg((cc2 & 0x08) ? "Y" : "N")
+        .arg((cc2 & 0x20) ? "Y" : "N")
+        .arg((cc2 & 0x40) ? "Y" : "N")
+        .arg((cc2 & 0x80) ? "Y" : "N"));
     auto *screen = m_displayWidget->screenBuffer();
 
     if (cc2 & 0x04) {
@@ -360,6 +382,9 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     // SBA address must point to the attribute byte (one cell before field data)
     int cols = screen->cols();
     QVector<ui::widgets::ScreenBuffer::Field> modFields = screen->getModifiedFields();
+    LOG_DEBUG(QString("CommandHandler: buildFieldResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
+        .arg(aidByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
+        .arg(modFields.size()));
     for (const auto &field : modFields) {
         int dataAddr = field.startRow * cols + field.startCol;
         int attrAddr = dataAddr - 1;

@@ -1,4 +1,5 @@
 #include "screen_buffer.h"
+#include "logger/logger.h"
 #include <QDebug>
 
 namespace ui::widgets {
@@ -11,6 +12,8 @@ ScreenBuffer::ScreenBuffer(int rows, int cols, QObject *parent) : QObject(parent
 ScreenBuffer::~ScreenBuffer() {}
 
 void ScreenBuffer::resize(int rows, int cols) {
+    LOG_DEBUG(QString("[ScreenBuffer] resize: %1x%2 -> %3x%4")
+        .arg(m_rows).arg(m_cols).arg(rows).arg(cols));
     m_rows = rows;
     m_cols = cols;
     m_buffer.resize(m_rows * m_cols);
@@ -53,6 +56,8 @@ void ScreenBuffer::setCursorPosition(int row, int col) {
         QPoint oldPos = m_cursorPos;
         m_cursorPos = QPoint(col, row);
         if (oldPos != m_cursorPos) {
+            LOG_DEBUG(QString("[ScreenBuffer] setCursorPosition: (%1,%2) -> (%3,%4)")
+                .arg(oldPos.y()).arg(oldPos.x()).arg(row).arg(col));
             emit cursorMoved(m_cursorPos);
         }
     }
@@ -94,6 +99,8 @@ void ScreenBuffer::setField(int row, int col, int length, bool protected_field) 
     field.protected_field = protected_field;
     field.modified = false;
     m_fields.append(field);
+    LOG_DEBUG(QString("[ScreenBuffer] setField: row=%1 col=%2 len=%3 protected=%4 (total fields=%5)")
+        .arg(row).arg(col).arg(length).arg(protected_field).arg(m_fields.size()));
 
     // Update cell attributes for all cells in the field (wrapping rows)
     int addr = row * m_cols + col;
@@ -108,6 +115,8 @@ void ScreenBuffer::setField(int row, int col, int length, bool protected_field) 
 }
 
 void ScreenBuffer::setFieldFFW(int row, int col, uint8_t ffw1, uint8_t ffw2) {
+    LOG_DEBUG(QString("[ScreenBuffer] setFieldFFW: row=%1 col=%2 ffw1=0x%3 ffw2=0x%4")
+        .arg(row).arg(col).arg(ffw1, 2, 16, QChar('0')).arg(ffw2, 2, 16, QChar('0')));
     int addr = row * m_cols + col;
     for (Field &field : m_fields) {
         int fStart = field.startRow * m_cols + field.startCol;
@@ -163,6 +172,8 @@ bool ScreenBuffer::isProtected(int row, int col) const {
 }
 
 void ScreenBuffer::clear() {
+    LOG_DEBUG(QString("[ScreenBuffer] clear: clearing %1x%2 buffer, %3 fields")
+        .arg(m_rows).arg(m_cols).arg(m_fields.size()));
     for (ScreenCell &cell : m_buffer) {
         cell.character = 0x40; // EBCDIC space
         cell.attributes = CellAttributes();
@@ -211,6 +222,7 @@ void ScreenBuffer::scrollUp(int lines) {
     if (lines <= 0 || lines >= m_rows) {
         return;
     }
+    LOG_DEBUG(QString("[ScreenBuffer] scrollUp: %1 lines").arg(lines));
 
     // Move lines up
     for (int row = 0; row < m_rows - lines; ++row) {
@@ -239,6 +251,7 @@ void ScreenBuffer::scrollDown(int lines) {
     if (lines <= 0 || lines >= m_rows) {
         return;
     }
+    LOG_DEBUG(QString("[ScreenBuffer] scrollDown: %1 lines").arg(lines));
 
     // Move lines down
     for (int row = m_rows - 1; row >= lines; --row) {
@@ -386,6 +399,10 @@ void ScreenBuffer::markFieldModified(int row, int col) {
         int fEnd = fStart + m_fields[i].length;
         int addr = row * m_cols + col;
         if (addr >= fStart && addr < fEnd) {
+            if (!m_fields[i].modified) {
+                LOG_DEBUG(QString("[ScreenBuffer] markFieldModified: field at (%1,%2) len=%3 marked MDT")
+                    .arg(m_fields[i].startRow).arg(m_fields[i].startCol).arg(m_fields[i].length));
+            }
             m_fields[i].modified = true;
             return;
         }
@@ -399,6 +416,8 @@ QVector<ScreenBuffer::Field> ScreenBuffer::getModifiedFields() const {
             result.append(f);
         }
     }
+    LOG_DEBUG(QString("[ScreenBuffer] getModifiedFields: %1 modified out of %2 total")
+        .arg(result.size()).arg(m_fields.size()));
     return result;
 }
 
@@ -418,6 +437,8 @@ void ScreenBuffer::scrollRegion(int topRow, int botRow, int lines, bool up) {
     if (topRow < 0) topRow = 0;
     if (botRow >= m_rows) botRow = m_rows - 1;
     if (topRow > botRow || lines <= 0) return;
+    LOG_DEBUG(QString("[ScreenBuffer] scrollRegion: top=%1 bot=%2 lines=%3 dir=%4")
+        .arg(topRow).arg(botRow).arg(lines).arg(up ? "up" : "down"));
 
     if (up) {
         // Scroll up: move rows upward, clear vacated rows at bottom
@@ -448,12 +469,17 @@ void ScreenBuffer::scrollRegion(int topRow, int botRow, int lines, bool up) {
 }
 
 void ScreenBuffer::resetAllMDTFlags() {
+    int count = 0;
     for (auto &field : m_fields) {
+        if (field.modified) count++;
         field.modified = false;
     }
+    LOG_DEBUG(QString("[ScreenBuffer] resetAllMDTFlags: cleared %1 modified flags out of %2 fields")
+        .arg(count).arg(m_fields.size()));
 }
 
 void ScreenBuffer::clearFields() {
+    LOG_DEBUG(QString("[ScreenBuffer] clearFields: removing %1 fields").arg(m_fields.size()));
     m_fields.clear();
 }
 
@@ -468,6 +494,9 @@ ScreenBuffer::SavedState ScreenBuffer::saveState() const {
 }
 
 void ScreenBuffer::restoreState(const SavedState &state) {
+    LOG_DEBUG(QString("[ScreenBuffer] restoreState: %1x%2 buffer, %3 fields, cursor=(%4,%5)")
+        .arg(state.rows).arg(state.cols).arg(state.fields.size())
+        .arg(state.cursorPos.y()).arg(state.cursorPos.x()));
     if (state.rows != m_rows || state.cols != m_cols) {
         resize(state.rows, state.cols);
     }
