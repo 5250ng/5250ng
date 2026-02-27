@@ -269,18 +269,53 @@ void TN5250Client::handleSubnegotiation(TelnetOption opt, const QByteArray &data
         break;
 
     case TelnetOption::NEW_ENVIRON:
-        // Handle NEW_ENVIRON subnegotiation
+        // Handle NEW_ENVIRON subnegotiation (RFC 1572 / RFC 4777)
         // Server may send:
-        // - IAC SB NEW_ENVIRON SEND (0x01) IAC SE - request to send
-        // - IAC SB NEW_ENVIRON IS (0x00) ... - server sending environment
-        // - IAC SB NEW_ENVIRON INFO (0x02) ... - server sending environment (alt)
-        // We always respond with: IAC SB NEW_ENVIRON IS VAR KBDTYPE USERVAR BRB
-        // VAR CODEPAGE USERVAR 37 VAR CHARSET USERVAR 697 IAC SE
+        // - IAC SB NEW_ENVIRON SEND (0x01) [USERVAR name]... IAC SE
+        // - IAC SB NEW_ENVIRON IS (0x00) [USERVAR name VALUE value]... IAC SE
+        // - IAC SB NEW_ENVIRON INFO (0x02) ... IAC SE
         if (data.size() >= 1) {
             uint8_t firstByte = static_cast<uint8_t>(data[0]);
             if (firstByte == 0x01) { // SEND = 0x01 (request to send)
+                // Parse requested variable names and extract IBMRSEED server seed.
+                // RFC 4777: server embeds the 8-byte seed after the "IBMRSEED" name
+                // in the SEND request.
+                QString reqVars;
+                m_serverSeed.clear();
+                for (int si = 1; si < data.size(); ++si) {
+                    uint8_t sb = static_cast<uint8_t>(data[si]);
+                    if (sb == 0x00 || sb == 0x03) { // VAR or USERVAR
+                        if (!reqVars.isEmpty()) reqVars += ", ";
+                        // Read variable name + any trailing data until next marker
+                        int nameStart = si + 1;
+                        int nameEnd = nameStart;
+                        while (nameEnd < data.size()) {
+                            uint8_t nb = static_cast<uint8_t>(data[nameEnd]);
+                            if (nb == 0x00 || nb == 0x01 || nb == 0x03) break;
+                            nameEnd++;
+                        }
+                        QByteArray rawName = data.mid(nameStart, nameEnd - nameStart);
+                        // Check if this is IBMRSEED with embedded seed bytes
+                        QByteArray ibmrseedTag("IBMRSEED");
+                        if (rawName.startsWith(ibmrseedTag) &&
+                            rawName.size() > ibmrseedTag.size()) {
+                            m_serverSeed = rawName.mid(ibmrseedTag.size());
+                            reqVars += "USERVAR IBMRSEED + seed(" +
+                                       QString::number(m_serverSeed.size()) +
+                                       " bytes, hex=" +
+                                       QString::fromLatin1(m_serverSeed.toHex()) + ")";
+                        } else {
+                            QString varName = QString::fromLatin1(rawName);
+                            reqVars += (sb == 0x03 ? "USERVAR " : "VAR ") + varName;
+                        }
+                        si = nameEnd - 1; // loop will increment
+                    }
+                }
                 logger::Logger::instance()->debug(
-                    "[TN5250->Client]: NEW_ENVIRON requested by server (SEND)"
+                    QString("[TN5250->Client]: NEW_ENVIRON requested by server (SEND): %1"
+                            " (raw hex: %2)")
+                        .arg(reqVars.isEmpty() ? "(all)" : reqVars)
+                        .arg(QString::fromLatin1(data.toHex()))
                 );
             } else if (firstByte == 0x00) { // IS = 0x00 (server sending)
                 logger::Logger::instance()->debug(

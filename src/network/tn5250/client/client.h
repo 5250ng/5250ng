@@ -45,6 +45,11 @@ class TN5250Client : public QObject {
     void setDeviceName(const QString &deviceName);
     QString deviceName() const { return m_deviceName; }
 
+    // Credentials for IBMRSEED password encryption (RFC 4777)
+    void setCredentials(const QString &username, const QString &password);
+    QString username() const { return m_username; }
+    QString password() const { return m_password; }
+
   signals:
     void connected();
     void disconnected();
@@ -96,6 +101,11 @@ class TN5250Client : public QObject {
     QString m_hostname;
     quint16 m_port;
     QString m_deviceName;
+    QString m_username;
+    QString m_password;
+
+    // IBMRSEED state (RFC 4777)
+    QByteArray m_serverSeed;  // 8-byte seed from server's NEW_ENVIRON SEND
 
     QByteArray m_receiveBuffer;
     bool m_inSubnegotiation;

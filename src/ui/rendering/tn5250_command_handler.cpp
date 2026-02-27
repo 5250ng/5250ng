@@ -368,18 +368,22 @@ void TN5250CommandHandler::onClearFormatTableRequested() {
 
 QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     QByteArray response;
-    response.append(static_cast<char>(aidByte));
 
     if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        response.append(static_cast<char>(0));
+        response.append(static_cast<char>(0));
+        response.append(static_cast<char>(aidByte));
         return response;
     }
 
     auto *screen = m_displayWidget->screenBuffer();
     QPoint cursor = screen->cursorPosition();
+    // 5250 response format: row (1-based), col (1-based), AID byte
     response.append(static_cast<char>(cursor.y() + 1));
     response.append(static_cast<char>(cursor.x() + 1));
+    response.append(static_cast<char>(aidByte));
 
-    // SBA address must point to the attribute byte (one cell before field data)
+    // SBA address points to the attribute byte (one cell before field data)
     int cols = screen->cols();
     QVector<ui::widgets::ScreenBuffer::Field> modFields = screen->getModifiedFields();
     LOG_DEBUG(QString("CommandHandler: buildFieldResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
@@ -394,7 +398,17 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
         response.append(static_cast<char>(0x11));
         response.append(static_cast<char>(attrRow + 1));
         response.append(static_cast<char>(attrCol + 1));
-        response.append(screen->getFieldData(field));
+        // Get field data, strip trailing nulls, convert embedded nulls to blanks
+        QByteArray fieldData = screen->getFieldData(field);
+        while (!fieldData.isEmpty() && fieldData.back() == '\0') {
+            fieldData.chop(1);
+        }
+        for (int k = 0; k < fieldData.size(); ++k) {
+            if (fieldData[k] == '\0') {
+                fieldData[k] = static_cast<char>(0x40);
+            }
+        }
+        response.append(fieldData);
     }
 
     return response;

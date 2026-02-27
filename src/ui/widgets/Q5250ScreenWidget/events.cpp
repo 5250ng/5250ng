@@ -539,20 +539,23 @@ void Q5250ScreenWidget::moveCursorDown() {
 
 QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     QByteArray response;
-    response.append(static_cast<char>(aidByte));
 
     if (!m_screenBuffer) {
+        response.append(static_cast<char>(0));
+        response.append(static_cast<char>(0));
+        response.append(static_cast<char>(aidByte));
         return response;
     }
 
     QPoint cursor = m_screenBuffer->cursorPosition();
-    // Cursor position: 1-based row and col
+    // 5250 response format: row (1-based), col (1-based), AID byte
     response.append(static_cast<char>(cursor.y() + 1));
     response.append(static_cast<char>(cursor.x() + 1));
+    response.append(static_cast<char>(aidByte));
 
     // Append modified fields: SBA(0x11) + row(1-based) + col(1-based) + field data
-    // The SBA address must point to the attribute byte position (one cell before
-    // the field data start), because the host identifies fields by attribute address.
+    // SBA address points to the field attribute byte position (one cell before
+    // the field data start), per the 5250 Functions Reference.
     int cols = m_screenBuffer->cols();
     QVector<ScreenBuffer::Field> modFields = m_screenBuffer->getModifiedFields();
     LOG_DEBUG(QString("[Q5250Widget] buildAIDResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
@@ -567,7 +570,19 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
         response.append(static_cast<char>(0x11)); // SBA order
         response.append(static_cast<char>(attrRow + 1));
         response.append(static_cast<char>(attrCol + 1));
-        response.append(m_screenBuffer->getFieldData(field));
+        // Get field data, strip trailing nulls, convert embedded nulls to blanks
+        QByteArray fieldData = m_screenBuffer->getFieldData(field);
+        // Strip trailing null bytes (0x00)
+        while (!fieldData.isEmpty() && fieldData.back() == '\0') {
+            fieldData.chop(1);
+        }
+        // Convert remaining embedded nulls to EBCDIC blanks (0x40)
+        for (int k = 0; k < fieldData.size(); ++k) {
+            if (fieldData[k] == '\0') {
+                fieldData[k] = static_cast<char>(0x40);
+            }
+        }
+        response.append(fieldData);
     }
 
     return response;

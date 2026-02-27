@@ -1,4 +1,5 @@
 #include "client.h"
+#include "ibmrseed.h"
 #include "logger/logger.h"
 
 namespace tn5250::client {
@@ -61,26 +62,84 @@ void TN5250Client::sendDeviceName() {
 }
 
 void TN5250Client::sendNewEnviron() {
-    // NEW_ENVIRON subnegotiation
-    // Format: IAC SB NEW_ENVIRON IS VAR KBDTYPE USERVAR BRB VAR CODEPAGE USERVAR
-    // 37 VAR CHARSET USERVAR 697 IAC SE IS = 0 (we're sending) VAR = 0x03
-    // (variable name follows) USERVAR = 0x01 (user variable value follows)
+    // NEW_ENVIRON subnegotiation per RFC 1572 / RFC 4777
+    // Format: IAC SB NEW_ENVIRON IS [USERVAR name VALUE value]... IAC SE
+    // Type codes: IS=0x00, USERVAR=0x03, VALUE=0x01
     QByteArray negotiation;
     negotiation.append(static_cast<uint8_t>(TelnetCommand::IAC));
     negotiation.append(static_cast<uint8_t>(TelnetCommand::SB));
     negotiation.append(static_cast<uint8_t>(TelnetOption::NEW_ENVIRON));
-    negotiation.append(static_cast<uint8_t>(0)); // IS = 0
+    negotiation.append(static_cast<uint8_t>(0x00)); // IS
+
+    // DEVNAME — virtual device name (empty = server auto-assigns)
+    negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
+    negotiation.append("DEVNAME");
+    negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
+    // Empty value = server auto-assigns
+
+    // IBMRSEED + IBMSUBSPW: password encryption (RFC 4777)
+    bool encrypted = false;
+    QByteArray clientSeed;
+    if (m_serverSeed.size() == 8 && !m_username.isEmpty() && !m_password.isEmpty()) {
+        clientSeed = IBMRSeed::generateClientSeed();
+        QByteArray pwSub = IBMRSeed::encryptPassword(
+            m_username, m_password, m_serverSeed, clientSeed);
+        if (!pwSub.isEmpty()) {
+            encrypted = true;
+            // IBMRSEED VALUE <escaped client seed>
+            negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
+            negotiation.append("IBMRSEED");
+            negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
+            negotiation.append(IBMRSeed::escapeNewEnviron(clientSeed));
+
+            // IBMSUBSPW VALUE <escaped encrypted password>
+            negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
+            negotiation.append("IBMSUBSPW");
+            negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
+            negotiation.append(IBMRSeed::escapeNewEnviron(pwSub));
+
+            logger::Logger::instance()->debug(
+                QString("[TN5250->Client]: IBMRSEED encrypted password prepared"
+                        " (clientSeed=%1, pwSub=%2)")
+                    .arg(QString::fromLatin1(clientSeed.toHex()))
+                    .arg(QString::fromLatin1(pwSub.toHex())));
+        }
+    }
+    if (!encrypted) {
+        // No encryption — send empty IBMRSEED
+        negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
+        negotiation.append("IBMRSEED");
+        negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
+        // Empty value
+
+        if (m_serverSeed.size() == 8) {
+            logger::Logger::instance()->warning(
+                "[TN5250->Client]: Server sent IBMRSEED seed but credentials not "
+                "provided — sending empty seed (password will be sent in cleartext)");
+        }
+    }
+
+    // IBMSUBSVAR — subsystem info (empty)
+    negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
+    negotiation.append("IBMSUBSVAR");
+    negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
+
+    // KBDTYPE = USB (US English keyboard)
+    negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
+    negotiation.append("KBDTYPE");
+    negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
+    negotiation.append("USB");
 
     // CODEPAGE = 37 (EBCDIC US/Canada)
-    negotiation.append(static_cast<uint8_t>(0x03)); // VAR
+    negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("CODEPAGE");
-    negotiation.append(static_cast<uint8_t>(0x01)); // USERVAR
+    negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
     negotiation.append("37");
 
     // CHARSET = 697 (EBCDIC character set)
-    negotiation.append(static_cast<uint8_t>(0x03)); // VAR
+    negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("CHARSET");
-    negotiation.append(static_cast<uint8_t>(0x01)); // USERVAR
+    negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
     negotiation.append("697");
 
     negotiation.append(static_cast<uint8_t>(TelnetCommand::IAC));
@@ -88,8 +147,10 @@ void TN5250Client::sendNewEnviron() {
 
     if (m_socket) {
         m_socket->write(negotiation);
-        logger::Logger::instance()->debug("[TN5250->Client]: Sent NEW_ENVIRON: "
-                                          "CODEPAGE=37, CHARSET=697");
+        logger::Logger::instance()->debug(
+            QString("[TN5250->Client]: Sent NEW_ENVIRON: DEVNAME=(auto) IBMRSEED=%1"
+                    " IBMSUBSVAR=(empty) KBDTYPE=USB CODEPAGE=37 CHARSET=697")
+                .arg(encrypted ? "encrypted" : "(empty)"));
     }
 }
 

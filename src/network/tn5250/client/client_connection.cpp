@@ -119,6 +119,11 @@ void TN5250Client::setDeviceName(const QString &deviceName) {
     m_deviceName = deviceName;
 }
 
+void TN5250Client::setCredentials(const QString &username, const QString &password) {
+    m_username = username;
+    m_password = password;
+}
+
 void TN5250Client::setState(ConnectionState newState) {
     if (m_state != newState) {
         m_state = newState;

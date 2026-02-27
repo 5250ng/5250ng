@@ -60,6 +60,15 @@ void ConnectDialog::setupUI() {
     m_tlsCheck = new QCheckBox("Use TLS/SSL", this);
     formLayout->addRow("", m_tlsCheck);
 
+    m_usernameEdit = new QLineEdit(this);
+    m_usernameEdit->setPlaceholderText("(optional — for encrypted sign-on)");
+    formLayout->addRow("Username:", m_usernameEdit);
+
+    m_passwordEdit = new QLineEdit(this);
+    m_passwordEdit->setPlaceholderText("(optional — for encrypted sign-on)");
+    m_passwordEdit->setEchoMode(QLineEdit::Password);
+    formLayout->addRow("Password:", m_passwordEdit);
+
     // Emulated device dropdown
     m_deviceCombo = new QComboBox(this);
     // Populate supported devices
@@ -140,6 +149,8 @@ void ConnectDialog::updateUI() {
     m_hostnameEdit->setText(m_currentConfig.hostname());
     m_portSpin->setValue(m_currentConfig.port());
     m_tlsCheck->setChecked(m_currentConfig.useTLS());
+    m_usernameEdit->setText(m_currentConfig.username());
+    m_passwordEdit->setText(m_currentConfig.password());
     // Select device in combo if supported
     int idx = m_deviceCombo->findText(m_currentConfig.deviceName());
     if (idx >= 0) {
@@ -178,6 +189,8 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     }
     config.setScreenRows(m_rowsSpin->value());
     config.setScreenCols(m_colsSpin->value());
+    config.setUsername(m_usernameEdit->text());
+    config.setPassword(m_passwordEdit->text());
     return config;
 }
 

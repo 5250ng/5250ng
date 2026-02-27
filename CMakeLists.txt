@@ -18,11 +18,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS 
-    Core 
-    Widgets 
+find_package(Qt6 REQUIRED COMPONENTS
+    Core
+    Widgets
     Network
 )
+
+find_package(OpenSSL REQUIRED)
 
 
 # Source files organized by layer
@@ -64,6 +66,8 @@ set(TN5250_CLIENT_SOURCES
     src/network/tn5250/client/client_telnet.cpp
     src/network/tn5250/client/client_handshake.cpp
     src/network/tn5250/client/client_tls.cpp
+    src/network/tn5250/client/ibmrseed.cpp
+    src/network/tn5250/client/ibmrseed.h
     src/network/tn5250/client/client.h
     src/network/tn5250/client/decoder.h
     src/network/tn5250/client/decoder.cpp
@@ -204,10 +208,11 @@ add_executable(tn5250
 )
 
 target_link_libraries(tn5250
-    PRIVATE 
+    PRIVATE
         Qt6::Core
         Qt6::Widgets
         Qt6::Network
+        OpenSSL::Crypto
 )
 
 if(HAVE_QT6_SSL)
@@ -245,6 +250,7 @@ if(BUILD_TESTS)
             Qt6::Core
             Qt6::Network
             Qt6::Widgets
+            OpenSSL::Crypto
     )
     if(HAVE_QT6_SSL)
         target_link_libraries(tn5250_core PUBLIC Qt6::Ssl)
@@ -267,6 +273,8 @@ if(BUILD_TESTS)
     add_tn5250_test(test_screen_buffer tests/unit/test_screen_buffer.cpp)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
+
+    add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)

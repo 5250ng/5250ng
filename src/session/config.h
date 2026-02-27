@@ -40,6 +40,13 @@ class SessionConfig : public QObject {
     int screenCols() const { return m_screenCols; }
     void setScreenCols(int cols) { m_screenCols = cols; }
 
+    // Credentials (transient — not serialized to JSON)
+    QString username() const { return m_username; }
+    void setUsername(const QString &username) { m_username = username; }
+
+    QString password() const { return m_password; }
+    void setPassword(const QString &password) { m_password = password; }
+
     // Serialization
     QJsonObject toJson() const;
     bool fromJson(const QJsonObject &json);
@@ -58,6 +65,8 @@ class SessionConfig : public QObject {
     QString m_deviceName;
     int m_screenRows;
     int m_screenCols;
+    QString m_username;
+    QString m_password;
 };
 
 } // namespace session

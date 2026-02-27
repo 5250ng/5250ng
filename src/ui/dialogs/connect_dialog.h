@@ -51,6 +51,8 @@ class ConnectDialog : public QDialog {
     QLineEdit *m_hostnameEdit;
     QSpinBox *m_portSpin;
     QCheckBox *m_tlsCheck;
+    QLineEdit *m_usernameEdit;
+    QLineEdit *m_passwordEdit;
     QComboBox *m_deviceCombo;
     QLineEdit *m_customDeviceEdit;
     QSpinBox *m_rowsSpin;
