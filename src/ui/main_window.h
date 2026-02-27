@@ -39,11 +39,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onConnect();
     void onDisconnect();
     void onConnectRequested(const session::SessionConfig &config);
-    void onConnected();
-    void onDisconnected();
-    void onErrorOccurred(const QString &error);
-    void onDataReceived(const QByteArray &data);
-    void onInputReady(const QByteArray &data);
     void onLogMessage(logger::LogLevel level, const QString &message);
     void onCurrentTabChanged(int index);
     void onTabMoved(int from, int to);
@@ -69,20 +64,12 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void setupMenuBar();
     void setupStatusBar();
     void connectToServer(const session::SessionConfig &config);
-    void updateConnectionStatus(bool connected);
-    void
-    updateStatusIndicator(tn5250::client::TN5250Client::ConnectionState state);
-    void onSaveScreenRequested();
-    void connectSessionSignals();
-    void disconnectSessionSignals();
     void setActiveSession(int index);
     void openContextMenuForTab(const QPoint &pos);
-    void sendToHost(const QByteArray &data);
 
     struct Session {
         QWidget *container;
         ui::widgets::Q5250ScreenWidget *displayWidget;
-        tn5250::client::TN5250Client *client;
         tn5250::client::Decoder *parser;
         QThread *thread;
         tn5250::session::Worker *worker;
@@ -102,7 +89,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
 
     // Convenience pointers to the active session
     ui::widgets::Q5250ScreenWidget *m_displayWidget;
-    tn5250::client::TN5250Client *m_client;
     tn5250::client::Decoder *m_parser;
     session::SessionConfig m_currentSession;
 

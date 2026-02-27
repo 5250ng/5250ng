@@ -33,7 +33,7 @@
  * @param parent Optional parent QWidget.
  */
 MainWindow::MainWindow(QWidget *parent)
-    : ui::widgets::BaseFramelessWindow(parent), m_displayWidget(nullptr), m_client(nullptr),
+    : ui::widgets::BaseFramelessWindow(parent), m_displayWidget(nullptr),
       m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
     setWindowTitle("5250ng");
     resize(1128, 836);
@@ -65,8 +65,14 @@ void MainWindow::onViewSessionLogs() {
  * is destroyed.
  */
 MainWindow::~MainWindow() {
-    if (m_client) {
-        m_client->disconnectFromHost();
+    for (Session *s : m_sessions) {
+        if (s && s->worker) {
+            QMetaObject::invokeMethod(s->worker, "stop", Qt::QueuedConnection);
+        }
+        if (s && s->thread) {
+            s->thread->quit();
+            s->thread->wait(2000);
+        }
     }
 }
 
@@ -117,7 +123,6 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     tabLayout->setStretch(0, 1); // terminal view grows
     tabLayout->setStretch(1, 0); // footer
     session->container->setLayout(tabLayout);
-    session->client = nullptr; // handled by session worker thread
     session->parser = new tn5250::client::Decoder(session->container);
     session->thread = new QThread(this);
     session->worker = new tn5250::session::Worker();
@@ -125,17 +130,45 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     session->worker->moveToThread(session->thread);
     connect(session->thread, &QThread::started, session->worker, &tn5250::session::Worker::start);
     connect(session->thread, &QThread::finished, session->worker, &QObject::deleteLater);
-    // Forward worker state to UI
-    connect(session->worker, &tn5250::session::Worker::connected, this, &MainWindow::onConnected);
-    connect(session->worker, &tn5250::session::Worker::disconnected, this, &MainWindow::onDisconnected);
-    connect(session->worker, &tn5250::session::Worker::errorOccurred, this, &MainWindow::onErrorOccurred);
-    connect(session->worker, &tn5250::session::Worker::stateChanged, this, &MainWindow::updateStatusIndicator);
-    // Also update this session's status widget directly regardless of active tab
-    connect(session->worker, &tn5250::session::Worker::stateChanged, this, [session](tn5250::client::TN5250Client::ConnectionState st) {
-        if (session->connectionStatus) {
-            session->connectionStatus->setState(st);
-        }
-    });
+    // Per-session state handling — always updates this session's status widget,
+    // and only touches global menu actions when this is the active tab.
+    connect(session->worker, &tn5250::session::Worker::stateChanged, this,
+        [this, session](tn5250::client::TN5250Client::ConnectionState state) {
+            if (session->connectionStatus) {
+                session->connectionStatus->setState(state);
+                switch (state) {
+                case tn5250::client::TN5250Client::ConnectionState::Connected:
+                    session->connectionStatus->setStatusText(
+                        QString("Connected to %1:%2")
+                            .arg(session->config.hostname())
+                            .arg(session->config.port()));
+                    break;
+                case tn5250::client::TN5250Client::ConnectionState::Connecting:
+                    session->connectionStatus->setStatusText("Connecting");
+                    break;
+                case tn5250::client::TN5250Client::ConnectionState::Negotiating:
+                    session->connectionStatus->setStatusText("Waiting for system");
+                    break;
+                default:
+                    session->connectionStatus->setStatusText("Not connected");
+                    break;
+                }
+            }
+            if (m_sessions.indexOf(session) == m_activeIndex) {
+                bool connected = (state == tn5250::client::TN5250Client::ConnectionState::Connected
+                               || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
+                m_connected = connected;
+                m_connectAction->setEnabled(!connected);
+                m_disconnectAction->setEnabled(connected);
+            }
+        });
+    connect(session->worker, &tn5250::session::Worker::errorOccurred, this,
+        [this, session](const QString &error) {
+            logger::Logger::instance()->error(QString("Connection error: %1").arg(error));
+            if (m_sessions.indexOf(session) == m_activeIndex) {
+                QMessageBox::warning(this, "Connection Error", error);
+            }
+        });
     // App data: feed this session's parser directly
     connect(session->worker, &tn5250::session::Worker::appData, this, [this, session](const QByteArray &bytes) {
         if (session->parser) {
@@ -175,10 +208,25 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     // Setup display size from session config
     session->displayWidget->setScreenSize(config.screenRows(), config.screenCols());
 
-    // Wire display input
-    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::inputReady, this, &MainWindow::onInputReady);
+    // Wire display input — per-session, routes directly to this session's worker
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::inputReady, this,
+        [session](const QByteArray &data) {
+            if (session->worker) {
+                QMetaObject::invokeMethod(session->worker, "sendInput",
+                    Qt::QueuedConnection, Q_ARG(QByteArray, data));
+            }
+        });
     if (session->displayWidget->screenBuffer()) {
-        connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::cursorMoved, this, &MainWindow::updateCursorCoordinates);
+        connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::cursorMoved, this,
+            [this, session]() {
+                if (m_sessions.indexOf(session) != m_activeIndex) return;
+                if (!session->displayWidget || !session->displayWidget->screenBuffer()
+                    || !session->coordinatesLabel) return;
+                updateCursorCoordinatesFont();
+                QPoint pos = session->displayWidget->screenBuffer()->cursorPosition();
+                session->coordinatesLabel->setText(
+                    QString("%1/%2").arg(pos.y() + 1).arg(pos.x() + 1));
+            });
     }
 
     // Set active pointers and connect signals for this session
@@ -187,12 +235,21 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     // Create command handler for this session
     session->commandHandler = new ui::rendering::TN5250CommandHandler(session->container);
     session->commandHandler->setDisplayWidget(session->displayWidget);
-    session->commandHandler->setSendToHostCallback([this](const QByteArray &data) {
-        sendToHost(data);
-    });
-    session->commandHandler->connectDecoder(m_parser);
-    // Wire save screen (needs access to per-session state)
-    connect(m_parser, &tn5250::client::Decoder::saveScreenRequested, this, &MainWindow::onSaveScreenRequested);
+    session->commandHandler->setSendToHostCallback(
+        [session](const QByteArray &data) {
+            if (session->worker) {
+                QMetaObject::invokeMethod(session->worker, "sendInput",
+                    Qt::QueuedConnection, Q_ARG(QByteArray, data));
+            }
+        });
+    session->commandHandler->connectDecoder(session->parser);
+    // Wire save screen — per-session
+    connect(session->parser, &tn5250::client::Decoder::saveScreenRequested, this,
+        [session]() {
+            if (session->displayWidget && session->displayWidget->screenBuffer()) {
+                session->savedScreen = session->displayWidget->screenBuffer()->saveState();
+            }
+        });
 
     // Start the session thread (which triggers the worker start)
     session->thread->start();
@@ -218,67 +275,6 @@ void MainWindow::onToggleInputFields() {
         m_displayWidget->toggleInputFields();
         m_showInputFieldsAction->setChecked(m_displayWidget->showInputFields());
     }
-}
-/**
- * Update UI widgets that reflect whether a session is connected.
- *
- * Enables/disables Connect/Disconnect actions and updates the status text.
- *
- * @param connected True if the active session is connected.
- */
-void MainWindow::updateConnectionStatus(bool connected) {
-    m_connected = connected;
-    m_connectAction->setEnabled(!connected);
-    m_disconnectAction->setEnabled(connected);
-
-    if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
-        Session *s = m_sessions[m_activeIndex];
-        if (s && s->connectionStatus) {
-            if (connected) {
-                s->connectionStatus->setStatusText(QString("Connected to %1:%2")
-                                                       .arg(m_currentSession.hostname())
-                                                       .arg(m_currentSession.port()));
-            } else {
-                s->connectionStatus->setStatusText("Not connected");
-            }
-        }
-    }
-}
-
-/**
- * Update the small round status indicator and text for the given state.
- *
- * The indicator color and tooltip are driven by the current theme using a
- * dynamic "state" property. This function also sets the status text message.
- *
- * @param state Current TN5250 client connection state.
- */
-void MainWindow::updateStatusIndicator(
-    tn5250::client::TN5250Client::ConnectionState state
-) {
-    if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) {
-        return;
-    }
-    Session *s = m_sessions[m_activeIndex];
-    if (!s || !s->connectionStatus)
-        return;
-    // Preserve detailed text when connected
-    if (state == tn5250::client::TN5250Client::ConnectionState::Connected &&
-        m_connected && !m_currentSession.hostname().isEmpty()) {
-        s->connectionStatus->setStatusText(QString("Connected to %1:%2")
-                                               .arg(m_currentSession.hostname())
-                                               .arg(m_currentSession.port()));
-    } else if (state == tn5250::client::TN5250Client::ConnectionState::Disconnected ||
-               state == tn5250::client::TN5250Client::ConnectionState::Error) {
-        s->connectionStatus->setStatusText("Not connected");
-    } else if (state == tn5250::client::TN5250Client::ConnectionState::Negotiating) {
-        s->connectionStatus->setStatusText("Waiting for system");
-    } else if (state == tn5250::client::TN5250Client::ConnectionState::Connecting) {
-        s->connectionStatus->setStatusText("Connecting");
-    } else {
-        s->connectionStatus->setStatusText("Ready");
-    }
-    s->connectionStatus->setState(state);
 }
 
 /**
@@ -352,53 +348,29 @@ void MainWindow::setActiveSession(int index) {
     if (index < 0 || index >= m_sessions.size()) {
         m_activeIndex = -1;
         m_displayWidget = nullptr;
-        m_client = nullptr;
         m_parser = nullptr;
+        m_connected = false;
+        m_connectAction->setEnabled(true);
+        m_disconnectAction->setEnabled(false);
         return;
     }
     m_activeIndex = index;
     Session *s = m_sessions[index];
     m_displayWidget = s->displayWidget;
-    m_client = s->client;
     m_parser = s->parser;
     m_cursorCoordinates = s->coordinatesLabel;
     m_currentSession = s->config;
+    // Sync menu actions with this session's actual connection state
+    auto state = s->connectionStatus->state();
+    bool connected = (state == tn5250::client::TN5250Client::ConnectionState::Connected
+                   || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
+    m_connected = connected;
+    m_connectAction->setEnabled(!connected);
+    m_disconnectAction->setEnabled(connected);
     updateCursorCoordinatesFont();
     updateCursorCoordinates();
 }
 
-/**
- * Connect client and parser signals for the currently active session.
- *
- * No-ops if required objects are missing.
- */
-void MainWindow::connectSessionSignals() {
-    if (!m_client || !m_parser) {
-        return;
-    }
-    connect(m_client, &tn5250::client::TN5250Client::connected, this, &MainWindow::onConnected);
-    connect(m_client, &tn5250::client::TN5250Client::disconnected, this, &MainWindow::onDisconnected);
-    connect(m_client, &tn5250::client::TN5250Client::errorOccurred, this, &MainWindow::onErrorOccurred);
-    connect(m_client, &tn5250::client::TN5250Client::dataReceived, this, &MainWindow::onDataReceived);
-    connect(m_client, &tn5250::client::TN5250Client::stateChanged, this, &MainWindow::updateStatusIndicator);
-
-    // Parser signals are handled by the per-session TN5250CommandHandler
-    // (wired in connectToServer)
-    connect(m_parser, &tn5250::client::Decoder::saveScreenRequested, this, &MainWindow::onSaveScreenRequested);
-}
-
-/**
- * Disconnect client and parser signals from the main window.
- *
- * No-ops if required objects are missing.
- */
-void MainWindow::disconnectSessionSignals() {
-    if (!m_client || !m_parser) {
-        return;
-    }
-    m_client->disconnect(this);
-    m_parser->disconnect(this);
-}
 
 /**
  * Intercept context menu events on the tab bar to support per-tab actions.
@@ -430,16 +402,6 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
 // onClearScreenRequested, onKeyboardUnlockRequested, onControlCharactersReceived,
 // processDeferredCC2, onSohReceived, onRollRequested, onWriteErrorCode
 // are now in ui::rendering::TN5250CommandHandler
-
-void MainWindow::onSaveScreenRequested() {
-    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
-        return;
-    }
-    if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
-        m_sessions[m_activeIndex]->savedScreen = m_displayWidget->screenBuffer()->saveState();
-        logger::Logger::instance()->debug("MainWindow: Screen saved");
-    }
-}
 
 // onClearScreenAlternateRequested, onClearFormatTableRequested
 // are now in ui::rendering::TN5250CommandHandler
@@ -512,13 +474,3 @@ void MainWindow::fillSessionsCombo(QComboBox *combo, const QString &placeholder)
     combo->blockSignals(false);
 }
 
-void MainWindow::sendToHost(const QByteArray &data) {
-    if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) {
-        return;
-    }
-    Session *s = m_sessions[m_activeIndex];
-    if (s && s->worker) {
-        QMetaObject::invokeMethod(s->worker, "sendInput", Qt::QueuedConnection,
-                                  Q_ARG(QByteArray, data));
-    }
-}

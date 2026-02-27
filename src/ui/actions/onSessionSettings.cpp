@@ -16,18 +16,16 @@ void MainWindow::onSessionSettings() {
         QMessageBox::information(this, "Session Settings", "No active session to configure.");
         return;
     }
+    Session *s = m_sessions[m_activeIndex];
     ConnectDialog dlg(this);
     dlg.setSessionConfig(m_currentSession);
     if (dlg.exec() == QDialog::Accepted) {
         session::SessionConfig newConfig = dlg.getSessionConfig();
         // Apply settings to active session
-        m_sessions[m_activeIndex]->config = newConfig;
+        s->config = newConfig;
         m_currentSession = newConfig;
-        if (m_client) {
-            m_client->setDeviceName(newConfig.deviceName());
-        }
-        if (m_displayWidget) {
-            m_displayWidget->setScreenSize(newConfig.screenRows(), newConfig.screenCols());
+        if (s->displayWidget) {
+            s->displayWidget->setScreenSize(newConfig.screenRows(), newConfig.screenCols());
             updateCursorCoordinatesFont();
             updateCursorCoordinates();
         }

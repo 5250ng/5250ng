@@ -64,7 +64,6 @@ void MainWindow::setupUI() {
 
     // Active session pointers are null until a tab is created
     m_displayWidget = nullptr;
-    m_client = nullptr;
     m_parser = nullptr;
 
     // Empty placeholder (visible when no tabs)

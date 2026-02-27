@@ -172,14 +172,9 @@ set(UI_SOURCES
     src/ui/actions/onAbout.cpp
     src/ui/actions/onCloseTabRequested.cpp
     src/ui/actions/onConnect.cpp
-    src/ui/actions/onConnected.cpp
     src/ui/actions/onConnectRequested.cpp
     src/ui/actions/onCurrentTabChanged.cpp
-    src/ui/actions/onDataReceived.cpp
     src/ui/actions/onDisconnect.cpp
-    src/ui/actions/onDisconnected.cpp
-    src/ui/actions/onErrorOccurred.cpp
-    src/ui/actions/onInputReady.cpp
     src/ui/actions/onLogMessage.cpp
     src/ui/actions/onNewSession.cpp
     src/ui/actions/onOpenSettings.cpp
