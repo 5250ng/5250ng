@@ -68,6 +68,9 @@ QByteArray KeyboardEncoder::encodeKeyEvent(QKeyEvent *event, bool shiftPressed, 
         }
         break;
 
+    case Qt::Key_SysReq:
+        return encodeAction(KeyboardAction::SysReq);
+
     default:
         break;
     }
@@ -206,6 +209,8 @@ uint8_t KeyboardEncoder::getAIDForAction(KeyboardAction action) const {
         return AID_ROLLUP;
     case KeyboardAction::RollDown:
         return AID_ROLLDOWN;
+    case KeyboardAction::Print:
+        return AID_PRINT;
     default:
         // Local-only actions (Tab, BackTab, Backspace, Delete, Insert,
         // Home, End, PageUp, PageDown, arrows) return 0 — handled locally.

@@ -65,6 +65,23 @@ void Worker::sendInput(const QByteArray &data) {
     m_client->sendData(data);
 }
 
+void Worker::sendAttention() {
+    if (!m_client) return;
+    LOG_DEBUG("[Worker] sendAttention: GDS(flags=0x40, opcode=0, null)");
+    m_client->sendGDS(0x40, 0x00, QByteArray());
+}
+
+void Worker::sendSystemRequest() {
+    if (!m_client) return;
+    LOG_DEBUG("[Worker] sendSystemRequest: GDS(flags=0x04, opcode=0, null)");
+    m_client->sendGDS(0x04, 0x00, QByteArray());
+}
+
+void Worker::sendGDS(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload) {
+    if (!m_client) return;
+    m_client->sendGDS(flagsHi, opcode, payload);
+}
+
 void Worker::onClientData(const QByteArray &data) {
     // Unmarshal and describe in debug mode; forward app data regardless
     std::vector<uint8_t> buf(reinterpret_cast<const uint8_t *>(data.constData()), reinterpret_cast<const uint8_t *>(data.constData()) + data.size());

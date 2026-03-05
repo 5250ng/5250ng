@@ -230,6 +230,52 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             break;
         }
 
+        case 0x12: { // WEA - Write Extended Attribute
+            if (i + 2 >= data.size()) {
+                i = data.size();
+                break;
+            }
+            uint8_t weaType = static_cast<uint8_t>(data[i + 1]);
+            uint8_t weaValue = static_cast<uint8_t>(data[i + 2]);
+            LOG_DEBUG(QString("[StreamRenderer] WEA: type=0x%1 value=0x%2 at (%3,%4)")
+                .arg(weaType, 2, 16, QChar('0')).arg(weaValue, 2, 16, QChar('0'))
+                .arg(currentRow).arg(currentCol));
+            switch (weaType) {
+            case 0x01: // Foreground color
+                // Color mapping per 5250 spec
+                switch (weaValue) {
+                case 0x20: currentAttr.color = 2; break;  // Green (default)
+                case 0x21: currentAttr.color = 2; break;  // Green
+                case 0x22: currentAttr.color = 9; break;  // Blue
+                case 0x23: currentAttr.color = 12; break; // Red
+                case 0x24: currentAttr.color = 13; break; // Pink/Magenta
+                case 0x25: currentAttr.color = 2; break;  // Green
+                case 0x26: currentAttr.color = 11; break; // Turquoise/Cyan
+                case 0x27: currentAttr.color = 15; break; // White
+                case 0x28: // Extended color IDs
+                case 0x29: case 0x2A: case 0x2B: case 0x2C:
+                case 0x2D: case 0x2E: case 0x2F:
+                    currentAttr.color = weaValue & 0x0F; break;
+                default:
+                    if (weaValue >= 0xF0) currentAttr.color = weaValue & 0x0F;
+                    break;
+                }
+                break;
+            case 0x02: // Background color (not directly supported in CellAttributes, apply via reverse)
+                break;
+            case 0x03: // Character attributes
+                currentAttr.underline = (weaValue & 0x04) != 0;
+                currentAttr.blink = (weaValue & 0x08) != 0;
+                currentAttr.reverse = (weaValue & 0x02) != 0;
+                currentAttr.colSep = (weaValue & 0x10) != 0;
+                break;
+            default:
+                break;
+            }
+            i += 3;
+            break;
+        }
+
         case 0x15: { // WDSF - Write to Display Structured Field
             if (i + 2 >= data.size()) {
                 i = data.size();
@@ -238,9 +284,120 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             int wdsfLen = (static_cast<uint8_t>(data[i + 1]) << 8) |
                            static_cast<uint8_t>(data[i + 2]);
             if (wdsfLen < 2) wdsfLen = 2;
-            LOG_DEBUG(QString("[StreamRenderer] WDSF: len=%1 (skipped)").arg(wdsfLen));
-            i += 1 + wdsfLen;
-            if (i > data.size()) i = data.size();
+
+            // Parse WDSF minor type if available
+            int wdsfStart = i + 3; // Past order + 2-byte length
+            int wdsfEnd = i + 1 + wdsfLen;
+            if (wdsfEnd > data.size()) wdsfEnd = data.size();
+
+            if (wdsfStart < wdsfEnd) {
+                uint8_t wdsfType = static_cast<uint8_t>(data[wdsfStart]);
+                LOG_DEBUG(QString("[StreamRenderer] WDSF: len=%1 type=0x%2")
+                    .arg(wdsfLen).arg(wdsfType, 2, 16, QChar('0')));
+
+                if (wdsfType == 0x51) {
+                    // Create Window (0xD9/0x51)
+                    // Parse window depth, width, and border characters
+                    int wi = wdsfStart + 1;
+                    // Flags byte
+                    uint8_t wflags = (wi < wdsfEnd) ? static_cast<uint8_t>(data[wi++]) : 0;
+                    Q_UNUSED(wflags);
+                    // Reserved
+                    if (wi < wdsfEnd) wi++;
+                    // Window depth (rows) and width (cols)
+                    uint8_t winDepth = (wi < wdsfEnd) ? static_cast<uint8_t>(data[wi++]) : 0;
+                    uint8_t winWidth = (wi < wdsfEnd) ? static_cast<uint8_t>(data[wi++]) : 0;
+
+                    LOG_DEBUG(QString("[StreamRenderer] WDSF CreateWindow: depth=%1 width=%2 at (%3,%4)")
+                        .arg(winDepth).arg(winWidth).arg(currentRow).arg(currentCol));
+
+                    if (winDepth > 0 && winWidth > 0) {
+                        // Draw window borders
+                        // Default border chars: TL='.', TR='.', BL=':', BR=':', H='-', V='|'
+                        // EBCDIC: '-'=0x60, '|'=0x4F, '.'=0x4B, ':'=0x7A
+                        uint8_t borderH = 0x60;  // '-'
+                        uint8_t borderV = 0x4F;  // '|'
+                        uint8_t borderTL = 0x4B; // '.'
+                        uint8_t borderTR = 0x4B; // '.'
+                        uint8_t borderBL = 0x7A; // ':'
+                        uint8_t borderBR = 0x7A; // ':'
+
+                        // Parse optional border presentation minor structure
+                        while (wi + 1 < wdsfEnd) {
+                            uint8_t minorLen = static_cast<uint8_t>(data[wi]);
+                            uint8_t minorType = static_cast<uint8_t>(data[wi + 1]);
+                            if (minorType == 0x01 && minorLen >= 8 && wi + minorLen <= wdsfEnd) {
+                                // Border presentation — extract border characters
+                                // Skip flags (2 bytes), then: TL, T, TR, L, R, BL, B, BR
+                                int bci = wi + 4; // past len, type, 2 flag bytes
+                                if (bci + 7 < wi + minorLen) {
+                                    borderTL = static_cast<uint8_t>(data[bci]);
+                                    borderH  = static_cast<uint8_t>(data[bci + 1]);
+                                    borderTR = static_cast<uint8_t>(data[bci + 2]);
+                                    borderV  = static_cast<uint8_t>(data[bci + 3]);
+                                    // bci+4 = right border (same as left)
+                                    borderBL = static_cast<uint8_t>(data[bci + 5]);
+                                    // bci+6 = bottom border (same as top)
+                                    borderBR = static_cast<uint8_t>(data[bci + 7]);
+                                }
+                            }
+                            wi += minorLen;
+                            if (minorLen == 0) break; // prevent infinite loop
+                        }
+
+                        // Top row — SBA already set the window start position
+                        // Adjust for border: window top-left is (currentRow-1, currentCol-1)
+                        int winStartRow = currentRow;
+                        int winStartCol = currentCol;
+
+                        ui::widgets::CellAttributes borderAttr;
+                        borderAttr.color = 2; // Green borders
+                        borderAttr.protected_field = true;
+
+                        // Top border
+                        if (winStartRow > 0) {
+                            int borderRow = winStartRow - 1;
+                            if (winStartCol > 0)
+                                screen->writeChar(borderRow, winStartCol - 1, borderTL, borderAttr);
+                            for (int c = 0; c < winWidth && winStartCol + c < screen->cols(); ++c)
+                                screen->writeChar(borderRow, winStartCol + c, borderH, borderAttr);
+                            if (winStartCol + winWidth < screen->cols())
+                                screen->writeChar(borderRow, winStartCol + winWidth, borderTR, borderAttr);
+                        }
+
+                        // Side borders
+                        for (int r = 0; r < winDepth && winStartRow + r < screen->rows(); ++r) {
+                            int bRow = winStartRow + r;
+                            if (winStartCol > 0)
+                                screen->writeChar(bRow, winStartCol - 1, borderV, borderAttr);
+                            if (winStartCol + winWidth < screen->cols())
+                                screen->writeChar(bRow, winStartCol + winWidth, borderV, borderAttr);
+                        }
+
+                        // Bottom border
+                        if (winStartRow + winDepth < screen->rows()) {
+                            int borderRow = winStartRow + winDepth;
+                            if (winStartCol > 0)
+                                screen->writeChar(borderRow, winStartCol - 1, borderBL, borderAttr);
+                            for (int c = 0; c < winWidth && winStartCol + c < screen->cols(); ++c)
+                                screen->writeChar(borderRow, winStartCol + c, borderH, borderAttr);
+                            if (winStartCol + winWidth < screen->cols())
+                                screen->writeChar(borderRow, winStartCol + winWidth, borderBR, borderAttr);
+                        }
+                    }
+                } else if (wdsfType == 0x5F) {
+                    // Remove GUI Window (0xD9/0x5F)
+                    LOG_DEBUG("[StreamRenderer] WDSF RemoveGUI");
+                    // No action needed — host will redraw underlying screen
+                } else {
+                    LOG_DEBUG(QString("[StreamRenderer] WDSF: unhandled type 0x%1")
+                        .arg(wdsfType, 2, 16, QChar('0')));
+                }
+            } else {
+                LOG_DEBUG(QString("[StreamRenderer] WDSF: len=%1 (no type byte)").arg(wdsfLen));
+            }
+
+            i = wdsfEnd;
             break;
         }
 

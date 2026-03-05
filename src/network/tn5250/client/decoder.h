@@ -62,6 +62,12 @@ class Decoder : public QObject {
     void writeErrorCodeRequested(const QByteArray &errorCode);
     void saveScreenRequested();
     void clearFormatTableRequested();
+    void inviteReceived();
+    void cancelInviteReceived();
+    void messageLightOn();
+    void messageLightOff();
+    void readScreenRequested(bool includeAttributes);
+    void writeStructuredFieldReceived(const QByteArray &data);
     void parseError(const QString &error);
 
   private:

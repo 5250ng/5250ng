@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/codepage.h"
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
@@ -40,6 +41,10 @@ class SessionConfig : public QObject {
     int screenCols() const { return m_screenCols; }
     void setScreenCols(int cols) { m_screenCols = cols; }
 
+    // Code page
+    core::CodePage::ID codePage() const { return m_codePage; }
+    void setCodePage(core::CodePage::ID cp) { m_codePage = cp; }
+
     // Credentials (transient — not serialized to JSON)
     QString username() const { return m_username; }
     void setUsername(const QString &username) { m_username = username; }
@@ -65,6 +70,7 @@ class SessionConfig : public QObject {
     QString m_deviceName;
     int m_screenRows;
     int m_screenCols;
+    core::CodePage::ID m_codePage;
     QString m_username;
     QString m_password;
 };

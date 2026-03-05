@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QString>
 #include <QThread>
+#include <QTimer>
 #include <QtNetwork/QAbstractSocket>
 #include <QtNetwork/QTcpSocket>
 #include <memory>
@@ -40,6 +41,7 @@ class TN5250Client : public QObject {
     // Data transmission
     void sendData(const QByteArray &data);
     void sendRawData(const QByteArray &data);
+    void sendGDS(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload);
 
     // Configuration
     void setDeviceName(const QString &deviceName);
@@ -117,6 +119,12 @@ class TN5250Client : public QObject {
     bool m_binaryNegotiated;
     bool m_eorNegotiated;
     bool m_terminalTypeSent;
+
+    // Keep-alive heartbeat
+    QTimer *m_heartbeatTimer = nullptr;
+    void startHeartbeat();
+    void stopHeartbeat();
+    void sendHeartbeat();
 };
 
 } // namespace tn5250::client

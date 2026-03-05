@@ -23,11 +23,13 @@ class TN5250CommandHandler : public QObject {
 
   public:
     using SendToHostFn = std::function<void(const QByteArray &)>;
+    using SendGDSFn = std::function<void(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload)>;
 
     explicit TN5250CommandHandler(QObject *parent = nullptr);
 
     void setDisplayWidget(ui::widgets::Q5250ScreenWidget *widget);
     void setSendToHostCallback(SendToHostFn fn);
+    void setSendGDSCallback(SendGDSFn fn);
 
     // Connect all decoder signals to this handler
     void connectDecoder(tn5250::client::Decoder *parser);
@@ -50,14 +52,26 @@ class TN5250CommandHandler : public QObject {
     void onSaveScreenRequested(ui::widgets::ScreenBuffer::SavedState &savedScreen);
     void onClearScreenAlternateRequested();
     void onClearFormatTableRequested();
+    void onInviteReceived();
+    void onCancelInviteReceived();
+    void onMessageLightOn();
+    void onMessageLightOff();
+    void onReadScreenRequested(bool includeAttributes);
+    void onWriteStructuredFieldReceived(const QByteArray &data);
+
+    void sendNegResponse(uint8_t category, uint8_t modifier, uint8_t uByte1, uint8_t uByte2);
 
     QByteArray buildFieldResponse(uint8_t aidByte);
+    QByteArray buildReadScreenResponse(bool includeAttributes);
+    QByteArray buildQueryResponse();
 
   private:
     ui::widgets::Q5250ScreenWidget *m_displayWidget = nullptr;
     TN5250StreamRenderer *m_renderer = nullptr;
     SendToHostFn m_sendToHost;
+    SendGDSFn m_sendGDS;
     uint8_t m_pendingCC2 = 0;
+    uint8_t m_readType = 0; // 0x52=READ_MDT, 0x42=READ_INPUT
 };
 
 } // namespace ui::rendering

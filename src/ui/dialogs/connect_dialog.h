@@ -64,6 +64,7 @@ class ConnectDialog : public QDialog {
     QPushButton *m_loadSessionButton;
     QPushButton *m_deleteSessionButton;
     QGroupBox *m_displayGroup;
+    QComboBox *m_codePageCombo;
 
     session::SessionConfig m_currentConfig;
     QVector<tn5250::devices::Device> m_supported;

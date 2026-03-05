@@ -31,6 +31,8 @@ find_package(OpenSSL REQUIRED)
 set(CORE_SOURCES
     src/core/ebcdic.cpp
     src/core/ebcdic.h
+    src/core/codepage.cpp
+    src/core/codepage.h
     src/core/keyboard_encoder.cpp
     src/core/keyboard_encoder.h
 )

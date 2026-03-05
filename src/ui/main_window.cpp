@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "core/ebcdic.h"
 #include "logger/logger.h"
 #include "session/config.h"
 #include "session/manager.h"
@@ -88,6 +89,9 @@ MainWindow::~MainWindow() {
  */
 void MainWindow::connectToServer(const session::SessionConfig &config) {
     m_currentSession = config;
+
+    // Apply the configured EBCDIC code page
+    core::EBCDIC::setCodePage(config.codePage());
 
     // Ensure a unique device name per host so the AS/400 doesn't reject the
     // session.  Collect device names already in use for the same host:port,
@@ -244,6 +248,22 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                     Qt::QueuedConnection, Q_ARG(QByteArray, data));
             }
         });
+    // Attention key — telnet-level GDS(flags=0x40)
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::attentionRequested, this,
+        [session]() {
+            if (session->worker) {
+                QMetaObject::invokeMethod(session->worker, "sendAttention",
+                    Qt::QueuedConnection);
+            }
+        });
+    // System Request — telnet-level GDS(flags=0x04)
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::systemRequestRequested, this,
+        [session]() {
+            if (session->worker) {
+                QMetaObject::invokeMethod(session->worker, "sendSystemRequest",
+                    Qt::QueuedConnection);
+            }
+        });
     if (session->displayWidget->screenBuffer()) {
         connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::cursorMoved, this,
             [this, session]() {
@@ -270,6 +290,16 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                     Qt::QueuedConnection, Q_ARG(QByteArray, data));
             }
         });
+    session->commandHandler->setSendGDSCallback(
+        [session](uint8_t flagsHi, uint8_t opcode, const QByteArray &payload) {
+            if (session->worker) {
+                QMetaObject::invokeMethod(session->worker, "sendGDS",
+                    Qt::QueuedConnection,
+                    Q_ARG(uint8_t, flagsHi),
+                    Q_ARG(uint8_t, opcode),
+                    Q_ARG(QByteArray, payload));
+            }
+        });
     session->commandHandler->connectDecoder(session->parser);
     // Wire save screen — per-session
     connect(session->parser, &tn5250::client::Decoder::saveScreenRequested, this,
@@ -288,6 +318,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
 void MainWindow::onToggleCursorRules() {
     if (m_displayWidget) {
         m_displayWidget->toggleCursorRules();
+        m_cursorRulesAction->setChecked(m_displayWidget->showCursorRules());
     }
 }
 

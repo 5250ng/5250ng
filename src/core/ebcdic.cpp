@@ -3,6 +3,17 @@
 
 namespace core {
 
+// Static code page instance (nullptr = use hardcoded CP037)
+std::unique_ptr<CodePage> EBCDIC::s_codePage;
+
+void EBCDIC::setCodePage(CodePage::ID id) {
+    s_codePage = std::make_unique<CodePage>(id);
+}
+
+CodePage::ID EBCDIC::activeCodePageId() {
+    return s_codePage ? s_codePage->id() : CodePage::ID::CP037;
+}
+
 // EBCDIC Code Page 037 to ASCII conversion table
 const uint8_t EBCDIC::EBCDIC_TO_ASCII[256] = {
     0x00, 0x01, 0x02, 0x03, 0x9C, 0x09, 0x86, 0x7F, 0x97, 0x8D, 0x8E, 0x0B,
@@ -54,6 +65,9 @@ const uint8_t EBCDIC::ASCII_TO_EBCDIC[256] = {
     0xDC, 0x8D, 0x8E, 0xDF};
 
 QChar EBCDIC::ebcdicToChar(uint8_t ebcdic) {
+    if (s_codePage) {
+        return s_codePage->toUnicode(ebcdic);
+    }
     uint8_t ascii = EBCDIC_TO_ASCII[ebcdic];
     // Handle special cases for control characters
     if (ascii < 0x20 && ascii != 0x09 && ascii != 0x0A && ascii != 0x0D) {
@@ -64,6 +78,9 @@ QChar EBCDIC::ebcdicToChar(uint8_t ebcdic) {
 }
 
 uint8_t EBCDIC::charToEBCDIC(QChar ch) {
+    if (s_codePage) {
+        return s_codePage->fromUnicode(ch);
+    }
     uint16_t code = ch.unicode();
     if (code < 256) {
         return ASCII_TO_EBCDIC[code];
@@ -73,6 +90,9 @@ uint8_t EBCDIC::charToEBCDIC(QChar ch) {
 }
 
 QString EBCDIC::ebcdicToString(const QByteArray &ebcdic) {
+    if (s_codePage) {
+        return s_codePage->toUnicode(ebcdic);
+    }
     QString result;
     result.reserve(ebcdic.size());
     for (uint8_t byte : ebcdic) {
@@ -82,6 +102,9 @@ QString EBCDIC::ebcdicToString(const QByteArray &ebcdic) {
 }
 
 QByteArray EBCDIC::stringToEBCDIC(const QString &str) {
+    if (s_codePage) {
+        return s_codePage->fromUnicode(str);
+    }
     QByteArray result;
     result.reserve(str.size());
     for (QChar ch : str) {
@@ -91,6 +114,10 @@ QByteArray EBCDIC::stringToEBCDIC(const QString &str) {
 }
 
 bool EBCDIC::isPrintable(uint8_t ebcdic) {
+    if (s_codePage) {
+        QChar ch = s_codePage->toUnicode(ebcdic);
+        return ch.isPrint() || ch == QChar(0x09) || ch == QChar(0x0A) || ch == QChar(0x0D);
+    }
     uint8_t ascii = EBCDIC_TO_ASCII[ebcdic];
     return (ascii >= 0x20 && ascii < 0x7F) || ascii == 0x09 || ascii == 0x0A ||
            ascii == 0x0D;

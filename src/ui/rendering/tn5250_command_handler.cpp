@@ -1,5 +1,6 @@
 #include "tn5250_command_handler.h"
 #include "logger/logger.h"
+#include "network/tn5250/protocol_constants.h"
 #include "utils/hex/hex.h"
 #include <QApplication>
 #include <vector>
@@ -17,6 +18,10 @@ void TN5250CommandHandler::setDisplayWidget(ui::widgets::Q5250ScreenWidget *widg
 
 void TN5250CommandHandler::setSendToHostCallback(SendToHostFn fn) {
     m_sendToHost = std::move(fn);
+}
+
+void TN5250CommandHandler::setSendGDSCallback(SendGDSFn fn) {
+    m_sendGDS = std::move(fn);
 }
 
 void TN5250CommandHandler::connectDecoder(tn5250::client::Decoder *parser) {
@@ -43,6 +48,18 @@ void TN5250CommandHandler::connectDecoder(tn5250::client::Decoder *parser) {
             this, &TN5250CommandHandler::onClearScreenAlternateRequested);
     connect(parser, &tn5250::client::Decoder::clearFormatTableRequested,
             this, &TN5250CommandHandler::onClearFormatTableRequested);
+    connect(parser, &tn5250::client::Decoder::inviteReceived,
+            this, &TN5250CommandHandler::onInviteReceived);
+    connect(parser, &tn5250::client::Decoder::cancelInviteReceived,
+            this, &TN5250CommandHandler::onCancelInviteReceived);
+    connect(parser, &tn5250::client::Decoder::messageLightOn,
+            this, &TN5250CommandHandler::onMessageLightOn);
+    connect(parser, &tn5250::client::Decoder::messageLightOff,
+            this, &TN5250CommandHandler::onMessageLightOff);
+    connect(parser, &tn5250::client::Decoder::readScreenRequested,
+            this, &TN5250CommandHandler::onReadScreenRequested);
+    connect(parser, &tn5250::client::Decoder::writeStructuredFieldReceived,
+            this, &TN5250CommandHandler::onWriteStructuredFieldReceived);
 }
 
 void TN5250CommandHandler::handleTN5250Command(tn5250::client::TN5250Command cmd,
@@ -58,6 +75,8 @@ void TN5250CommandHandler::handleTN5250Command(tn5250::client::TN5250Command cmd
 
     switch (cmd) {
     case tn5250::client::TN5250Command::READ_MDT_FIELDS:
+        m_readType = 0x52;
+        if (m_displayWidget) m_displayWidget->setReadType(0x52);
         logger::Logger::instance()->debug("CommandHandler: READ_MDT_FIELDS - awaiting user AID key");
         break;
 
@@ -72,6 +91,8 @@ void TN5250CommandHandler::handleTN5250Command(tn5250::client::TN5250Command cmd
         break;
 
     case tn5250::client::TN5250Command::READ_INPUT_FIELDS:
+        m_readType = 0x42;
+        if (m_displayWidget) m_displayWidget->setReadType(0x42);
         logger::Logger::instance()->debug("CommandHandler: READ_INPUT_FIELDS - awaiting user AID key");
         break;
 
@@ -383,21 +404,16 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     response.append(static_cast<char>(cursor.x() + 1));
     response.append(static_cast<char>(aidByte));
 
-    // SBA address points to the attribute byte (one cell before field data)
+    // SBA address points to the field data start position
     int cols = screen->cols();
     QVector<ui::widgets::ScreenBuffer::Field> modFields = screen->getModifiedFields();
     LOG_DEBUG(QString("CommandHandler: buildFieldResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
         .arg(aidByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
         .arg(modFields.size()));
     for (const auto &field : modFields) {
-        int dataAddr = field.startRow * cols + field.startCol;
-        int attrAddr = dataAddr - 1;
-        if (attrAddr < 0) attrAddr = 0;
-        int attrRow = attrAddr / cols;
-        int attrCol = attrAddr % cols;
         response.append(static_cast<char>(0x11));
-        response.append(static_cast<char>(attrRow + 1));
-        response.append(static_cast<char>(attrCol + 1));
+        response.append(static_cast<char>(field.startRow + 1));
+        response.append(static_cast<char>(field.startCol + 1));
         // Get field data, strip trailing nulls, convert embedded nulls to blanks
         QByteArray fieldData = screen->getFieldData(field);
         while (!fieldData.isEmpty() && fieldData.back() == '\0') {
@@ -412,6 +428,194 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     }
 
     return response;
+}
+
+void TN5250CommandHandler::onInviteReceived() {
+    if (!m_displayWidget) return;
+    // Invite unlocks the keyboard for user input
+    m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
+    m_displayWidget->setCursorBlinkRate(250);
+    m_displayWidget->setFocus();
+    LOG_DEBUG("CommandHandler: Invite received - keyboard unlocked");
+}
+
+void TN5250CommandHandler::onCancelInviteReceived() {
+    if (!m_displayWidget) return;
+    // Lock keyboard and echo Cancel Invite back to host
+    m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Locked);
+    if (m_sendGDS) {
+        m_sendGDS(0x00, tn5250::protocol::GDS_OPCODE_CANCEL_INVITE, QByteArray());
+    }
+    LOG_DEBUG("CommandHandler: Cancel Invite received - keyboard locked, echoed back");
+}
+
+void TN5250CommandHandler::onMessageLightOn() {
+    if (!m_displayWidget) return;
+    m_displayWidget->setMessageWaiting(true);
+    LOG_DEBUG("CommandHandler: Message light ON");
+}
+
+void TN5250CommandHandler::onMessageLightOff() {
+    if (!m_displayWidget) return;
+    m_displayWidget->setMessageWaiting(false);
+    LOG_DEBUG("CommandHandler: Message light OFF");
+}
+
+void TN5250CommandHandler::sendNegResponse(uint8_t category, uint8_t modifier,
+                                            uint8_t uByte1, uint8_t uByte2) {
+    if (!m_sendGDS) return;
+    QByteArray payload;
+    payload.append(static_cast<char>(category));
+    payload.append(static_cast<char>(modifier));
+    payload.append(static_cast<char>(uByte1));
+    payload.append(static_cast<char>(uByte2));
+    m_sendGDS(tn5250::protocol::GDS_FLAG_ERR, 0x00, payload);
+    LOG_DEBUG(QString("CommandHandler: Sent negative response: cat=0x%1 mod=0x%2")
+        .arg(category, 2, 16, QChar('0')).arg(modifier, 2, 16, QChar('0')));
+}
+
+void TN5250CommandHandler::onReadScreenRequested(bool includeAttributes) {
+    if (!m_sendToHost) return;
+    QByteArray response = buildReadScreenResponse(includeAttributes);
+    m_sendToHost(response);
+    LOG_DEBUG(QString("CommandHandler: Read Screen response sent (%1 bytes, attrs=%2)")
+        .arg(response.size()).arg(includeAttributes));
+}
+
+QByteArray TN5250CommandHandler::buildReadScreenResponse(bool includeAttributes) {
+    QByteArray response;
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) return response;
+
+    auto *screen = m_displayWidget->screenBuffer();
+    int rows = screen->rows();
+    int cols = screen->cols();
+
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            const auto &cell = screen->cell(r, c);
+            if (includeAttributes && cell.attributes.protected_field && cell.attributes.nonDisplay) {
+                // This is a field attribute position — emit the attribute byte
+                response.append(static_cast<char>(0x20 | (cell.attributes.color & 0x0F)));
+            } else {
+                uint8_t ch = cell.character;
+                if (ch == 0x00) ch = 0x40; // Null → space
+                response.append(static_cast<char>(ch));
+            }
+        }
+    }
+    return response;
+}
+
+void TN5250CommandHandler::onWriteStructuredFieldReceived(const QByteArray &data) {
+    // Check for Query (5250) — class 0xD9, type 0x70
+    if (data.size() >= 4) {
+        uint8_t clazz = static_cast<uint8_t>(data[2]);
+        uint8_t type = static_cast<uint8_t>(data[3]);
+        if (clazz == 0xD9 && type == 0x70) {
+            LOG_DEBUG("CommandHandler: Query (0xD9/0x70) received, sending query response");
+            if (m_sendToHost) {
+                m_sendToHost(buildQueryResponse());
+            }
+            return;
+        }
+    }
+    LOG_DEBUG(QString("CommandHandler: Unhandled Write Structured Field (%1 bytes)")
+        .arg(data.size()));
+}
+
+QByteArray TN5250CommandHandler::buildQueryResponse() {
+    // Build 5250 Query Response per SA21-9247-6 section 15.26.1
+    // Response mimics a 5251-011 device
+    QByteArray resp;
+
+    // Structured field header
+    resp.append(static_cast<char>(0x00)); // Length high (filled later)
+    resp.append(static_cast<char>(0x00)); // Length low (filled later)
+    resp.append(static_cast<char>(0xD9)); // Class: 5250 Terminal
+    resp.append(static_cast<char>(0x70)); // Type: Query Response
+    resp.append(static_cast<char>(0x80)); // Flag: response to query
+
+    // Controller hardware class (4 bytes)
+    resp.append(static_cast<char>(0x06)); // 0x06 = remote controller
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+
+    // Controller code level (4 bytes — version 1.1.0.0)
+    resp.append(static_cast<char>(0x01));
+    resp.append(static_cast<char>(0x01));
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+
+    // Reserved (16 bytes)
+    for (int i = 0; i < 16; ++i)
+        resp.append(static_cast<char>(0x00));
+
+    // Device type (7 EBCDIC bytes: "5251011")
+    // EBCDIC: 5=0xF5, 2=0xF2, 1=0xF1, 0=0xF0
+    resp.append(static_cast<char>(0xF5)); // '5'
+    resp.append(static_cast<char>(0xF2)); // '2'
+    resp.append(static_cast<char>(0xF5)); // '5'
+    resp.append(static_cast<char>(0xF1)); // '1'
+    resp.append(static_cast<char>(0xF0)); // '0'
+    resp.append(static_cast<char>(0xF1)); // '1'
+    resp.append(static_cast<char>(0xF1)); // '1'
+
+    // Device model (3 EBCDIC bytes: "   ")
+    resp.append(static_cast<char>(0x40));
+    resp.append(static_cast<char>(0x40));
+    resp.append(static_cast<char>(0x40));
+
+    // Keyboard ID (1 byte)
+    resp.append(static_cast<char>(0x02)); // Standard keyboard
+
+    // Extended keyboard ID (1 byte)
+    resp.append(static_cast<char>(0x00));
+
+    // Reserved (1 byte)
+    resp.append(static_cast<char>(0x00));
+
+    // Display serial number (4 bytes)
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+
+    // Maximum number of input fields (2 bytes)
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x80)); // 128 fields
+
+    // Reserved (3 bytes)
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+    resp.append(static_cast<char>(0x00));
+
+    // Capabilities flags
+    // Row 1, Col 1: screen capability
+    int screenRows = 24, screenCols = 80;
+    if (m_displayWidget && m_displayWidget->screenBuffer()) {
+        screenRows = m_displayWidget->screenBuffer()->rows();
+        screenCols = m_displayWidget->screenBuffer()->cols();
+    }
+    resp.append(static_cast<char>(screenRows));  // Max rows
+    resp.append(static_cast<char>(screenCols));   // Max cols
+
+    // Workstation capabilities (2 bytes)
+    // Bit flags: supports read screen, supports extended attributes
+    resp.append(static_cast<char>(0x01)); // Enhanced display
+    resp.append(static_cast<char>(0x00));
+
+    // Fill to standard 64-byte response
+    while (resp.size() < 64) {
+        resp.append(static_cast<char>(0x00));
+    }
+
+    // Fix up length field (bytes 0-1, big-endian, includes length itself)
+    int len = resp.size();
+    resp[0] = static_cast<char>((len >> 8) & 0xFF);
+    resp[1] = static_cast<char>(len & 0xFF);
+
+    return resp;
 }
 
 } // namespace ui::rendering

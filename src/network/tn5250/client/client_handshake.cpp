@@ -208,6 +208,7 @@ void TN5250Client::checkHandshakeComplete() {
         if (shouldComplete) {
             m_handshakeComplete = true;
             setState(ConnectionState::Connected);
+            startHeartbeat();
             emit connected();
             logger::Logger::instance()->debug("[TN5250->Client]: Handshake complete");
 

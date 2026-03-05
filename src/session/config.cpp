@@ -4,9 +4,9 @@
 
 namespace session {
 
-SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceName("IBM-3179-2"), m_screenRows(24), m_screenCols(80) {}
+SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceName("IBM-3179-2"), m_screenRows(24), m_screenCols(80), m_codePage(core::CodePage::ID::CP037) {}
 
-SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_username(other.m_username), m_password(other.m_password) {}
+SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_username(other.m_username), m_password(other.m_password) {}
 
 SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
     if (this != &other) {
@@ -17,6 +17,7 @@ SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
         m_deviceName = other.m_deviceName;
         m_screenRows = other.m_screenRows;
         m_screenCols = other.m_screenCols;
+        m_codePage = other.m_codePage;
         m_username = other.m_username;
         m_password = other.m_password;
         emit changed();
@@ -33,6 +34,7 @@ QJsonObject SessionConfig::toJson() const {
     json["deviceName"] = m_deviceName;
     json["screenRows"] = m_screenRows;
     json["screenCols"] = m_screenCols;
+    json["codePage"] = static_cast<int>(m_codePage);
     return json;
 }
 
@@ -57,6 +59,9 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     }
     if (json.contains("screenCols") && json["screenCols"].isDouble()) {
         m_screenCols = json["screenCols"].toInt();
+    }
+    if (json.contains("codePage") && json["codePage"].isDouble()) {
+        m_codePage = static_cast<core::CodePage::ID>(json["codePage"].toInt());
     }
 
     emit changed();

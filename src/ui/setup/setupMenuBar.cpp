@@ -64,7 +64,8 @@ void MainWindow::setupMenuBar() {
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");
     toolsMenu->addAction("&Take a Screenshot", this, &MainWindow::onTakeScreenshot);
-    toolsMenu->addAction("Toggle &cursor rules", this, &MainWindow::onToggleCursorRules);
+    m_cursorRulesAction = toolsMenu->addAction("Show &cursor rules", this, &MainWindow::onToggleCursorRules);
+    m_cursorRulesAction->setCheckable(true);
     // Advanced submenu
     QMenu *advancedMenu = toolsMenu->addMenu("&Advanced");
     m_showFieldProtectionAction = advancedMenu->addAction("Show &field protection", this, &MainWindow::onToggleFieldProtection);

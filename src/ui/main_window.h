@@ -96,6 +96,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_connectAction;
     QAction *m_disconnectAction;
     QAction *m_exitAction;
+    QAction *m_cursorRulesAction;
     QAction *m_showFieldProtectionAction;
     QAction *m_showInputFieldsAction;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)

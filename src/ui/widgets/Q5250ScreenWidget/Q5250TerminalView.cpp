@@ -81,6 +81,12 @@ void Q5250TerminalView::updateStatusIndicators() {
         for (int j = 0; text[j] && pos + j < cols; ++j) {
             buf->writeChar(0, pos + j, core::EBCDIC::charToEBCDIC(QChar(text[j])), indicatorAttr);
         }
+    } else if (kbState == KeyboardState::SystemRequest) {
+        indicatorAttr.color = 14; // Yellow
+        const char *text = "X SR";
+        for (int j = 0; text[j] && pos + j < cols; ++j) {
+            buf->writeChar(0, pos + j, core::EBCDIC::charToEBCDIC(QChar(text[j])), indicatorAttr);
+        }
     }
 
     // Insert mode indicator

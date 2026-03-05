@@ -23,6 +23,9 @@ class Worker : public QObject {
     void start();
     void stop();
     void sendInput(const QByteArray &data);
+    void sendAttention();
+    void sendSystemRequest();
+    void sendGDS(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload);
 
   signals:
     void connected();

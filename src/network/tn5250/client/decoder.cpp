@@ -90,14 +90,33 @@ void Decoder::parseData(const QByteArray &data) {
         }
         QByteArray payload = payloadLen > 0 ? rec.mid(payloadStart, payloadLen) : QByteArray();
 
-        // For opcodes that carry display data, consume ESC sequences and emit display stream
-        // Opcodes seen:
-        //   0x02 Output Only, 0x03 Put/Get, 0x05 Restore Screen
+        // Handle GDS opcodes that don't carry display data first
         if (opcode == GDS_OPCODE_SAVE_SCREEN) {
             LOG_DEBUG("[Decoder] opcode=0x04 SAVE_SCREEN");
             emit saveScreenRequested();
             continue;
         }
+        if (opcode == GDS_OPCODE_INVITE) {
+            LOG_DEBUG("[Decoder] opcode=0x01 INVITE");
+            emit inviteReceived();
+            continue;
+        }
+        if (opcode == GDS_OPCODE_CANCEL_INVITE) {
+            LOG_DEBUG("[Decoder] opcode=0x0A CANCEL_INVITE");
+            emit cancelInviteReceived();
+            continue;
+        }
+        if (opcode == GDS_OPCODE_MSG_LIGHT_ON) {
+            LOG_DEBUG("[Decoder] opcode=0x0B MSG_LIGHT_ON");
+            emit messageLightOn();
+            continue;
+        }
+        if (opcode == GDS_OPCODE_MSG_LIGHT_OFF) {
+            LOG_DEBUG("[Decoder] opcode=0x0C MSG_LIGHT_OFF");
+            emit messageLightOff();
+            continue;
+        }
+        // For opcodes that carry display data, consume ESC sequences and emit display stream
         if (opcode == GDS_OPCODE_OUTPUT_ONLY || opcode == GDS_OPCODE_PUT_GET || opcode == GDS_OPCODE_RESTORE) {
             const char *opName = (opcode == GDS_OPCODE_OUTPUT_ONLY) ? "OUTPUT_ONLY" :
                                  (opcode == GDS_OPCODE_PUT_GET) ? "PUT_GET" : "RESTORE";
@@ -172,6 +191,22 @@ void Decoder::parseData(const QByteArray &data) {
                         }
                         continue;
                     }
+                    if (cc == CC_WRITE_ERROR_CODE_TO_WINDOW) {
+                        // Same as Write Error Code (0x21) but for windowed context
+                        int j = i + 2;
+                        QByteArray errData;
+                        while (j < payload.size()) {
+                            uint8_t ob = static_cast<uint8_t>(payload[j]);
+                            if (ob == ESC) break;
+                            errData.append(static_cast<char>(ob));
+                            j++;
+                        }
+                        LOG_DEBUG(QString("[Decoder] ESC 0x22 WRITE_ERROR_CODE_TO_WINDOW: %1 bytes")
+                            .arg(errData.size()));
+                        emit writeErrorCodeRequested(errData);
+                        i = j;
+                        continue;
+                    }
                     if (cc == CC_READ_INPUT_FIELDS) {
                         LOG_DEBUG("[Decoder] ESC 0x42 READ_INPUT_FIELDS");
                         emit commandReceived(TN5250Command::READ_INPUT_FIELDS, QByteArray());
@@ -194,6 +229,28 @@ void Decoder::parseData(const QByteArray &data) {
                         LOG_DEBUG("[Decoder] ESC 0x72 READ_IMMEDIATE");
                         emit commandReceived(TN5250Command::READ_IMMEDIATE, QByteArray());
                         i += 4; // ESC + cmd + ctrl1 + ctrl2
+                        continue;
+                    }
+                    if (cc == CC_READ_SCREEN || cc == CC_READ_SCREEN_ALT) {
+                        LOG_DEBUG(QString("[Decoder] ESC 0x%1 READ_SCREEN").arg(cc, 2, 16, QChar('0')));
+                        bool includeAttrs = (cc == CC_READ_SCREEN_ALT);
+                        emit readScreenRequested(includeAttrs);
+                        i += 4; // ESC + cmd + ctrl1 + ctrl2
+                        continue;
+                    }
+                    if (cc == CC_WRITE_STRUCTURED_FIELD) {
+                        // Write Structured Field: ESC 0xF3 + structured data
+                        int j = i + 2;
+                        QByteArray sfData;
+                        while (j < payload.size()) {
+                            uint8_t ob = static_cast<uint8_t>(payload[j]);
+                            if (ob == ESC) break;
+                            sfData.append(static_cast<char>(ob));
+                            j++;
+                        }
+                        LOG_DEBUG(QString("[Decoder] ESC 0xF3 WRITE_STRUCTURED_FIELD: %1 bytes").arg(sfData.size()));
+                        emit writeStructuredFieldReceived(sfData);
+                        i = j;
                         continue;
                     }
                     if (cc == CC_WRITE_TO_DISPLAY) { // Write To Display

@@ -1,4 +1,5 @@
 #include "Q5250ScreenWidget.h"
+#include "core/ebcdic.h"
 #include "logger/logger.h"
 #include <climits>
 #include <QApplication>
@@ -56,6 +57,13 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
             event->accept();
             return;
         }
+    }
+
+    // Handle Ctrl+V for pasting from clipboard
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_V) {
+        handlePaste();
+        event->accept();
+        return;
     }
 
     // Handle Escape: Error Reset (if error-locked) or clear selection
@@ -137,10 +145,22 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
             event->accept();
             return;
         case Qt::Key_End:
+            if (event->modifiers() & Qt::ControlModifier) {
+                // Ctrl+End = Field Exit
+                handleFieldExit();
+                event->accept();
+                return;
+            }
             moveToFieldEnd();
             event->accept();
             return;
         case Qt::Key_Backspace:
+            if (event->modifiers() & Qt::ControlModifier) {
+                // Ctrl+Backspace = Erase Field
+                handleEraseField();
+                event->accept();
+                return;
+            }
             handleBackspace();
             event->accept();
             return;
@@ -148,16 +168,38 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
             if (event->modifiers() & Qt::AltModifier) {
                 // Erase Input: clear all non-protected fields, reset MDT, move to IC
                 handleEraseInput();
+            } else if (event->modifiers() & Qt::ControlModifier) {
+                // EraseEOF: clear from cursor to end of field
+                handleEraseEOF();
             } else {
                 handleDelete();
             }
             event->accept();
             return;
         case Qt::Key_Insert:
-            m_insertMode = !m_insertMode;
-            emit terminalStateChanged();
+            if (event->modifiers() & Qt::ShiftModifier) {
+                // Shift+Insert = Dup key
+                handleDup();
+            } else {
+                m_insertMode = !m_insertMode;
+                emit terminalStateChanged();
+            }
             event->accept();
             return;
+        case Qt::Key_Plus:
+            if (event->modifiers() & Qt::AltModifier) {
+                handleFieldPlus();
+                event->accept();
+                return;
+            }
+            break;
+        case Qt::Key_Minus:
+            if (event->modifiers() & Qt::AltModifier) {
+                handleFieldMinus();
+                event->accept();
+                return;
+            }
+            break;
         default:
             break;
         }
@@ -287,6 +329,22 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
     // original Qt key event, NOT by the encoded byte value.
 
     if (isAID) {
+        // Attn key — telnet-level signal, not a normal AID response
+        if (firstByte == 0x70) { // AID_ATTN
+            emit attentionRequested();
+            setKeyboardState(KeyboardState::Locked);
+            if (m_insertMode) {
+                m_insertMode = false;
+                emit terminalStateChanged();
+            }
+            return;
+        }
+        // SysReq key — telnet-level signal
+        if (firstByte == 0x71) { // AID_SYSREQ
+            emit systemRequestRequested();
+            return;
+        }
+
         // Right-adjust the current field before sending (per spec)
         QPoint cursor = m_screenBuffer->cursorPosition();
         rightAdjustField(cursor.y(), cursor.x());
@@ -553,23 +611,30 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     response.append(static_cast<char>(cursor.x() + 1));
     response.append(static_cast<char>(aidByte));
 
-    // Append modified fields: SBA(0x11) + row(1-based) + col(1-based) + field data
+    // Append fields: SBA(0x11) + row(1-based) + col(1-based) + field data
     // SBA address points to the field attribute byte position (one cell before
     // the field data start), per the 5250 Functions Reference.
+    // READ_INPUT_FIELDS (0x42): send ALL unprotected fields
+    // READ_MDT_FIELDS (0x52): send only modified fields (default)
     int cols = m_screenBuffer->cols();
-    QVector<ScreenBuffer::Field> modFields = m_screenBuffer->getModifiedFields();
-    LOG_DEBUG(QString("[Q5250Widget] buildAIDResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
+    QVector<ScreenBuffer::Field> fieldsToSend;
+    if (m_readType == 0x42) {
+        // READ_INPUT: all unprotected fields
+        for (const auto &f : m_screenBuffer->fields()) {
+            if (!f.protected_field && f.length > 0) {
+                fieldsToSend.append(f);
+            }
+        }
+    } else {
+        fieldsToSend = m_screenBuffer->getModifiedFields();
+    }
+    LOG_DEBUG(QString("[Q5250Widget] buildAIDResponse: aid=0x%1 cursor=(%2,%3) fields=%4 (readType=0x%5)")
         .arg(aidByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
-        .arg(modFields.size()));
-    for (const auto &field : modFields) {
-        int dataAddr = field.startRow * cols + field.startCol;
-        int attrAddr = dataAddr - 1;
-        if (attrAddr < 0) attrAddr = 0;
-        int attrRow = attrAddr / cols;
-        int attrCol = attrAddr % cols;
+        .arg(fieldsToSend.size()).arg(m_readType, 2, 16, QChar('0')));
+    for (const auto &field : fieldsToSend) {
         response.append(static_cast<char>(0x11)); // SBA order
-        response.append(static_cast<char>(attrRow + 1));
-        response.append(static_cast<char>(attrCol + 1));
+        response.append(static_cast<char>(field.startRow + 1));
+        response.append(static_cast<char>(field.startCol + 1));
         // Get field data, strip trailing nulls, convert embedded nulls to blanks
         QByteArray fieldData = m_screenBuffer->getFieldData(field);
         // Strip trailing null bytes (0x00)
@@ -793,6 +858,293 @@ void Q5250ScreenWidget::rightAdjustField(int row, int col) {
         }
     }
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+    update();
+}
+
+void Q5250ScreenWidget::handleFieldExit() {
+    if (!m_screenBuffer) return;
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+    if (m_screenBuffer->isProtected(row, col)) return;
+
+    ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+    if (field.length <= 0) return;
+
+    // Check mandatory fill (rightAdjust == 7): all positions must be filled
+    if (field.rightAdjust == 7) {
+        int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+        for (int j = 0; j < field.length; ++j) {
+            int r = (fieldStart + j) / m_screenBuffer->cols();
+            int c = (fieldStart + j) % m_screenBuffer->cols();
+            uint8_t ch = m_screenBuffer->character(r, c);
+            if (ch == 0x00 || ch == 0x40) {
+                // Field not fully filled — reject exit
+                LOG_DEBUG("[Q5250Widget] FieldExit: mandatory fill check failed");
+                return;
+            }
+        }
+    }
+
+    // Clear from cursor to end of field
+    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+    int fieldEnd = fieldStart + field.length;
+    int curAddr = row * m_screenBuffer->cols() + col;
+    for (int addr = curAddr; addr < fieldEnd; ++addr) {
+        int r = addr / m_screenBuffer->cols();
+        int c = addr % m_screenBuffer->cols();
+        m_screenBuffer->writeChar(r, c, 0x00);
+    }
+
+    // Right-adjust the field
+    rightAdjustField(field.startRow, field.startCol);
+
+    // Handle signed numeric field — process sign
+    if (field.shiftType == 7) {
+        // Signed numeric: last position gets zone byte
+        int lastAddr = fieldEnd - 1;
+        int lastR = lastAddr / m_screenBuffer->cols();
+        int lastC = lastAddr % m_screenBuffer->cols();
+        uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
+        // Ensure the last digit has proper zone for positive sign
+        if (lastCh >= 0xF0 && lastCh <= 0xF9) {
+            // Already has F-zone (positive) — leave as-is
+        }
+    }
+
+    m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+
+    // Advance to next field
+    ScreenBuffer::Field nextField = findNextField(row, col);
+    if (nextField.length > 0) {
+        m_screenBuffer->setCursorPosition(nextField.startRow, nextField.startCol);
+    }
+    update();
+}
+
+void Q5250ScreenWidget::handleEraseEOF() {
+    if (!m_screenBuffer) return;
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+    if (m_screenBuffer->isProtected(row, col)) return;
+
+    ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+    if (field.length <= 0) return;
+
+    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+    int fieldEnd = fieldStart + field.length;
+    int curAddr = row * m_screenBuffer->cols() + col;
+    for (int addr = curAddr; addr < fieldEnd; ++addr) {
+        int r = addr / m_screenBuffer->cols();
+        int c = addr % m_screenBuffer->cols();
+        m_screenBuffer->writeChar(r, c, 0x00);
+    }
+    m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+    update();
+}
+
+void Q5250ScreenWidget::handleEraseField() {
+    if (!m_screenBuffer) return;
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+    if (m_screenBuffer->isProtected(row, col)) return;
+
+    ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+    if (field.length <= 0) return;
+
+    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+    for (int j = 0; j < field.length; ++j) {
+        int r = (fieldStart + j) / m_screenBuffer->cols();
+        int c = (fieldStart + j) % m_screenBuffer->cols();
+        m_screenBuffer->writeChar(r, c, 0x00);
+    }
+    m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+    m_screenBuffer->setCursorPosition(field.startRow, field.startCol);
+    update();
+}
+
+void Q5250ScreenWidget::handleDup() {
+    if (!m_screenBuffer) return;
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+    if (m_screenBuffer->isProtected(row, col)) return;
+
+    // Write Dup marker (0x1C) at cursor position
+    m_screenBuffer->writeChar(row, col, 0x1C);
+    m_screenBuffer->markFieldModified(row, col);
+
+    // Advance to next field
+    ScreenBuffer::Field nextField = findNextField(row, col);
+    if (nextField.length > 0) {
+        m_screenBuffer->setCursorPosition(nextField.startRow, nextField.startCol);
+    }
+    update();
+}
+
+void Q5250ScreenWidget::handleFieldPlus() {
+    if (!m_screenBuffer) return;
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+    if (m_screenBuffer->isProtected(row, col)) return;
+
+    ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+    if (field.length <= 0) return;
+
+    // Field Plus: right-adjust and write '+' sign (EBCDIC 0x4E) at last position
+    // Only meaningful for signed numeric fields, but write regardless
+    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+    int fieldEnd = fieldStart + field.length;
+
+    // Clear from cursor to end
+    int curAddr = row * m_screenBuffer->cols() + col;
+    for (int addr = curAddr; addr < fieldEnd; ++addr) {
+        int r = addr / m_screenBuffer->cols();
+        int c = addr % m_screenBuffer->cols();
+        m_screenBuffer->writeChar(r, c, 0x00);
+    }
+
+    rightAdjustField(field.startRow, field.startCol);
+
+    // For signed numeric, zone the last digit with F-zone (positive)
+    int lastAddr = fieldEnd - 1;
+    int lastR = lastAddr / m_screenBuffer->cols();
+    int lastC = lastAddr % m_screenBuffer->cols();
+    uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
+    if (lastCh >= 0xD0 && lastCh <= 0xD9) {
+        // Change D-zone to F-zone (negative → positive)
+        m_screenBuffer->writeChar(lastR, lastC, lastCh + 0x20);
+    }
+
+    m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+
+    // Advance to next field
+    ScreenBuffer::Field nextField = findNextField(row, col);
+    if (nextField.length > 0) {
+        m_screenBuffer->setCursorPosition(nextField.startRow, nextField.startCol);
+    }
+    update();
+}
+
+void Q5250ScreenWidget::handleFieldMinus() {
+    if (!m_screenBuffer) return;
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+    if (m_screenBuffer->isProtected(row, col)) return;
+
+    ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+    if (field.length <= 0) return;
+
+    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+    int fieldEnd = fieldStart + field.length;
+
+    // Clear from cursor to end
+    int curAddr = row * m_screenBuffer->cols() + col;
+    for (int addr = curAddr; addr < fieldEnd; ++addr) {
+        int r = addr / m_screenBuffer->cols();
+        int c = addr % m_screenBuffer->cols();
+        m_screenBuffer->writeChar(r, c, 0x00);
+    }
+
+    rightAdjustField(field.startRow, field.startCol);
+
+    // For signed numeric, zone the last digit with D-zone (negative)
+    int lastAddr = fieldEnd - 1;
+    int lastR = lastAddr / m_screenBuffer->cols();
+    int lastC = lastAddr % m_screenBuffer->cols();
+    uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
+    if (lastCh >= 0xF0 && lastCh <= 0xF9) {
+        // Change F-zone to D-zone (positive → negative)
+        m_screenBuffer->writeChar(lastR, lastC, lastCh - 0x20);
+    }
+
+    m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+
+    // Advance to next field
+    ScreenBuffer::Field nextField = findNextField(row, col);
+    if (nextField.length > 0) {
+        m_screenBuffer->setCursorPosition(nextField.startRow, nextField.startCol);
+    }
+    update();
+}
+
+void Q5250ScreenWidget::handlePaste() {
+    if (!m_screenBuffer) return;
+
+    QString text = QApplication::clipboard()->text();
+    if (text.isEmpty()) return;
+
+    QPoint cursor = m_screenBuffer->cursorPosition();
+    int row = cursor.y();
+    int col = cursor.x();
+
+    for (int i = 0; i < text.size(); ++i) {
+        QChar ch = text[i];
+
+        // Handle newlines by advancing to next field
+        if (ch == '\n' || ch == '\r') {
+            if (i + 1 < text.size() && text[i] == '\r' && text[i + 1] == '\n') {
+                ++i; // Skip \r\n pair
+            }
+            ScreenBuffer::Field nextField = findNextField(row, col);
+            if (nextField.length > 0) {
+                row = nextField.startRow;
+                col = nextField.startCol;
+            }
+            continue;
+        }
+
+        // Skip protected positions
+        if (m_screenBuffer->isProtected(row, col)) {
+            // Try to find next unprotected field
+            ScreenBuffer::Field nextField = findNextField(row, col);
+            if (nextField.length > 0) {
+                row = nextField.startRow;
+                col = nextField.startCol;
+            } else {
+                break; // No more fields
+            }
+        }
+
+        // Convert character to EBCDIC
+        uint8_t ebcdic = core::EBCDIC::charToEBCDIC(ch);
+        if (ebcdic == 0x00) continue; // Skip unmappable characters
+
+        m_screenBuffer->writeChar(row, col, ebcdic);
+        m_screenBuffer->markFieldModified(row, col);
+
+        // Advance within field
+        ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
+        if (field.length > 0) {
+            int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
+            int fieldEnd = fieldStart + field.length;
+            int curAddr = row * m_screenBuffer->cols() + col;
+            if (curAddr + 1 >= fieldEnd) {
+                // End of field — advance to next field
+                ScreenBuffer::Field nextField = findNextField(row, col);
+                if (nextField.length > 0) {
+                    row = nextField.startRow;
+                    col = nextField.startCol;
+                } else {
+                    break;
+                }
+                continue;
+            }
+        }
+
+        col++;
+        if (col >= m_screenBuffer->cols()) {
+            col = 0;
+            row++;
+            if (row >= m_screenBuffer->rows()) break;
+        }
+    }
+
+    m_screenBuffer->setCursorPosition(row, col);
     update();
 }
 

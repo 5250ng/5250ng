@@ -102,9 +102,14 @@ class Q5250ScreenWidget : public QWidget {
     void moveCursorUp();
     void moveCursorDown();
 
+    void setReadType(uint8_t readType) { m_readType = readType; }
+    uint8_t readType() const { return m_readType; }
+
   signals:
     void screenSizeChanged(int rows, int cols);
     void inputReady(const QByteArray &data);
+    void attentionRequested();
+    void systemRequestRequested();
     void terminalStateChanged();
 
   protected:
@@ -153,6 +158,13 @@ class Q5250ScreenWidget : public QWidget {
     void handleBackspace();
     void handleDelete();
     void handleEraseInput();
+    void handleFieldExit();
+    void handleEraseEOF();
+    void handleEraseField();
+    void handleDup();
+    void handleFieldPlus();
+    void handleFieldMinus();
+    void handlePaste();
     void rightAdjustField(int row, int col);
 
     ScreenBuffer *m_screenBuffer;
@@ -196,6 +208,7 @@ class Q5250ScreenWidget : public QWidget {
     int m_errorLineRow;                // Error line row from SOH (default: last row)
     uint8_t m_cmdKeyMask[3];           // SOH command key masks
     QVector<ScreenCell> m_savedErrorLine; // Saved error line contents for Error Reset
+    uint8_t m_readType = 0x52; // 0x52=READ_MDT (default), 0x42=READ_INPUT
 };
 
 } // namespace ui::widgets

@@ -194,6 +194,12 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
 
     case TelnetCommand::DO:
         // Server wants us to enable an option
+        if (option == TelnetOption::TIMING_MARK) {
+            // Respond WONT TIMING_MARK per RFC 860 — acknowledges host's timing request
+            sendTelnetCommand(TelnetCommand::WONT, TelnetOption::TIMING_MARK);
+            logger::Logger::instance()->debug("[TN5250->Client]: Responded WONT TIMING_MARK");
+            break;
+        }
         if (option == TelnetOption::TRANSMIT_BINARY) {
             sendTelnetCommand(TelnetCommand::WILL, TelnetOption::TRANSMIT_BINARY);
             m_binaryNegotiated = true;
@@ -391,10 +397,10 @@ void TN5250Client::sendData(const QByteArray &data) {
     record.append(static_cast<char>(0x00));
     // Variable header length (includes itself: 1 + 2 flags + 1 opcode = 4)
     record.append(static_cast<char>(GDS_VAR_HDR_LEN));
-    // Flags (0x0000) and opcode (0x00 = no-op / general response)
+    // Flags (0x00), reserved (0x00), opcode PUT_GET (0x03) — client response to host's PUT_GET
     record.append(static_cast<char>(0x00));
     record.append(static_cast<char>(0x00));
-    record.append(static_cast<char>(0x00));
+    record.append(static_cast<char>(GDS_OPCODE_PUT_GET));
     // Payload
     record.append(data);
 
@@ -425,6 +431,59 @@ void TN5250Client::sendRawData(const QByteArray &data) {
     escaped.append(static_cast<uint8_t>(TelnetCommand::EOR));
 
     m_socket->write(escaped);
+}
+
+void TN5250Client::sendGDS(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload) {
+    using namespace tn5250::protocol;
+    QByteArray record;
+    int recLen = GDS_HEADER_SIZE + payload.size();
+
+    // 2-byte big-endian record length
+    record.append(static_cast<char>((recLen >> 8) & 0xFF));
+    record.append(static_cast<char>(recLen & 0xFF));
+    // Record type 0x12A0
+    record.append(static_cast<char>(GDS_RECORD_TYPE_HI));
+    record.append(static_cast<char>(GDS_RECORD_TYPE_LO));
+    // Reserved 0x0000
+    record.append(static_cast<char>(0x00));
+    record.append(static_cast<char>(0x00));
+    // Variable header length
+    record.append(static_cast<char>(GDS_VAR_HDR_LEN));
+    // Flags and opcode
+    record.append(static_cast<char>(flagsHi));
+    record.append(static_cast<char>(0x00));
+    record.append(static_cast<char>(opcode));
+    // Payload
+    record.append(payload);
+
+    sendRawData(record);
+}
+
+void TN5250Client::startHeartbeat() {
+    if (!m_heartbeatTimer) {
+        m_heartbeatTimer = new QTimer(this);
+        m_heartbeatTimer->setInterval(30000); // 30 seconds
+        connect(m_heartbeatTimer, &QTimer::timeout, this, &TN5250Client::sendHeartbeat);
+    }
+    m_heartbeatTimer->start();
+}
+
+void TN5250Client::stopHeartbeat() {
+    if (m_heartbeatTimer) {
+        m_heartbeatTimer->stop();
+    }
+}
+
+void TN5250Client::sendHeartbeat() {
+    if (!m_socket || m_socket->state() != QAbstractSocket::ConnectedState) {
+        return;
+    }
+    // Send IAC NOP as keep-alive
+    QByteArray nop;
+    nop.append(static_cast<uint8_t>(TelnetCommand::IAC));
+    nop.append(static_cast<uint8_t>(TelnetCommand::NOP));
+    m_socket->write(nop);
+    LOG_DEBUG("[TN5250->Client]: Sent heartbeat IAC NOP");
 }
 
 } // namespace tn5250::client

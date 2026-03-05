@@ -1,4 +1,5 @@
 #include "connect_dialog.h"
+#include "core/codepage.h"
 #include "session/manager.h"
 #include <QGroupBox>
 #include <QInputDialog>
@@ -122,6 +123,18 @@ void ConnectDialog::setupUI() {
     m_displayGroup->setLayout(displayLayout);
     mainLayout->addWidget(m_displayGroup);
 
+    // Code page group
+    QGroupBox *codePageGroup = new QGroupBox("Code Page", this);
+    QFormLayout *codePageLayout = new QFormLayout(codePageGroup);
+    m_codePageCombo = new QComboBox(this);
+    for (auto cpId : core::CodePage::supportedCodePages()) {
+        m_codePageCombo->addItem(core::CodePage::codepageName(cpId),
+                                 static_cast<int>(cpId));
+    }
+    codePageLayout->addRow("EBCDIC Code Page:", m_codePageCombo);
+    codePageGroup->setLayout(codePageLayout);
+    mainLayout->addWidget(codePageGroup);
+
     // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     m_connectButton = new QPushButton("Connect", this);
@@ -174,6 +187,12 @@ void ConnectDialog::updateUI() {
         m_colsSpin->setValue(m_currentConfig.screenCols());
         m_displayGroup->setEnabled(true);
     }
+
+    // Code page
+    int cpIdx = m_codePageCombo->findData(static_cast<int>(m_currentConfig.codePage()));
+    if (cpIdx >= 0) {
+        m_codePageCombo->setCurrentIndex(cpIdx);
+    }
 }
 
 session::SessionConfig ConnectDialog::getSessionConfig() const {
@@ -191,6 +210,8 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setScreenCols(m_colsSpin->value());
     config.setUsername(m_usernameEdit->text());
     config.setPassword(m_passwordEdit->text());
+    config.setCodePage(static_cast<core::CodePage::ID>(
+        m_codePageCombo->currentData().toInt()));
     return config;
 }
 

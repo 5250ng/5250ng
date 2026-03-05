@@ -35,6 +35,7 @@ void TN5250Client::onSocketConnected() {
 
 void TN5250Client::onSocketDisconnected() {
     logger::Logger::instance()->debug("[TN5250->Client]: Socket disconnected");
+    stopHeartbeat();
     setState(ConnectionState::Disconnected);
     emit disconnected();
 }
