@@ -32,7 +32,13 @@ QSize Q5250ScreenWidget::minimumSizeHint() const {
 
 /**
  * Compute character cell size and font scaling to fit the widget dimensions.
- * Preserves the base font aspect ratio to avoid distorted glyphs.
+ *
+ * In Packed mode, the font aspect ratio is preserved and the grid is centered
+ * within the widget (some horizontal or vertical space is unused).
+ *
+ * In Wide mode, cells are stretched to fill the entire widget width and height.
+ * The font is scaled to fit the cell height; characters are drawn centered
+ * inside their (potentially wider) cells.
  */
 void Q5250ScreenWidget::calculateCellSize() {
     if (!m_screenBuffer) {
@@ -60,56 +66,64 @@ void Q5250ScreenWidget::calculateCellSize() {
         return;
     }
 
-    // Calculate ideal cell size to fill the widget
-    double idealCellWidth = static_cast<double>(widgetSize.width()) / cols;
-    double idealCellHeight = static_cast<double>(widgetSize.height()) / rows;
+    if (m_gridMode == ui::themes::TerminalTheme::Wide) {
+        // Wide mode: cells fill the entire widget
+        int cellWidth = widgetSize.width() / cols;
+        int cellHeight = widgetSize.height() / rows;
+        if (cellWidth < 1) cellWidth = 1;
+        if (cellHeight < 1) cellHeight = 1;
+        m_cellSize = QSize(cellWidth, cellHeight);
 
-    // Get font's natural aspect ratio from base font
-    QFontMetrics fm(m_baseFont);
-    double fontAspectRatio =
-        static_cast<double>(fm.horizontalAdvance('M')) / fm.height();
-
-    // Calculate cell aspect ratio
-    double cellAspectRatio = idealCellWidth / idealCellHeight;
-
-    // Adjust to maintain font aspect ratio
-    double finalCellWidth, finalCellHeight;
-
-    if (cellAspectRatio > fontAspectRatio) {
-        // Widget is wider than needed, constrain by height
-        finalCellHeight = idealCellHeight;
-        finalCellWidth = finalCellHeight * fontAspectRatio;
-    } else {
-        // Widget is taller than needed, constrain by width
-        finalCellWidth = idealCellWidth;
-        finalCellHeight = finalCellWidth / fontAspectRatio;
-    }
-
-    // Update cell size (round to nearest integer)
-    m_cellSize = QSize(static_cast<int>(finalCellWidth + 0.5),
-                       static_cast<int>(finalCellHeight + 0.5));
-
-    // Scale font to match cell size if needed
-    int baseFontHeight = fm.height();
-    int targetFontHeight = m_cellSize.height();
-
-    if (baseFontHeight != targetFontHeight && baseFontHeight > 0) {
-        // Scale font to fit the cell height
-        double scaleFactor = static_cast<double>(targetFontHeight) / baseFontHeight;
-        double newFontSize = m_baseFont.pointSizeF() * scaleFactor;
-        if (newFontSize < 1.0) {
-            newFontSize = 1.0;
+        // Scale font to match cell height
+        QFontMetrics fm(m_baseFont);
+        int baseFontHeight = fm.height();
+        if (baseFontHeight > 0 && baseFontHeight != cellHeight) {
+            double scaleFactor = static_cast<double>(cellHeight) / baseFontHeight;
+            double newFontSize = m_baseFont.pointSizeF() * scaleFactor;
+            if (newFontSize < 1.0) newFontSize = 1.0;
+            m_font = m_baseFont;
+            m_font.setPointSizeF(newFontSize);
+        } else {
+            m_font = m_baseFont;
         }
-        m_font = m_baseFont;
-        m_font.setPointSizeF(newFontSize);
-
-        // Recalculate cell size from scaled font to ensure exact fit
-        QFontMetrics scaledFm(m_font);
-        m_cellSize = QSize(scaledFm.horizontalAdvance('M'), scaledFm.height());
     } else {
-        // Use base font if no scaling needed
-        m_font = m_baseFont;
-        // Cell size is already calculated to fit the window
+        // Packed mode: preserve font aspect ratio
+        double idealCellWidth = static_cast<double>(widgetSize.width()) / cols;
+        double idealCellHeight = static_cast<double>(widgetSize.height()) / rows;
+
+        QFontMetrics fm(m_baseFont);
+        double fontAspectRatio =
+            static_cast<double>(fm.horizontalAdvance('M')) / fm.height();
+
+        double cellAspectRatio = idealCellWidth / idealCellHeight;
+
+        double finalCellWidth, finalCellHeight;
+        if (cellAspectRatio > fontAspectRatio) {
+            finalCellHeight = idealCellHeight;
+            finalCellWidth = finalCellHeight * fontAspectRatio;
+        } else {
+            finalCellWidth = idealCellWidth;
+            finalCellHeight = finalCellWidth / fontAspectRatio;
+        }
+
+        m_cellSize = QSize(static_cast<int>(finalCellWidth + 0.5),
+                           static_cast<int>(finalCellHeight + 0.5));
+
+        int baseFontHeight = fm.height();
+        int targetFontHeight = m_cellSize.height();
+
+        if (baseFontHeight != targetFontHeight && baseFontHeight > 0) {
+            double scaleFactor = static_cast<double>(targetFontHeight) / baseFontHeight;
+            double newFontSize = m_baseFont.pointSizeF() * scaleFactor;
+            if (newFontSize < 1.0) newFontSize = 1.0;
+            m_font = m_baseFont;
+            m_font.setPointSizeF(newFontSize);
+            // Keep the calculated m_cellSize — it is guaranteed to fit inside
+            // the widget so screenOffset() can center the grid correctly.
+            // Characters are drawn with Qt::AlignCenter inside each cell.
+        } else {
+            m_font = m_baseFont;
+        }
     }
 }
 

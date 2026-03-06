@@ -36,6 +36,7 @@ void SessionSettingsDialog::setupUI() {
     contentLayout->setSpacing(12);
 
     contentLayout->addWidget(buildThemeSection());
+    contentLayout->addWidget(buildGridModeSection());
     contentLayout->addWidget(buildBackgroundSection());
     contentLayout->addWidget(buildFontSection());
     contentLayout->addWidget(buildColorsSection());
@@ -150,6 +151,23 @@ QWidget *SessionSettingsDialog::buildThemeSection() {
     return group;
 }
 
+QWidget *SessionSettingsDialog::buildGridModeSection() {
+    QGroupBox *group = new QGroupBox("Screen Grid");
+    QHBoxLayout *h = new QHBoxLayout(group);
+
+    h->addWidget(new QLabel("Layout:"));
+    m_gridModeCombo = new QComboBox();
+    m_gridModeCombo->addItem("Packed", "packed");
+    m_gridModeCombo->addItem("Wide", "wide");
+    h->addWidget(m_gridModeCombo);
+    h->addStretch();
+
+    connect(m_gridModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SessionSettingsDialog::onThemePropertyChanged);
+
+    return group;
+}
+
 QWidget *SessionSettingsDialog::buildBackgroundSection() {
     QGroupBox *group = new QGroupBox("Background");
     QVBoxLayout *v = new QVBoxLayout(group);
@@ -245,7 +263,24 @@ QWidget *SessionSettingsDialog::buildFontSection() {
 
 QWidget *SessionSettingsDialog::buildColorsSection() {
     QGroupBox *group = new QGroupBox("Terminal Colors");
-    QGridLayout *grid = new QGridLayout(group);
+    QVBoxLayout *outer = new QVBoxLayout(group);
+
+    // Monochrome option
+    QHBoxLayout *monoRow = new QHBoxLayout();
+    m_monochromeEnabled = new QCheckBox("Monochrome");
+    m_monochromeEnabled->setToolTip("Derive all colors from a single hue");
+    monoRow->addWidget(m_monochromeEnabled);
+    monoRow->addWidget(new QLabel("Color:"));
+    m_monochromeColorSwatch = createColorSwatch("monoColor", QColor(255, 176, 0));
+    monoRow->addWidget(m_monochromeColorSwatch);
+    monoRow->addStretch();
+    outer->addLayout(monoRow);
+
+    connect(m_monochromeEnabled, &QCheckBox::toggled, this, &SessionSettingsDialog::onMonochromeToggled);
+    connect(m_monochromeColorSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
+    // Individual color grid
+    QGridLayout *grid = new QGridLayout();
 
     // Each column group: label(0), swatch(1), contrast(2), spacer(3), label(4), swatch(5), contrast(6)
     auto addColorRow = [&](int row, int col, const QString &label,
@@ -275,6 +310,8 @@ QWidget *SessionSettingsDialog::buildColorsSection() {
 
     // Spacer column between left and right groups
     grid->setColumnMinimumWidth(3, 20);
+
+    outer->addLayout(grid);
 
     return group;
 }
@@ -542,6 +579,11 @@ void SessionSettingsDialog::setTheme(const ui::themes::TerminalTheme &theme) {
 }
 
 void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme) {
+    // Grid mode
+    int gmIdx = m_gridModeCombo->findData(
+        ui::themes::TerminalTheme::gridModeToString(theme.gridMode));
+    if (gmIdx >= 0) m_gridModeCombo->setCurrentIndex(gmIdx);
+
     // Background
     m_bgColorRadio->setChecked(theme.backgroundMode == ui::themes::TerminalTheme::Color);
     m_bgImageRadio->setChecked(theme.backgroundMode == ui::themes::TerminalTheme::Image);
@@ -556,6 +598,11 @@ void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme
     int fontIdx = m_fontCombo->findText(theme.fontFamily);
     if (fontIdx >= 0) m_fontCombo->setCurrentIndex(fontIdx);
     m_fontSizeSpin->setValue(theme.fontSize);
+
+    // Monochrome
+    m_monochromeEnabled->setChecked(theme.monochrome);
+    setSwatchColor(m_monochromeColorSwatch, theme.monochromeColor);
+    onMonochromeToggled(theme.monochrome);
 
     // Colors
     setSwatchColor(m_colorGreen,  theme.colorGreen);
@@ -610,6 +657,10 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
         t.displayName.chop(11);
     }
 
+    // Grid mode
+    t.gridMode = ui::themes::TerminalTheme::gridModeFromString(
+        m_gridModeCombo->currentData().toString());
+
     // Background
     t.backgroundMode = m_bgColorRadio->isChecked()
                             ? ui::themes::TerminalTheme::Color
@@ -623,6 +674,10 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
     // Font
     t.fontFamily = m_fontCombo->currentText();
     t.fontSize   = m_fontSizeSpin->value();
+
+    // Monochrome
+    t.monochrome = m_monochromeEnabled->isChecked();
+    t.monochromeColor = swatchColor(m_monochromeColorSwatch);
 
     // Colors
     t.colorGreen  = swatchColor(m_colorGreen);
@@ -842,6 +897,21 @@ void SessionSettingsDialog::onApplyToAll() {
 void SessionSettingsDialog::onOk() {
     emit applyRequested(collectThemeFromUI());
     accept();
+}
+
+void SessionSettingsDialog::onMonochromeToggled(bool checked) {
+    m_monochromeColorSwatch->setEnabled(checked);
+    // Disable individual color swatches when monochrome is on
+    m_colorGreen->setEnabled(!checked);
+    m_colorWhite->setEnabled(!checked);
+    m_colorBlue->setEnabled(!checked);
+    m_colorYellow->setEnabled(!checked);
+    m_colorRed->setEnabled(!checked);
+    m_colorCyan->setEnabled(!checked);
+    m_colorPink->setEnabled(!checked);
+    m_colorBlack->setEnabled(!checked);
+    m_colorCursor->setEnabled(!checked);
+    onThemePropertyChanged();
 }
 
 void SessionSettingsDialog::onThemeFilterChanged(const QString &filter) {

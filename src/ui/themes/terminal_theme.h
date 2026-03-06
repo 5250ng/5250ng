@@ -57,11 +57,19 @@ struct TerminalTheme {
     CursorShape cursorShape = Block;
     int cursorBlinkRateMs = 530;
 
+    // Screen grid layout
+    enum GridMode { Packed, Wide };
+    GridMode gridMode = Packed;
+
     // CRT effect
     bool crtEffectEnabled = false;
     double crtScanlineIntensity = 0.3;
     double crtGlowRadius = 0.2;
     double crtCurvature = 0.1;
+
+    // Monochrome mode: derive all protocol colors from a single hue
+    bool monochrome = false;
+    QColor monochromeColor = QColor(255, 176, 0); // default amber
 
     // Global brightness/saturation adjustment
     double globalBrightness = 1.0;  // 0.5–1.5
@@ -92,6 +100,8 @@ struct TerminalTheme {
     static ColSepStyle colSepStyleFromString(const QString &str);
     static QString cursorShapeToString(CursorShape shape);
     static CursorShape cursorShapeFromString(const QString &str);
+    static QString gridModeToString(GridMode mode);
+    static GridMode gridModeFromString(const QString &str);
 };
 
 } // namespace ui::themes

@@ -67,6 +67,19 @@ TerminalTheme::CursorShape TerminalTheme::cursorShapeFromString(const QString &s
     return Block;
 }
 
+QString TerminalTheme::gridModeToString(GridMode mode) {
+    switch (mode) {
+    case Packed: return "packed";
+    case Wide:   return "wide";
+    }
+    return "packed";
+}
+
+TerminalTheme::GridMode TerminalTheme::gridModeFromString(const QString &str) {
+    if (str == "wide") return Wide;
+    return Packed;
+}
+
 // --- Color adjustment ---
 
 QColor TerminalTheme::adjustColor(const QColor &color) const {
@@ -92,6 +105,34 @@ QColor TerminalTheme::adjustColor(const QColor &color) const {
 
 QVector<QColor> TerminalTheme::buildColorScheme() const {
     QVector<QColor> scheme(16);
+
+    if (monochrome && monochromeColor.isValid()) {
+        // Monochrome: all colors are brightness variants of the base hue
+        int h, s, v;
+        monochromeColor.getHsv(&h, &s, &v);
+
+        // Dim variants (indices 0-7)
+        scheme[0]  = adjustColor(backgroundColor);                            // black
+        scheme[1]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 50 / 100, 255)));  // dim blue
+        scheme[2]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 60 / 100, 255)));  // dim green
+        scheme[3]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 55 / 100, 255)));  // dim cyan
+        scheme[4]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 45 / 100, 255)));  // dim red
+        scheme[5]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 50 / 100, 255)));  // dim pink
+        scheme[6]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 40 / 100, 255)));  // brown
+        scheme[7]  = adjustColor(QColor::fromHsv(h, s * 70 / 100, qBound(0, v * 75 / 100, 255))); // light gray
+
+        // Bright variants (indices 8-15)
+        scheme[8]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 35 / 100, 255)));  // dark gray
+        scheme[9]  = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 70 / 100, 255)));  // blue
+        scheme[10] = adjustColor(monochromeColor);                                        // green (base)
+        scheme[11] = adjustColor(QColor::fromHsv(h, s * 80 / 100, qBound(0, v * 90 / 100, 255))); // cyan
+        scheme[12] = adjustColor(QColor::fromHsv(h, s, qBound(0, v * 60 / 100, 255)));  // red
+        scheme[13] = adjustColor(QColor::fromHsv(h, s * 85 / 100, qBound(0, v * 80 / 100, 255))); // pink
+        scheme[14] = adjustColor(QColor::fromHsv(h, s * 70 / 100, qMin(255, v * 110 / 100))); // yellow
+        scheme[15] = adjustColor(QColor::fromHsv(h, s * 50 / 100, qMin(255, v * 120 / 100))); // white
+
+        return scheme;
+    }
 
     // Dim variants (indices 0-7)
     scheme[0]  = adjustColor(colorBlack);
@@ -203,6 +244,17 @@ QJsonObject TerminalTheme::toJson() const {
     crt["curvature"]          = crtCurvature;
     json["crtEffect"] = crt;
 
+    // Grid mode
+    json["gridMode"] = gridModeToString(gridMode);
+
+    // Monochrome
+    if (monochrome) {
+        QJsonObject mono;
+        mono["enabled"] = true;
+        mono["color"] = colorToHex(monochromeColor);
+        json["monochrome"] = mono;
+    }
+
     // Global adjustments
     json["globalBrightness"]  = globalBrightness;
     json["globalSaturation"]  = globalSaturation;
@@ -284,6 +336,16 @@ TerminalTheme TerminalTheme::fromJson(const QJsonObject &json) {
         t.crtCurvature           = crt["curvature"].toDouble(0.1);
     }
 
+    // Grid mode
+    t.gridMode = gridModeFromString(json["gridMode"].toString());
+
+    // Monochrome
+    if (json.contains("monochrome") && json["monochrome"].isObject()) {
+        QJsonObject mono = json["monochrome"].toObject();
+        t.monochrome = mono["enabled"].toBool(false);
+        t.monochromeColor = colorFromHex(mono["color"].toString(), QColor(255, 176, 0));
+    }
+
     // Global adjustments
     t.globalBrightness = json["globalBrightness"].toDouble(1.0);
     t.globalSaturation = json["globalSaturation"].toDouble(1.0);
@@ -352,6 +414,11 @@ TerminalTheme TerminalTheme::resolved(
     result.cursorColor      = cursorColor;
     result.cursorShape      = cursorShape;
     result.cursorBlinkRateMs = cursorBlinkRateMs;
+
+    result.gridMode = gridMode;
+
+    result.monochrome = monochrome;
+    result.monochromeColor = monochromeColor;
 
     result.crtEffectEnabled     = crtEffectEnabled;
     result.crtScanlineIntensity = crtScanlineIntensity;

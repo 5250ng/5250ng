@@ -42,6 +42,7 @@ void Q5250TerminalView::setFont(const QFont &font) {
 
 void Q5250TerminalView::applyTerminalTheme(const ui::themes::TerminalTheme &theme) {
     m_screen->applyTerminalTheme(theme);
+    // Footer always uses the same grid mode so its columns align with the screen
     m_footer->applyTerminalTheme(theme);
     // HRule gets a dimmed version of the foreground color
     QColor ruleColor = theme.colorGreen;

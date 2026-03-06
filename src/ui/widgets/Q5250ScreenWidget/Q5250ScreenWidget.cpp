@@ -107,6 +107,16 @@ void Q5250ScreenWidget::setScreenSize(int rows, int cols) {
     emit screenSizeChanged(rows, cols);
 }
 
+void Q5250ScreenWidget::setGridMode(ui::themes::TerminalTheme::GridMode mode) {
+    if (m_gridMode != mode) {
+        m_gridMode = mode;
+        calculateCellSize();
+        updateGeometry();
+        updateCursorWidget();
+        update();
+    }
+}
+
 void Q5250ScreenWidget::setFont(const QFont &font) {
     m_baseFont = font;
     m_font = font;
@@ -172,6 +182,9 @@ void Q5250ScreenWidget::applyTerminalTheme(const ui::themes::TerminalTheme &them
     // Apply column separator settings
     m_colSepColor = theme.columnSeparatorColor;
     m_colSepStyle = theme.columnSeparatorStyle;
+
+    // Apply grid mode
+    m_gridMode = theme.gridMode;
 
     // Apply CRT effect
     m_crtEnabled = theme.crtEffectEnabled;
@@ -367,6 +380,11 @@ QColor Q5250ScreenWidget::getColorForCode(uint8_t colorCode) const {
  */
 QPoint Q5250ScreenWidget::screenOffset() const {
     if (!m_screenBuffer) {
+        return QPoint(0, 0);
+    }
+
+    // In Wide mode the grid fills the widget — no offset needed
+    if (m_gridMode == ui::themes::TerminalTheme::Wide) {
         return QPoint(0, 0);
     }
 

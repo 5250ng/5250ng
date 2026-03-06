@@ -61,6 +61,10 @@ class Q5250ScreenWidget : public QWidget {
     // Terminal theme
     void applyTerminalTheme(const ui::themes::TerminalTheme &theme);
 
+    // Grid layout mode
+    void setGridMode(ui::themes::TerminalTheme::GridMode mode);
+    ui::themes::TerminalTheme::GridMode gridMode() const { return m_gridMode; }
+
     // Color scheme
     void setColorScheme(const QVector<QColor> &colors);
     QColor backgroundColor() const { return m_bgColor; }
@@ -214,6 +218,9 @@ class Q5250ScreenWidget : public QWidget {
     bool m_cursorBlinkState;
     bool m_blinkTextState = true;
     bool m_cursorEnabled = true;
+
+    // Grid layout mode
+    ui::themes::TerminalTheme::GridMode m_gridMode = ui::themes::TerminalTheme::Packed;
 
     // 27×132 mode support
     bool m_extendedMode;

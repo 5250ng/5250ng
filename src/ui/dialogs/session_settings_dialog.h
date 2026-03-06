@@ -48,6 +48,7 @@ class SessionSettingsDialog : public QDialog {
     void onBrowseBackgroundImage();
     void onColorSwatchClicked();
     void onThemePropertyChanged();
+    void onMonochromeToggled(bool checked);
 
   private:
     void setupUI();
@@ -58,6 +59,7 @@ class SessionSettingsDialog : public QDialog {
     QWidget *buildSelectionSection();
     QWidget *buildColumnSeparatorSection();
     QWidget *buildCursorSection();
+    QWidget *buildGridModeSection();
     QWidget *buildCRTSection();
     QWidget *buildBrightnessSection();
 
@@ -102,6 +104,13 @@ class SessionSettingsDialog : public QDialog {
     // Font
     QComboBox *m_fontCombo;
     QSpinBox *m_fontSizeSpin;
+
+    // Grid mode
+    QComboBox *m_gridModeCombo;
+
+    // Monochrome
+    QCheckBox *m_monochromeEnabled;
+    QPushButton *m_monochromeColorSwatch;
 
     // Terminal colors
     QPushButton *m_colorGreen;
