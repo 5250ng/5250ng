@@ -141,6 +141,7 @@ class SessionSettingsDialog : public QDialog {
     // CRT effect
     QCheckBox *m_crtEnabled;
     QSlider *m_crtScanline;
+    QSlider *m_crtPhosphorBloom;
     QSlider *m_crtGlow;
     QSlider *m_crtCurvature;
 

@@ -168,6 +168,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     session->crtOverlay = new ui::widgets::QCRTOverlayWidget(session->container);
     session->crtOverlay->setVisible(false);
     session->crtOverlay->raise();
+    // Invalidate bloom cache when screen content changes
+    connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
+            session->crtOverlay, &ui::widgets::QCRTOverlayWidget::invalidateBloom);
     // Keep overlay sized to container
     session->container->installEventFilter(this);
     session->parser = new tn5250::client::Decoder(session->container);
@@ -478,11 +481,12 @@ void MainWindow::applyThemeToSession(Session *session, const QString &themeId) {
     }
     // CRT overlay applies to the entire tab
     if (session->crtOverlay) {
-        session->crtOverlay->setEnabled(theme.crtEffectEnabled);
         session->crtOverlay->setScanlineIntensity(theme.crtScanlineIntensity);
         session->crtOverlay->setGlowRadius(theme.crtGlowRadius);
         session->crtOverlay->setGlowColor(theme.colorGreen);
         session->crtOverlay->setCurvature(theme.crtCurvature);
+        session->crtOverlay->setPhosphorBloom(theme.crtPhosphorBloom);
+        session->crtOverlay->setEnabled(theme.crtEffectEnabled);
         session->crtOverlay->setGeometry(session->container->rect());
         session->crtOverlay->raise();
     }

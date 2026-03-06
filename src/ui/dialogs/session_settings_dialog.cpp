@@ -419,6 +419,7 @@ QWidget *SessionSettingsDialog::buildCRTSection() {
     };
 
     addSliderRow("Scanlines:", m_crtScanline);
+    addSliderRow("Phosphor Bloom:", m_crtPhosphorBloom);
     addSliderRow("Glow:", m_crtGlow);
     addSliderRow("Curvature:", m_crtCurvature);
 
@@ -635,6 +636,7 @@ void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme
     // CRT
     m_crtEnabled->setChecked(theme.crtEffectEnabled);
     m_crtScanline->setValue(static_cast<int>(theme.crtScanlineIntensity * 100));
+    m_crtPhosphorBloom->setValue(static_cast<int>(theme.crtPhosphorBloom * 100));
     m_crtGlow->setValue(static_cast<int>(theme.crtGlowRadius * 100));
     m_crtCurvature->setValue(static_cast<int>(theme.crtCurvature * 100));
 
@@ -709,6 +711,7 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
     // CRT
     t.crtEffectEnabled     = m_crtEnabled->isChecked();
     t.crtScanlineIntensity = m_crtScanline->value() / 100.0;
+    t.crtPhosphorBloom     = m_crtPhosphorBloom->value() / 100.0;
     t.crtGlowRadius        = m_crtGlow->value() / 100.0;
     t.crtCurvature         = m_crtCurvature->value() / 100.0;
 

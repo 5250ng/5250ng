@@ -66,6 +66,7 @@ struct TerminalTheme {
     double crtScanlineIntensity = 0.3;
     double crtGlowRadius = 0.2;
     double crtCurvature = 0.1;
+    double crtPhosphorBloom = 0.0; // local phosphor glow around characters (0.0–1.0)
 
     // Monochrome mode: derive all protocol colors from a single hue
     bool monochrome = false;

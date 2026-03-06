@@ -190,6 +190,28 @@ void ThemePreviewWidget::renderCursor(QPainter &painter, const QRect &cellRect) 
 }
 
 void ThemePreviewWidget::renderCRTEffect(QPainter &painter, const QRect &area) {
+    // Phosphor bloom: local glow around characters via downscale blur
+    if (m_theme.crtPhosphorBloom > 0.01) {
+        QImage snapshot = grab(area).toImage();
+        if (!snapshot.isNull()) {
+            int w = snapshot.width();
+            int h = snapshot.height();
+            QImage blurred = snapshot;
+            for (int pass = 0; pass < 2; ++pass) {
+                w = qMax(1, w / 4);
+                h = qMax(1, h / 4);
+                blurred = blurred.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            }
+            blurred = blurred.scaled(snapshot.width(), snapshot.height(),
+                                     Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            painter.save();
+            painter.setCompositionMode(QPainter::CompositionMode_Plus);
+            painter.setOpacity(m_theme.crtPhosphorBloom * 0.7);
+            painter.drawImage(area.topLeft(), blurred);
+            painter.restore();
+        }
+    }
+
     // Scanlines: alternating semi-transparent dark horizontal lines
     if (m_theme.crtScanlineIntensity > 0.01) {
         QColor scanColor(0, 0, 0, static_cast<int>(m_theme.crtScanlineIntensity * 180));

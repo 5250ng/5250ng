@@ -40,6 +40,7 @@
     "crtEffect": {
         "enabled": true,
         "scanlineIntensity": 0.15,
+        "phosphorBloom": 0.3,
         "glowRadius": 0.12,
         "curvature": 0.05
     },

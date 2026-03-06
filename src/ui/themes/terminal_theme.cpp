@@ -242,6 +242,7 @@ QJsonObject TerminalTheme::toJson() const {
     crt["scanlineIntensity"]  = crtScanlineIntensity;
     crt["glowRadius"]         = crtGlowRadius;
     crt["curvature"]          = crtCurvature;
+    crt["phosphorBloom"]      = crtPhosphorBloom;
     json["crtEffect"] = crt;
 
     // Grid mode
@@ -334,6 +335,7 @@ TerminalTheme TerminalTheme::fromJson(const QJsonObject &json) {
         t.crtScanlineIntensity   = crt["scanlineIntensity"].toDouble(0.3);
         t.crtGlowRadius          = crt["glowRadius"].toDouble(0.2);
         t.crtCurvature           = crt["curvature"].toDouble(0.1);
+        t.crtPhosphorBloom       = crt["phosphorBloom"].toDouble(0.0);
     }
 
     // Grid mode
@@ -425,6 +427,7 @@ TerminalTheme TerminalTheme::resolved(
     result.crtScanlineIntensity = crtScanlineIntensity;
     result.crtGlowRadius        = crtGlowRadius;
     result.crtCurvature         = crtCurvature;
+    result.crtPhosphorBloom     = crtPhosphorBloom;
 
     result.globalBrightness = globalBrightness;
     result.globalSaturation = globalSaturation;
