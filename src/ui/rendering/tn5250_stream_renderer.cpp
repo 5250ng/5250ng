@@ -57,7 +57,6 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             if (currentRow >= screen->rows()) currentRow = screen->rows() - 1;
             if (currentCol >= screen->cols()) currentCol = screen->cols() - 1;
             LOG_DEBUG(QString("[StreamRenderer] SBA: row=%1 col=%2").arg(currentRow).arg(currentCol));
-            currentAttr = ui::widgets::CellAttributes();
             i += 3;
             break;
         }
@@ -88,10 +87,43 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             int fieldLen = (static_cast<uint8_t>(data[idx]) << 8) | static_cast<uint8_t>(data[idx + 1]);
             idx += 2;
 
-            // Write BLANK at attribute byte position
+            // Find the display attributes that were in effect before this SF
+            // by scanning backwards from the current position for the last
+            // attribute marker.  currentAttr is unreliable here because it
+            // may carry stale attributes from a completely different field.
+            ui::widgets::CellAttributes prevAttr;
+            {
+                int sfAddr = currentRow * screen->cols() + currentCol;
+                for (int a = sfAddr - 1; a >= 0; --a) {
+                    int pr = a / screen->cols();
+                    int pc = a % screen->cols();
+                    const auto &pc_cell = screen->cell(pr, pc);
+                    if (pc_cell.attributes.nonDisplay && pc_cell.attributes.protected_field) {
+                        prevAttr.color = pc_cell.attributes.color;
+                        prevAttr.reverse = pc_cell.attributes.reverse;
+                        prevAttr.blink = pc_cell.attributes.blink;
+                        prevAttr.underline = pc_cell.attributes.underline;
+                        prevAttr.colSep = pc_cell.attributes.colSep;
+                        break;
+                    }
+                }
+            }
+
+            // Resolve display attributes from the SF's attribute byte
+            uint8_t tableIdx = attrByte & 0x1F;
+            const auto &ae = kAttributeTable[tableIdx];
+
+            // Write the attribute marker at the attribute byte position.
+            // Store the display attributes it defines so the final
+            // inheritance pass can propagate them to subsequent cells.
             ui::widgets::CellAttributes attrPosAttr;
             attrPosAttr.protected_field = true;
             attrPosAttr.nonDisplay = true;
+            attrPosAttr.color = ae.color;
+            attrPosAttr.reverse = ae.reverse;
+            attrPosAttr.blink = ae.blink;
+            attrPosAttr.underline = ae.underline;
+            attrPosAttr.colSep = ae.colSep;
             screen->writeChar(currentRow, currentCol, 0x40, attrPosAttr);
 
             // Advance past attribute byte position
@@ -110,37 +142,37 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             screen->setField(fieldStartRow, fieldStartCol, fieldLen, isProtected);
             screen->setFieldFFW(fieldStartRow, fieldStartCol, ffw1, ffw2);
 
+            // Write an implicit field-end marker just past the last field
+            // position.  This restores the pre-SF display attributes so the
+            // inheritance pass does not bleed the field's attributes (e.g.
+            // underline) into the gap before the next explicit marker.
+            int endAddr = nextAddr + fieldLen;
+            if (endAddr < totalCells) {
+                int endRow = endAddr / screen->cols();
+                int endCol = endAddr % screen->cols();
+                auto &endCell = screen->cell(endRow, endCol);
+                // Only write if the position is not already a marker
+                if (!(endCell.attributes.nonDisplay && endCell.attributes.protected_field)) {
+                    ui::widgets::CellAttributes endAttr;
+                    endAttr.protected_field = true;
+                    endAttr.nonDisplay = true;
+                    endAttr.color = prevAttr.color;
+                    endAttr.reverse = prevAttr.reverse;
+                    endAttr.blink = prevAttr.blink;
+                    endAttr.underline = prevAttr.underline;
+                    endAttr.colSep = prevAttr.colSep;
+                    screen->writeChar(endRow, endCol, 0x40, endAttr);
+                }
+            }
+
             currentAttr = ui::widgets::CellAttributes();
             currentAttr.protected_field = isProtected;
-
-            uint8_t tableIdx = attrByte & 0x1F;
-            const auto &ae = kAttributeTable[tableIdx];
             currentAttr.color = ae.color;
             currentAttr.reverse = ae.reverse;
             currentAttr.blink = ae.blink;
             currentAttr.underline = ae.underline;
             currentAttr.nonDisplay = ae.nonDisplay;
             currentAttr.colSep = ae.colSep;
-
-            // Pre-apply the field's display attributes to all cells in the
-            // field extent.  The data stream may not contain explicit data
-            // bytes for every position (e.g. empty input fields), so cells
-            // left over from a prior Clear Unit would otherwise keep their
-            // default attributes (no underline, no color, etc.).
-            for (int fi = 0; fi < fieldLen; ++fi) {
-                int addr = nextAddr + fi;
-                int r = addr / screen->cols();
-                int c = addr % screen->cols();
-                if (r >= screen->rows()) break;
-                auto &sc = screen->cell(r, c);
-                sc.attributes.color = currentAttr.color;
-                sc.attributes.reverse = currentAttr.reverse;
-                sc.attributes.blink = currentAttr.blink;
-                sc.attributes.underline = currentAttr.underline;
-                sc.attributes.nonDisplay = currentAttr.nonDisplay;
-                sc.attributes.colSep = currentAttr.colSep;
-                sc.attributes.protected_field = currentAttr.protected_field;
-            }
 
             currentRow = fieldStartRow;
             currentCol = fieldStartCol;
@@ -468,13 +500,20 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
                 break;
             }
             if (byte >= 0x20 && byte <= 0x3F) {
-                // Attribute indicator byte — occupies a display position (shown as blank)
+                // Attribute indicator byte — occupies a display position (shown as blank).
+                // Store the display attributes it defines in the marker cell so the
+                // final inheritance pass can propagate them to subsequent cells.
+                uint8_t tableIdx = byte & 0x1F;
+                const auto &ae = kAttributeTable[tableIdx];
                 ui::widgets::CellAttributes attrPosAttr;
                 attrPosAttr.protected_field = true;
                 attrPosAttr.nonDisplay = true;
+                attrPosAttr.color = ae.color;
+                attrPosAttr.reverse = ae.reverse;
+                attrPosAttr.blink = ae.blink;
+                attrPosAttr.underline = ae.underline;
+                attrPosAttr.colSep = ae.colSep;
                 screen->writeChar(currentRow, currentCol, 0x40, attrPosAttr);
-                uint8_t tableIdx = byte & 0x1F;
-                const auto &ae = kAttributeTable[tableIdx];
                 currentAttr = ui::widgets::CellAttributes();
                 currentAttr.color = ae.color;
                 currentAttr.reverse = ae.reverse;
@@ -500,6 +539,51 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             i++;
             break;
         }
+        }
+    }
+
+    // Attribute inheritance pass — resolve display attributes from markers.
+    // In 5250, attribute indicator bytes and SF attribute bytes are positional
+    // markers: every subsequent cell inherits their display attributes until
+    // the next marker.  This pass scans the entire screen left-to-right,
+    // top-to-bottom (wrapping), propagating attributes from markers to the
+    // data cells that follow them.
+    {
+        ui::widgets::CellAttributes inherited;
+        // Seed from the last marker on screen (attributes wrap around).
+        // Scan backwards to find it.
+        for (int addr = totalCells - 1; addr >= 0; --addr) {
+            int r = addr / screen->cols();
+            int c = addr % screen->cols();
+            const auto &sc = screen->cell(r, c);
+            if (sc.attributes.nonDisplay && sc.attributes.protected_field) {
+                inherited.color = sc.attributes.color;
+                inherited.reverse = sc.attributes.reverse;
+                inherited.blink = sc.attributes.blink;
+                inherited.underline = sc.attributes.underline;
+                inherited.colSep = sc.attributes.colSep;
+                break;
+            }
+        }
+        for (int addr = 0; addr < totalCells; ++addr) {
+            int r = addr / screen->cols();
+            int c = addr % screen->cols();
+            auto &sc = screen->cell(r, c);
+            if (sc.attributes.nonDisplay && sc.attributes.protected_field) {
+                // Attribute marker — extract its display info for inheritance
+                inherited.color = sc.attributes.color;
+                inherited.reverse = sc.attributes.reverse;
+                inherited.blink = sc.attributes.blink;
+                inherited.underline = sc.attributes.underline;
+                inherited.colSep = sc.attributes.colSep;
+            } else {
+                // Data cell — inherit display attributes from preceding marker
+                sc.attributes.color = inherited.color;
+                sc.attributes.reverse = inherited.reverse;
+                sc.attributes.blink = inherited.blink;
+                sc.attributes.underline = inherited.underline;
+                sc.attributes.colSep = inherited.colSep;
+            }
         }
     }
 
