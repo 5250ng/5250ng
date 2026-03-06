@@ -155,6 +155,32 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
         }
     }
 
+    // Draw contiguous underlines: scan each row for runs of underlined cells
+    // and draw a single line spanning the full run (no gaps between cells).
+    for (int row = 0; row < rows; ++row) {
+        int col = 0;
+        while (col < cols) {
+            const ScreenCell &cell = m_screenBuffer->cell(row, col);
+            if (cell.attributes.underline && !cell.attributes.nonDisplay) {
+                int runStart = col;
+                QColor ulColor = getColorForCode(cell.attributes.color);
+                while (col < cols) {
+                    const ScreenCell &c = m_screenBuffer->cell(row, col);
+                    if (!c.attributes.underline || c.attributes.nonDisplay)
+                        break;
+                    ++col;
+                }
+                QRect startRect = cellRect(row, runStart);
+                QRect endRect = cellRect(row, col - 1);
+                int y = endRect.bottom();
+                painter.setPen(ulColor);
+                painter.drawLine(startRect.left(), y, endRect.right(), y);
+            } else {
+                ++col;
+            }
+        }
+    }
+
     // Cursor rendering handled by overlay widget when enabled
 
     // Render selection border (outer rectangle only)
@@ -223,16 +249,10 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
 
     painter.setPen(fgColor);
 
-    // Handle underline
-    QFont font = m_font;
-    if (cell.attributes.underline) {
-        font.setUnderline(true);
-        painter.setFont(font);
-    }
+    // Underline is drawn as a contiguous line in renderScreen(), not per-cell
 
     // Skip text when blinking is active and the blink state is "off"
     if (cell.attributes.blink && !m_blinkTextState) {
-        painter.setFont(m_font);
         return;
     }
 
@@ -244,9 +264,6 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
         painter.setPen(fgColor);
         painter.drawLine(cellRect.left(), cellRect.top(), cellRect.left(), cellRect.bottom());
     }
-
-    // Reset font
-    painter.setFont(m_font);
 }
 
 /**
