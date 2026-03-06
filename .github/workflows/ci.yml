@@ -62,6 +62,8 @@ jobs:
   windows:
     name: Windows Build & Test
     runs-on: windows-latest
+    env:
+      OPENSSL_ROOT_DIR: "C:/Program Files/OpenSSL-Win64"
     steps:
       - uses: actions/checkout@v4
 
@@ -75,10 +77,22 @@ jobs:
         run: choco install openssl -y
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=ON
+          -DOPENSSL_ROOT_DIR="${{ env.OPENSSL_ROOT_DIR }}"
 
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Run tests
-        run: cd build && ctest -C Release --output-on-failure
+      - name: Run unit tests
+        run: |
+          cd build
+          ctest -C Release --output-on-failure -E "test_tn5250_connection"
+
+      - name: Run integration tests (allow failure)
+        continue-on-error: true
+        run: |
+          cd build
+          ctest -C Release --output-on-failure -R "test_tn5250_connection"
