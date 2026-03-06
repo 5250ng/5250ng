@@ -287,6 +287,15 @@ if(BUILD_TESTS)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
+    add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
+
+    # Terminal theme test — needs theme sources not in tn5250_core
+    add_executable(test_terminal_theme tests/unit/test_terminal_theme.cpp
+        src/ui/themes/terminal_theme.cpp
+        src/ui/themes/terminal_theme.h
+    )
+    target_link_libraries(test_terminal_theme PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_terminal_theme COMMAND test_terminal_theme)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
