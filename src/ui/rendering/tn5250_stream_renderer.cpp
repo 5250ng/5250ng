@@ -122,6 +122,26 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             currentAttr.nonDisplay = ae.nonDisplay;
             currentAttr.colSep = ae.colSep;
 
+            // Pre-apply the field's display attributes to all cells in the
+            // field extent.  The data stream may not contain explicit data
+            // bytes for every position (e.g. empty input fields), so cells
+            // left over from a prior Clear Unit would otherwise keep their
+            // default attributes (no underline, no color, etc.).
+            for (int fi = 0; fi < fieldLen; ++fi) {
+                int addr = nextAddr + fi;
+                int r = addr / screen->cols();
+                int c = addr % screen->cols();
+                if (r >= screen->rows()) break;
+                auto &sc = screen->cell(r, c);
+                sc.attributes.color = currentAttr.color;
+                sc.attributes.reverse = currentAttr.reverse;
+                sc.attributes.blink = currentAttr.blink;
+                sc.attributes.underline = currentAttr.underline;
+                sc.attributes.nonDisplay = currentAttr.nonDisplay;
+                sc.attributes.colSep = currentAttr.colSep;
+                sc.attributes.protected_field = currentAttr.protected_field;
+            }
+
             currentRow = fieldStartRow;
             currentCol = fieldStartCol;
             i = idx;
