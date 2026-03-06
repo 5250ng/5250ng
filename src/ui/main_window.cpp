@@ -163,6 +163,13 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     tabLayout->setStretch(0, 1); // terminal view grows
     tabLayout->setStretch(1, 0); // footer
     session->container->setLayout(tabLayout);
+
+    // CRT overlay covers the entire tab (screen + hrule + footer + status bar)
+    session->crtOverlay = new ui::widgets::QCRTOverlayWidget(session->container);
+    session->crtOverlay->setVisible(false);
+    session->crtOverlay->raise();
+    // Keep overlay sized to container
+    session->container->installEventFilter(this);
     session->parser = new tn5250::client::Decoder(session->container);
     session->thread = new QThread(this);
     session->worker = new tn5250::session::Worker();
@@ -469,6 +476,16 @@ void MainWindow::applyThemeToSession(Session *session, const QString &themeId) {
     if (session->connectionStatus) {
         session->connectionStatus->setTextColor(theme.colorGreen);
     }
+    // CRT overlay applies to the entire tab
+    if (session->crtOverlay) {
+        session->crtOverlay->setEnabled(theme.crtEffectEnabled);
+        session->crtOverlay->setScanlineIntensity(theme.crtScanlineIntensity);
+        session->crtOverlay->setGlowRadius(theme.crtGlowRadius);
+        session->crtOverlay->setGlowColor(theme.colorGreen);
+        session->crtOverlay->setCurvature(theme.crtCurvature);
+        session->crtOverlay->setGeometry(session->container->rect());
+        session->crtOverlay->raise();
+    }
     session->config.setTerminalThemeId(themeId);
 
     // Update tab tooltip to show theme name
@@ -521,6 +538,16 @@ void MainWindow::dropEvent(QDropEvent *event) {
  * @return true if the event was handled, false to propagate.
  */
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // Resize CRT overlay to match its tab container
+    if (event->type() == QEvent::Resize) {
+        for (auto *s : m_sessions) {
+            if (obj == s->container && s->crtOverlay) {
+                s->crtOverlay->setGeometry(s->container->rect());
+                s->crtOverlay->raise();
+                break;
+            }
+        }
+    }
     if (obj == m_tabWidget->tabBar() && event->type() == QEvent::ContextMenu) {
         QContextMenuEvent *ce = static_cast<QContextMenuEvent *>(event);
         int tabIndex = m_tabWidget->tabBar()->tabAt(ce->pos());

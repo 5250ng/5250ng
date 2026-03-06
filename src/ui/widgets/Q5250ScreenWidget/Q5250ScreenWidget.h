@@ -146,7 +146,6 @@ class Q5250ScreenWidget : public QWidget {
     void renderCell(QPainter &painter, int row, int col, const ScreenCell &cell);
     void renderCursorRules(QPainter &painter);
     void renderSelectionBorder(QPainter &painter);
-    void renderCRTEffect(QPainter &painter);
     QColor getColorForCode(uint8_t colorCode) const;
     void updateCursorWidget();
 
@@ -205,12 +204,6 @@ class Q5250ScreenWidget : public QWidget {
     QColor m_colSepColor = QColor(128, 128, 128);
     ui::themes::TerminalTheme::ColSepStyle m_colSepStyle =
         ui::themes::TerminalTheme::Solid;
-
-    // CRT effect
-    bool m_crtEnabled = false;
-    double m_crtScanlineIntensity = 0.0;
-    double m_crtGlowRadius = 0.0;
-    double m_crtCurvature = 0.0;
 
     // Cursor blinking
     QTimer *m_blinkTimer;

@@ -10,6 +10,7 @@
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
+#include "ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.h"
 #include "ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h"
 #include <QAction>
 #include <QComboBox>
@@ -84,6 +85,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         session::SessionConfig config;
         ui::widgets::ScreenBuffer::SavedState savedScreen;
         ui::rendering::TN5250CommandHandler *commandHandler;
+        ui::widgets::QCRTOverlayWidget *crtOverlay;
     };
 
     void applyThemeToSession(Session *session, const QString &themeId);

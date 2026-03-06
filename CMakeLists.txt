@@ -157,6 +157,8 @@ set(UI_SOURCES
     src/ui/device/IBM-3179-2.cpp
     src/ui/device/IBM-3179-2.h
     # widgets
+    src/ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.cpp
+    src/ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.h
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.cpp
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h
     src/ui/widgets/Frameless/BaseFramelessWindow.cpp
@@ -319,6 +321,9 @@ endif()
 if(APPLE)
     set_target_properties(tn5250 PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist
+        MACOSX_BUNDLE_BUNDLE_NAME "5250ng"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.p0dalirius.5250ng"
     )
 endif()

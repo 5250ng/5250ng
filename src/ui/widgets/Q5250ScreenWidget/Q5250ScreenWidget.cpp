@@ -186,12 +186,6 @@ void Q5250ScreenWidget::applyTerminalTheme(const ui::themes::TerminalTheme &them
     // Apply grid mode
     m_gridMode = theme.gridMode;
 
-    // Apply CRT effect
-    m_crtEnabled = theme.crtEffectEnabled;
-    m_crtScanlineIntensity = theme.crtScanlineIntensity;
-    m_crtGlowRadius = theme.crtGlowRadius;
-    m_crtCurvature = theme.crtCurvature;
-
     calculateCellSize();
     updateGeometry();
     updateCursorWidget();
@@ -510,48 +504,7 @@ void Q5250ScreenWidget::renderBackgroundImage(QPainter &painter) {
     painter.restore();
 }
 
-void Q5250ScreenWidget::renderCRTEffect(QPainter &painter) {
-    painter.save();
-
-    // 1. Scanlines: alternating semi-transparent dark horizontal lines
-    if (m_crtScanlineIntensity > 0.01) {
-        int alpha = static_cast<int>(m_crtScanlineIntensity * 180);
-        QColor scanlineColor(0, 0, 0, alpha);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(scanlineColor);
-        for (int y = 0; y < height(); y += 2) {
-            painter.drawRect(0, y, width(), 1);
-        }
-    }
-
-    // 2. Phosphor glow: subtle green-tinted glow overlay with gradient from center
-    if (m_crtGlowRadius > 0.01) {
-        int glowAlpha = static_cast<int>(m_crtGlowRadius * 40);
-        QColor glowColor(m_fgColor.red(), m_fgColor.green(), m_fgColor.blue(), glowAlpha);
-        QRadialGradient gradient(rect().center(), qMax(width(), height()) * 0.7);
-        gradient.setColorAt(0.0, glowColor);
-        gradient.setColorAt(1.0, Qt::transparent);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(gradient);
-        painter.setCompositionMode(QPainter::CompositionMode_Plus);
-        painter.drawRect(rect());
-        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-    }
-
-    // 3. Curvature: vignette darkening at edges to simulate CRT screen curvature
-    if (m_crtCurvature > 0.01) {
-        int vignetteAlpha = static_cast<int>(m_crtCurvature * 255);
-        QRadialGradient vignette(rect().center(), qMax(width(), height()) * 0.6);
-        vignette.setColorAt(0.0, Qt::transparent);
-        vignette.setColorAt(0.7, Qt::transparent);
-        vignette.setColorAt(1.0, QColor(0, 0, 0, vignetteAlpha));
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(vignette);
-        painter.drawRect(rect());
-    }
-
-    painter.restore();
-}
+// CRT effect rendering moved to QCRTOverlayWidget (applied at tab level)
 
 void Q5250ScreenWidget::setShowCursorRules(bool enabled) {
     if (m_showCursorRules == enabled) {

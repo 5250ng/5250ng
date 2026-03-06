@@ -44,11 +44,6 @@ void Q5250ScreenWidget::paintEvent(QPaintEvent *event) {
 
     // Render screen content
     renderScreen(painter);
-
-    // CRT effect overlay (post-processing)
-    if (m_crtEnabled) {
-        renderCRTEffect(painter);
-    }
 }
 
 void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {
