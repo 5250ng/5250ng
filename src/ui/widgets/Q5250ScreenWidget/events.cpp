@@ -626,7 +626,6 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     // the field data start), per the 5250 Functions Reference.
     // READ_INPUT_FIELDS (0x42): send ALL unprotected fields
     // READ_MDT_FIELDS (0x52): send only modified fields (default)
-    int cols = m_screenBuffer->cols();
     QVector<ScreenBuffer::Field> fieldsToSend;
     if (m_readType == 0x42) {
         // READ_INPUT: all unprotected fields

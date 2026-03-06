@@ -249,7 +249,7 @@ void ThemeManager::applyToApplication(QApplication *app) {
 /**
  * Register the built-in themes (Dark, Light, High Contrast).
  *
- * Invokes builder functions in data/*.cpp to construct and register
+ * Invokes builder functions in data/ to construct and register
  * the default theme set.
  */
 void ThemeManager::loadBuiltinThemes() {

@@ -248,6 +248,12 @@ if(BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
 
     # Shared static library — compiled once, linked by all test targets
+    # Theme sources needed by Q5250ScreenWidget (applyTerminalTheme)
+    set(THEME_SOURCES
+        src/ui/themes/terminal_theme.cpp
+        src/ui/themes/terminal_theme.h
+    )
+
     add_library(tn5250_core STATIC
         ${CORE_SOURCES}
         ${SESSION_SOURCES}
@@ -256,6 +262,7 @@ if(BUILD_TESTS)
         ${LOGGER_SOURCES}
         ${UTILS_SOURCES}
         ${DISPLAY_SOURCES}
+        ${THEME_SOURCES}
     )
     target_link_libraries(tn5250_core
         PUBLIC
@@ -289,13 +296,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
 
-    # Terminal theme test — needs theme sources not in tn5250_core
-    add_executable(test_terminal_theme tests/unit/test_terminal_theme.cpp
-        src/ui/themes/terminal_theme.cpp
-        src/ui/themes/terminal_theme.h
-    )
-    target_link_libraries(test_terminal_theme PRIVATE tn5250_core Qt6::Test)
-    add_test(NAME test_terminal_theme COMMAND test_terminal_theme)
+    add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)

@@ -405,7 +405,6 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     response.append(static_cast<char>(aidByte));
 
     // SBA address points to the field data start position
-    int cols = screen->cols();
     QVector<ui::widgets::ScreenBuffer::Field> modFields = screen->getModifiedFields();
     LOG_DEBUG(QString("CommandHandler: buildFieldResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
         .arg(aidByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
