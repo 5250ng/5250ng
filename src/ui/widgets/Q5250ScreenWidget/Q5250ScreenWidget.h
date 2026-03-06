@@ -3,9 +3,11 @@
 #include "core/ebcdic.h"
 #include "core/keyboard_encoder.h"
 #include "screen_buffer.h"
+#include "ui/themes/terminal_theme.h"
 #include <QClipboard>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QTimer>
 #include <QWidget>
 #include "Q5250Cursor.h"
@@ -55,6 +57,9 @@ class Q5250ScreenWidget : public QWidget {
     // Font configuration
     void setFont(const QFont &font);
     QFont font() const { return m_font; }
+
+    // Terminal theme
+    void applyTerminalTheme(const ui::themes::TerminalTheme &theme);
 
     // Color scheme
     void setColorScheme(const QVector<QColor> &colors);
@@ -133,9 +138,11 @@ class Q5250ScreenWidget : public QWidget {
   private:
     // Rendering
     void renderScreen(QPainter &painter);
+    void renderBackgroundImage(QPainter &painter);
     void renderCell(QPainter &painter, int row, int col, const ScreenCell &cell);
     void renderCursorRules(QPainter &painter);
     void renderSelectionBorder(QPainter &painter);
+    void renderCRTEffect(QPainter &painter);
     QColor getColorForCode(uint8_t colorCode) const;
     void updateCursorWidget();
 
@@ -177,6 +184,29 @@ class Q5250ScreenWidget : public QWidget {
     QVector<QColor> m_colorScheme;
     QPoint m_cursorPos;
     Q5250Cursor *m_cursorWidget = nullptr;
+
+    // Background image
+    QPixmap m_bgImage;
+    ui::themes::TerminalTheme::BackgroundImageLayout m_bgImageLayout =
+        ui::themes::TerminalTheme::Stretch;
+    double m_bgImageOpacity = 1.0;
+    bool m_hasBgImage = false;
+
+    // Selection & indicator colors (from theme)
+    QColor m_selectionBgColor = QColor(255, 255, 0, 64);
+    QColor m_selectionFgColor = QColor(255, 255, 255);
+    QColor m_fieldIndicatorColor = QColor(0, 128, 255, 64);
+
+    // Column separator (from theme)
+    QColor m_colSepColor = QColor(128, 128, 128);
+    ui::themes::TerminalTheme::ColSepStyle m_colSepStyle =
+        ui::themes::TerminalTheme::Solid;
+
+    // CRT effect
+    bool m_crtEnabled = false;
+    double m_crtScanlineIntensity = 0.0;
+    double m_crtGlowRadius = 0.0;
+    double m_crtCurvature = 0.0;
 
     // Cursor blinking
     QTimer *m_blinkTimer;

@@ -1,0 +1,48 @@
+{
+    "id": "blue_terminal",
+    "displayName": "Blue Terminal",
+    "builtin": true,
+    "description": "Cool blue phosphor display — inspired by later-generation IBM 3278 terminals.",
+    "background": {
+        "mode": "color",
+        "color": "#000818",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM 3270",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#000818",
+        "green":  "#33bbff",
+        "white":  "#ddeeff",
+        "blue":   "#2266cc",
+        "red":    "#ff4466",
+        "cyan":   "#66ddff",
+        "pink":   "#bb88ff",
+        "yellow": "#aaddff",
+        "cursor": "#33bbff"
+    },
+    "selection": {
+        "background": "#33bbff40",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#33bbff30"
+    },
+    "columnSeparator": {
+        "color": "#1a4466",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "block",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": true,
+        "scanlineIntensity": 0.15,
+        "glowRadius": 0.12,
+        "curvature": 0.05
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

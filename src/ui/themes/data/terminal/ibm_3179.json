@@ -1,0 +1,47 @@
+{
+    "id": "ibm_3179",
+    "displayName": "IBM 3179-2",
+    "builtin": true,
+    "background": {
+        "mode": "color",
+        "color": "#000000",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM 3270",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#000000",
+        "green":  "#00c000",
+        "white":  "#ffffff",
+        "blue":   "#0000c0",
+        "red":    "#c00000",
+        "cyan":   "#00c0c0",
+        "pink":   "#c000c0",
+        "yellow": "#c0c000",
+        "cursor": "#00c000"
+    },
+    "selection": {
+        "background": "#ffff0040",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#0080ff40"
+    },
+    "columnSeparator": {
+        "color": "#808080",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "underline",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": true,
+        "scanlineIntensity": 0.15,
+        "glowRadius": 0.1,
+        "curvature": 0.05
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

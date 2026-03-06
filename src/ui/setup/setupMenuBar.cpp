@@ -17,13 +17,13 @@
  * - File:
  *   - Connect... (Ctrl+N): open the connection dialog
  *   - Disconnect: terminate the current session
- *   - Settings...: open the application settings dialog
+ *   - Settings...: open the settings dialog (Application Theme, 5250 Theme)
  *   - Exit (Ctrl+Q): quit the application
  * - Session:
  *   - New (Add Tab): create a new session tab
- *   - Settings: open settings for the active session
  *   - Open saved session (submenu): dynamically populated on aboutToShow and
  *     wired so selecting an entry triggers opening that saved session
+ *   - Theme (submenu): quick terminal theme picker
  * - Tools:
  *   - Take a Screenshot: capture the active tab as a PNG
  * - Help:
@@ -55,11 +55,14 @@ void MainWindow::setupMenuBar() {
     QAction *newSessionAction =
         sessionMenu->addAction("&New", this, &MainWindow::onNewSession);
     newSessionAction->setShortcut(QKeySequence::AddTab);
-    sessionMenu->addAction("&Settings", this, &MainWindow::onSessionSettings);
     // Quick open saved sessions submenu inside Session menu
     m_quickOpenMenu = sessionMenu->addMenu("Open saved session");
     connect(m_quickOpenMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickOpenMenu);
     connect(m_quickOpenMenu, &QMenu::triggered, this, &MainWindow::onSavedSessionChosen);
+    // Quick theme switching submenu
+    m_quickThemeMenu = sessionMenu->addMenu("Theme");
+    connect(m_quickThemeMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickThemeMenu);
+    connect(m_quickThemeMenu, &QMenu::triggered, this, &MainWindow::onQuickThemeChosen);
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");

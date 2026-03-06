@@ -17,12 +17,17 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
 #include <QTabBar>
 #include <QTimer>
 #include <QWidgetAction>
+#include "ui/themes/terminal_theme_manager.h"
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <climits>
 
 /**
@@ -39,6 +44,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
     setWindowTitle("5250ng");
     resize(1128, 836);
+    setAcceptDrops(true);
 
     setupUI();
     setupMenuBar();
@@ -129,6 +135,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     // Terminal view: screen + hrule + footer screen(1 row)
     ui::widgets::Q5250TerminalView *terminalView = new ui::widgets::Q5250TerminalView(session->container);
     tabLayout->addWidget(terminalView);
+    session->terminalView = terminalView;
     session->displayWidget = terminalView->screen();
     // Per-tab footer with connection status (left) and cursor coordinates (right)
     QHBoxLayout *footerLayout = new QHBoxLayout();
@@ -150,6 +157,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     footerWidget->setStyleSheet("background-color: black;");
     footerWidget->setMinimumHeight(22);
     footerWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    session->statusBar = footerWidget;
     tabLayout->addWidget(footerWidget);
     // Ensure the display fills remaining space and footer stays at bottom
     tabLayout->setStretch(0, 1); // terminal view grows
@@ -239,6 +247,15 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
 
     // Setup display size from session config
     session->displayWidget->setScreenSize(config.screenRows(), config.screenCols());
+
+    // Apply terminal theme from session config
+    {
+        QString themeId = config.terminalThemeId();
+        auto &mgr = ui::themes::TerminalThemeManager::instance();
+        if (!mgr.hasTheme(themeId))
+            themeId = ui::themes::TerminalThemeManager::defaultThemeId();
+        applyThemeToSession(session, themeId);
+    }
 
     // Wire display input — per-session, routes directly to this session's worker
     connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::inputReady, this,
@@ -430,6 +447,71 @@ void MainWindow::setActiveSession(int index) {
     updateCursorCoordinates();
 }
 
+void MainWindow::applyThemeToSession(Session *session, const QString &themeId) {
+    auto &mgr = ui::themes::TerminalThemeManager::instance();
+    if (!mgr.hasTheme(themeId)) return;
+
+    auto theme = mgr.resolvedTheme(themeId);
+    if (session->terminalView) {
+        session->terminalView->applyTerminalTheme(theme);
+    }
+    QString bgHex = theme.backgroundColor.name(QColor::HexRgb);
+    QString fgHex = theme.colorGreen.name(QColor::HexRgb);
+    if (session->statusBar) {
+        session->statusBar->setStyleSheet(
+            QString("background-color: %1;").arg(bgHex));
+    }
+    if (session->coordinatesLabel) {
+        session->coordinatesLabel->setStyleSheet(
+            QString("color: %1; background-color: %2; padding: 0px;")
+                .arg(fgHex, bgHex));
+    }
+    if (session->connectionStatus) {
+        session->connectionStatus->setTextColor(theme.colorGreen);
+    }
+    session->config.setTerminalThemeId(themeId);
+
+    // Update tab tooltip to show theme name
+    int idx = m_sessions.indexOf(session);
+    if (idx >= 0) {
+        QString host = session->config.hostname();
+        m_tabWidget->setTabToolTip(idx,
+            QString("%1 — Theme: %2").arg(host.isEmpty() ? "Session" : host,
+                                           theme.displayName));
+    }
+}
+
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
+    if (event->mimeData()->hasUrls()) {
+        for (const QUrl &url : event->mimeData()->urls()) {
+            QString path = url.toLocalFile();
+            if (path.endsWith(".5250theme", Qt::CaseInsensitive)
+                || path.endsWith(".json", Qt::CaseInsensitive)) {
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event) {
+    auto &mgr = ui::themes::TerminalThemeManager::instance();
+    int imported = 0;
+    for (const QUrl &url : event->mimeData()->urls()) {
+        QString path = url.toLocalFile();
+        if (path.endsWith(".5250theme", Qt::CaseInsensitive)
+            || path.endsWith(".json", Qt::CaseInsensitive)) {
+            if (mgr.importTheme(path)) {
+                ++imported;
+            }
+        }
+    }
+    if (imported > 0) {
+        QMessageBox::information(this, "Import Theme",
+            QString("Imported %1 theme(s) successfully.").arg(imported));
+    }
+}
 
 /**
  * Intercept context menu events on the tab bar to support per-tab actions.
@@ -445,12 +527,47 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         if (tabIndex >= 0) {
             QMenu menu(this);
             QAction *rename = menu.addAction("Rename");
+
+            // Theme submenu in context menu
+            QMenu *themeSubMenu = menu.addMenu("Theme");
+            if (tabIndex >= 0 && tabIndex < m_sessions.size()) {
+                auto &mgr = ui::themes::TerminalThemeManager::instance();
+                QString curId = m_sessions[tabIndex]->config.terminalThemeId();
+                for (const QString &id : mgr.availableThemes()) {
+                    ui::themes::TerminalTheme t = mgr.theme(id);
+                    // Color swatch icon
+                    QPixmap swatch(16, 16);
+                    swatch.fill(t.backgroundColor);
+                    QPainter sp(&swatch);
+                    sp.setPen(Qt::NoPen);
+                    sp.setBrush(t.colorGreen);
+                    sp.drawRect(4, 4, 8, 8);
+                    sp.end();
+
+                    QString label = t.displayName;
+                    QAction *a = themeSubMenu->addAction(QIcon(swatch), label);
+                    a->setData(id);
+                    a->setCheckable(true);
+                    a->setChecked(id == curId);
+                }
+            }
+
+            menu.addSeparator();
             QAction *close = menu.addAction("Close");
             QAction *chosen = menu.exec(ce->globalPos());
             if (chosen == rename) {
                 onRenameTabRequested(tabIndex);
             } else if (chosen == close) {
                 onCloseTabRequested(tabIndex);
+            } else if (chosen && chosen->parent() == themeSubMenu) {
+                // Theme was chosen from context menu
+                QString themeId = chosen->data().toString();
+                if (!themeId.isEmpty() && tabIndex < m_sessions.size()) {
+                    applyThemeToSession(m_sessions[tabIndex], themeId);
+                    if (tabIndex == m_activeIndex) {
+                        m_currentSession.setTerminalThemeId(themeId);
+                    }
+                }
             }
             return true;
         }

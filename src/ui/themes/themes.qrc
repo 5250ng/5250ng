@@ -3,6 +3,24 @@
     <file>data/dark.json</file>
     <file>data/light.json</file>
     <file>data/highcontrast.json</file>
+    <file>data/terminal/classic_green.json</file>
+    <file>data/terminal/classic_white.json</file>
+    <file>data/terminal/modern_dark.json</file>
+    <file>data/terminal/ibm_3179.json</file>
+    <file>data/terminal/high_contrast.json</file>
+    <file>data/terminal/solarized_dark.json</file>
+    <file>data/terminal/amber_phosphor.json</file>
+    <file>data/terminal/blue_terminal.json</file>
+    <file>data/terminal/matrix.json</file>
+    <file>data/terminal/dracula.json</file>
+    <file>data/terminal/nord.json</file>
+    <file>data/terminal/monokai.json</file>
+  </qresource>
+  <qresource prefix="/fonts">
+    <file>data/fonts/3270-Regular.ttf</file>
+    <file>data/fonts/3270SemiCondensed-Regular.ttf</file>
+    <file>data/fonts/IBMPlexMono-Regular.ttf</file>
+    <file>data/fonts/IBMPlexMono-Bold.ttf</file>
   </qresource>
 </RCC>
 

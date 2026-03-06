@@ -1,0 +1,48 @@
+{
+    "id": "amber_phosphor",
+    "displayName": "Amber Phosphor",
+    "builtin": true,
+    "description": "Classic amber CRT terminal — warm phosphor glow reminiscent of early 1980s displays.",
+    "background": {
+        "mode": "color",
+        "color": "#1a0800",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM 3270",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#1a0800",
+        "green":  "#ffb000",
+        "white":  "#ffe0a0",
+        "blue":   "#cc8800",
+        "red":    "#ff6600",
+        "cyan":   "#ffcc44",
+        "pink":   "#ff9944",
+        "yellow": "#ffdd66",
+        "cursor": "#ffb000"
+    },
+    "selection": {
+        "background": "#ffb00040",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#ffb00030"
+    },
+    "columnSeparator": {
+        "color": "#664400",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "underline",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": true,
+        "scanlineIntensity": 0.2,
+        "glowRadius": 0.15,
+        "curvature": 0.08
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

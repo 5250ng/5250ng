@@ -1,6 +1,7 @@
 #include "connect_dialog.h"
 #include "core/codepage.h"
 #include "session/manager.h"
+#include "ui/themes/terminal_theme_manager.h"
 #include <QGroupBox>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -135,6 +136,22 @@ void ConnectDialog::setupUI() {
     codePageGroup->setLayout(codePageLayout);
     mainLayout->addWidget(codePageGroup);
 
+    // Terminal theme group
+    QGroupBox *themeGroup = new QGroupBox("Terminal Theme", this);
+    QFormLayout *themeLayout = new QFormLayout(themeGroup);
+    m_themeCombo = new QComboBox(this);
+    auto &themeMgr = ui::themes::TerminalThemeManager::instance();
+    for (const QString &id : themeMgr.availableThemes()) {
+        ui::themes::TerminalTheme t = themeMgr.theme(id);
+        QString label = t.displayName;
+        if (t.builtin)
+            label += " (built-in)";
+        m_themeCombo->addItem(label, id);
+    }
+    themeLayout->addRow("Theme:", m_themeCombo);
+    themeGroup->setLayout(themeLayout);
+    mainLayout->addWidget(themeGroup);
+
     // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     m_connectButton = new QPushButton("Connect", this);
@@ -193,6 +210,12 @@ void ConnectDialog::updateUI() {
     if (cpIdx >= 0) {
         m_codePageCombo->setCurrentIndex(cpIdx);
     }
+
+    // Terminal theme
+    int themeIdx = m_themeCombo->findData(m_currentConfig.terminalThemeId());
+    if (themeIdx >= 0) {
+        m_themeCombo->setCurrentIndex(themeIdx);
+    }
 }
 
 session::SessionConfig ConnectDialog::getSessionConfig() const {
@@ -212,6 +235,7 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setPassword(m_passwordEdit->text());
     config.setCodePage(static_cast<core::CodePage::ID>(
         m_codePageCombo->currentData().toInt()));
+    config.setTerminalThemeId(m_themeCombo->currentData().toString());
     return config;
 }
 

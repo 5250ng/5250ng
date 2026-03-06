@@ -42,6 +42,11 @@ QString QConnectionStatusWidget::statusText() const {
     return m_text->text();
 }
 
+void QConnectionStatusWidget::setTextColor(const QColor &color) {
+    m_text->setStyleSheet(
+        QString("color: %1; background: transparent;").arg(color.name(QColor::HexRgb)));
+}
+
 void QConnectionStatusWidget::updateVisuals() {
     // Set dynamic property used by themes to style the dot
     // Values: "disconnected", "connecting", "negotiating", "connected", "error"

@@ -1,5 +1,6 @@
 #include "ui/main_window.h"
 #include "ui/themes/manager.h"
+#include "ui/themes/terminal_theme_manager.h"
 #include <QComboBox>
 #include <QFrame>
 #include <QLabel>
@@ -67,7 +68,17 @@ void MainWindow::setupUI() {
     m_parser = nullptr;
 
     // Empty placeholder (visible when no tabs)
+    // Use default terminal theme colors for a cohesive look
+    auto &termThemeMgr = ui::themes::TerminalThemeManager::instance();
+    ui::themes::TerminalTheme defTheme = termThemeMgr.resolvedTheme(
+        ui::themes::TerminalThemeManager::defaultThemeId());
+    QString emptyFg = defTheme.colorGreen.name(QColor::HexRgb);
+    QString emptyBg = defTheme.backgroundColor.name(QColor::HexRgb);
+    QString emptyDim = defTheme.colorGreen.darker(150).name(QColor::HexRgb);
+
     m_emptyPlaceholder = new QWidget(this);
+    m_emptyPlaceholder->setStyleSheet(
+        QString("background-color: %1;").arg(emptyBg));
     // Outer layout to center the box
     QHBoxLayout *outerLayout = new QHBoxLayout(m_emptyPlaceholder);
     outerLayout->setContentsMargins(0, 0, 0, 0);
@@ -79,18 +90,19 @@ void MainWindow::setupUI() {
     emptyLayout->addStretch();
     QLabel *title = new QLabel("5250ng", this);
     {
-        QFont f = title->font();
+        QFont f(defTheme.fontFamily.isEmpty() ? "Courier" : defTheme.fontFamily);
         f.setBold(true);
-        f.setPointSize(f.pointSize() + 8);
+        f.setPointSize(22);
         title->setFont(f);
     }
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet("color: #cccccc;");
+    title->setStyleSheet(QString("color: %1; background: transparent;").arg(emptyFg));
     emptyLayout->addWidget(title);
     emptyLayout->addSpacing(6);
     QLabel *emptyText = new QLabel("No sessions currently open.", this);
     emptyText->setAlignment(Qt::AlignCenter);
-    emptyText->setStyleSheet("color: #cccccc; font-size: 16px;");
+    emptyText->setStyleSheet(
+        QString("color: %1; font-size: 16px; background: transparent;").arg(emptyDim));
     emptyLayout->addWidget(emptyText);
     emptyLayout->addSpacing(8);
     QPushButton *newSessionBtn = new QPushButton("Create New Session", this);
@@ -103,12 +115,14 @@ void MainWindow::setupUI() {
     hr->setFrameShape(QFrame::HLine);
     hr->setFrameShadow(QFrame::Sunken);
     hr->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    hr->setStyleSheet(QString("color: %1;").arg(emptyDim));
     emptyLayout->addWidget(hr);
     emptyLayout->addSpacing(8);
     // Open saved session label and dropdown
     QLabel *openLabel = new QLabel("Open saved session", this);
     openLabel->setAlignment(Qt::AlignCenter);
-    openLabel->setStyleSheet("color: #cccccc; font-size: 16px;");
+    openLabel->setStyleSheet(
+        QString("color: %1; font-size: 16px; background: transparent;").arg(emptyDim));
     emptyLayout->addWidget(openLabel);
     m_emptyOpenCombo = new QComboBox(this);
     m_emptyOpenCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);

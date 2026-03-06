@@ -15,6 +15,8 @@
 #include <QVBoxLayout>
 #include <QVector>
 
+namespace ui::themes { class TerminalThemeManager; }
+
 class ConnectDialog : public QDialog {
     Q_OBJECT
 
@@ -65,6 +67,7 @@ class ConnectDialog : public QDialog {
     QPushButton *m_deleteSessionButton;
     QGroupBox *m_displayGroup;
     QComboBox *m_codePageCombo;
+    QComboBox *m_themeCombo;
 
     session::SessionConfig m_currentConfig;
     QVector<tn5250::devices::Device> m_supported;

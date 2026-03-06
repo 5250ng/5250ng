@@ -45,6 +45,10 @@ class SessionConfig : public QObject {
     core::CodePage::ID codePage() const { return m_codePage; }
     void setCodePage(core::CodePage::ID cp) { m_codePage = cp; }
 
+    // Terminal theme
+    QString terminalThemeId() const { return m_terminalThemeId; }
+    void setTerminalThemeId(const QString &id) { m_terminalThemeId = id; }
+
     // Credentials (transient — not serialized to JSON)
     QString username() const { return m_username; }
     void setUsername(const QString &username) { m_username = username; }
@@ -71,6 +75,7 @@ class SessionConfig : public QObject {
     int m_screenRows;
     int m_screenCols;
     core::CodePage::ID m_codePage;
+    QString m_terminalThemeId;
     QString m_username;
     QString m_password;
 };

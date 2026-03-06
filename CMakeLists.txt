@@ -169,10 +169,20 @@ set(UI_SOURCES
     src/ui/dialogs/connect_dialog.cpp
     src/ui/dialogs/connect_dialog.h
     src/ui/dialogs/settings_dialog.cpp
-    src/ui/dialogs/settings_dialog.h    
+    src/ui/dialogs/settings_dialog.h
+    src/ui/dialogs/session_settings_dialog.cpp
+    src/ui/dialogs/session_settings_dialog.h
+    src/ui/dialogs/theme_preview_widget.cpp
+    src/ui/dialogs/theme_preview_widget.h
     # themes
     src/ui/themes/manager.cpp
     src/ui/themes/manager.h
+    src/ui/themes/font_loader.cpp
+    src/ui/themes/font_loader.h
+    src/ui/themes/terminal_theme.cpp
+    src/ui/themes/terminal_theme.h
+    src/ui/themes/terminal_theme_manager.cpp
+    src/ui/themes/terminal_theme_manager.h
     src/ui/themes/themes.qrc
     # actions
     src/ui/actions/onAbout.cpp
@@ -185,9 +195,9 @@ set(UI_SOURCES
     src/ui/actions/onNewSession.cpp
     src/ui/actions/onOpenSettings.cpp
     src/ui/actions/onQuickOpenChanged.cpp
+    src/ui/actions/onQuickTheme.cpp
     src/ui/actions/onRenameTabRequested.cpp
     src/ui/actions/onSavedSessionChosen.cpp
-    src/ui/actions/onSessionSettings.cpp
     src/ui/actions/onTabMoved.cpp
     src/ui/actions/onTakeScreenshot.cpp
     # setup

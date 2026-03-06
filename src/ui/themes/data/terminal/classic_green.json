@@ -1,0 +1,47 @@
+{
+    "id": "classic_green",
+    "displayName": "Classic Green Screen",
+    "builtin": true,
+    "background": {
+        "mode": "color",
+        "color": "#000000",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM 3270",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#000000",
+        "green":  "#00ff00",
+        "white":  "#ffffff",
+        "blue":   "#5555ff",
+        "red":    "#ff5555",
+        "cyan":   "#00ffff",
+        "pink":   "#ff55ff",
+        "yellow": "#ffff55",
+        "cursor": "#00ff00"
+    },
+    "selection": {
+        "background": "#ffff0040",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#0080ff40"
+    },
+    "columnSeparator": {
+        "color": "#808080",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "block",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.3,
+        "glowRadius": 0.2,
+        "curvature": 0.1
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

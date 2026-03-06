@@ -1,0 +1,47 @@
+{
+    "id": "solarized_dark",
+    "displayName": "Solarized Dark",
+    "builtin": true,
+    "background": {
+        "mode": "color",
+        "color": "#002b36",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#002b36",
+        "green":  "#859900",
+        "white":  "#eee8d5",
+        "blue":   "#268bd2",
+        "red":    "#dc322f",
+        "cyan":   "#2aa198",
+        "pink":   "#d33682",
+        "yellow": "#b58900",
+        "cursor": "#839496"
+    },
+    "selection": {
+        "background": "#073642",
+        "foreground": "#eee8d5",
+        "fieldIndicator": "#07364260"
+    },
+    "columnSeparator": {
+        "color": "#586e75",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "block",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.0,
+        "glowRadius": 0.0,
+        "curvature": 0.0
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

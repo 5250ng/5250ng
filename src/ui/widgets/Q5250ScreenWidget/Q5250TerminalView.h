@@ -4,6 +4,7 @@
 #include <QVBoxLayout>
 #include "Q5250ScreenWidget.h"
 #include "Q5250HRule.h"
+#include "ui/themes/terminal_theme.h"
 
 namespace ui::widgets {
 
@@ -19,6 +20,7 @@ class Q5250TerminalView : public QWidget {
 
     void setScreenSize(int rows, int cols);
     void setFont(const QFont &font);
+    void applyTerminalTheme(const ui::themes::TerminalTheme &theme);
     void updateStatusIndicators();
 
   private slots:

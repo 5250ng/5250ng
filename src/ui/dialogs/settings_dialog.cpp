@@ -8,9 +8,15 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent) {
 
 SettingsDialog::~SettingsDialog() {}
 
+void SettingsDialog::setTerminalTheme(const ui::themes::TerminalTheme &theme) {
+    if (m_terminalThemePage) {
+        m_terminalThemePage->setTheme(theme);
+    }
+}
+
 void SettingsDialog::setupUI() {
     setWindowTitle("Settings");
-    resize(800, 500);
+    resize(850, 650);
 
     QVBoxLayout *rootLayout = new QVBoxLayout(this);
     m_splitter = new QSplitter(Qt::Horizontal, this);
@@ -18,14 +24,28 @@ void SettingsDialog::setupUI() {
     // Left: category tree
     m_categoryTree = new QTreeWidget(this);
     m_categoryTree->setHeaderHidden(true);
-    QTreeWidgetItem *themeItem = new QTreeWidgetItem(QStringList() << "Theme");
+    QTreeWidgetItem *themeItem = new QTreeWidgetItem(QStringList() << "Application Theme");
     m_categoryTree->addTopLevelItem(themeItem);
+    QTreeWidgetItem *termThemeItem = new QTreeWidgetItem(QStringList() << "5250 Theme");
+    m_categoryTree->addTopLevelItem(termThemeItem);
     m_categoryTree->setCurrentItem(themeItem);
 
     // Right: pages
     m_pages = new QStackedWidget(this);
     m_themePage = buildThemePage();
-    m_pages->addWidget(m_themePage); // index 0: theme
+    m_pages->addWidget(m_themePage); // index 0: application theme
+
+    // 5250 Theme page — embed the SessionSettingsDialog as a plain widget
+    m_terminalThemePage = new SessionSettingsDialog(this);
+    m_terminalThemePage->setWindowFlags(Qt::Widget);
+    m_terminalThemePage->setWindowTitle(QString()); // not shown as dialog
+    m_pages->addWidget(m_terminalThemePage); // index 1: 5250 theme
+
+    // Forward the embedded editor's signals
+    connect(m_terminalThemePage, &SessionSettingsDialog::applyRequested,
+            this, &SettingsDialog::terminalThemeApplyRequested);
+    connect(m_terminalThemePage, &SessionSettingsDialog::applyToAllRequested,
+            this, &SettingsDialog::terminalThemeApplyToAllRequested);
 
     m_splitter->addWidget(m_categoryTree);
     m_splitter->addWidget(m_pages);
@@ -97,8 +117,10 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
     Q_UNUSED(previous);
     if (!current)
         return;
-    if (current->text(0) == "Theme") {
+    if (current->text(0) == "Application Theme") {
         m_pages->setCurrentWidget(m_themePage);
+    } else if (current->text(0) == "5250 Theme") {
+        m_pages->setCurrentWidget(m_terminalThemePage);
     }
 }
 

@@ -1,0 +1,48 @@
+{
+    "id": "nord",
+    "displayName": "Nord",
+    "builtin": true,
+    "description": "Arctic, north-bluish color palette — clean and low-contrast.",
+    "background": {
+        "mode": "color",
+        "color": "#2e3440",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#2e3440",
+        "green":  "#a3be8c",
+        "white":  "#eceff4",
+        "blue":   "#5e81ac",
+        "red":    "#bf616a",
+        "cyan":   "#88c0d0",
+        "pink":   "#b48ead",
+        "yellow": "#ebcb8b",
+        "cursor": "#d8dee9"
+    },
+    "selection": {
+        "background": "#434c5e",
+        "foreground": "#eceff4",
+        "fieldIndicator": "#434c5e60"
+    },
+    "columnSeparator": {
+        "color": "#3b4252",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "block",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.0,
+        "glowRadius": 0.0,
+        "curvature": 0.0
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

@@ -40,6 +40,15 @@ void Q5250TerminalView::setFont(const QFont &font) {
     m_footer->setFont(font);
 }
 
+void Q5250TerminalView::applyTerminalTheme(const ui::themes::TerminalTheme &theme) {
+    m_screen->applyTerminalTheme(theme);
+    m_footer->applyTerminalTheme(theme);
+    // HRule gets a dimmed version of the foreground color
+    QColor ruleColor = theme.colorGreen;
+    ruleColor.setAlpha(100);
+    m_rule->setColor(ruleColor);
+}
+
 void Q5250TerminalView::onScreenSizeChanged(int rows, int cols) {
     Q_UNUSED(rows);
     m_footer->setScreenSize(1, cols);

@@ -1,0 +1,47 @@
+{
+    "id": "modern_dark",
+    "displayName": "Modern Dark",
+    "builtin": true,
+    "background": {
+        "mode": "color",
+        "color": "#1e1e1e",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "colors": {
+        "black":  "#1e1e1e",
+        "green":  "#4ec94e",
+        "white":  "#d4d4d4",
+        "blue":   "#569cd6",
+        "red":    "#f44747",
+        "cyan":   "#4ec9b0",
+        "pink":   "#c586c0",
+        "yellow": "#dcdcaa",
+        "cursor": "#aeafad"
+    },
+    "selection": {
+        "background": "#264f7840",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#264f7830"
+    },
+    "columnSeparator": {
+        "color": "#404040",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "bar",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.0,
+        "glowRadius": 0.0,
+        "curvature": 0.0
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

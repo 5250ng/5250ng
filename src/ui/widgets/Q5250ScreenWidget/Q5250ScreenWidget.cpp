@@ -116,6 +116,75 @@ void Q5250ScreenWidget::setFont(const QFont &font) {
     update();
 }
 
+void Q5250ScreenWidget::applyTerminalTheme(const ui::themes::TerminalTheme &theme) {
+    // Apply color scheme
+    m_colorScheme = theme.buildColorScheme();
+
+    // Apply background color
+    m_bgColor = theme.backgroundColor;
+
+    // Apply background image
+    if (theme.backgroundMode == ui::themes::TerminalTheme::Image
+        && !theme.backgroundImagePath.isEmpty()) {
+        m_bgImage = QPixmap(theme.backgroundImagePath);
+        m_hasBgImage = !m_bgImage.isNull();
+    } else if (!theme.backgroundImageData.isEmpty()) {
+        m_bgImage.loadFromData(theme.backgroundImageData);
+        m_hasBgImage = !m_bgImage.isNull();
+    } else {
+        m_bgImage = QPixmap();
+        m_hasBgImage = false;
+    }
+    m_bgImageLayout = theme.backgroundImageLayout;
+    m_bgImageOpacity = theme.backgroundImageOpacity;
+
+    // Apply foreground (use green as default foreground)
+    m_fgColor = theme.colorGreen;
+
+    // Apply font
+    QFont newFont(theme.fontFamily, theme.fontSize);
+    m_baseFont = newFont;
+    m_font = newFont;
+
+    // Apply cursor
+    if (m_cursorWidget) {
+        m_cursorWidget->setColor(theme.cursorColor);
+        m_cursorWidget->setCursorShape(theme.cursorShape);
+    }
+    m_cursorBlinkRate = theme.cursorBlinkRateMs;
+    if (m_blinkTimer) {
+        if (m_cursorBlinkRate > 0) {
+            m_blinkTimer->setInterval(m_cursorBlinkRate);
+            if (!m_blinkTimer->isActive()) {
+                m_blinkTimer->start(m_cursorBlinkRate);
+            }
+        } else {
+            m_blinkTimer->stop();
+            m_cursorBlinkState = true;
+        }
+    }
+
+    // Apply selection & indicator colors
+    m_selectionBgColor = theme.selectionBackground;
+    m_selectionFgColor = theme.selectionForeground;
+    m_fieldIndicatorColor = theme.fieldIndicatorColor;
+
+    // Apply column separator settings
+    m_colSepColor = theme.columnSeparatorColor;
+    m_colSepStyle = theme.columnSeparatorStyle;
+
+    // Apply CRT effect
+    m_crtEnabled = theme.crtEffectEnabled;
+    m_crtScanlineIntensity = theme.crtScanlineIntensity;
+    m_crtGlowRadius = theme.crtGlowRadius;
+    m_crtCurvature = theme.crtCurvature;
+
+    calculateCellSize();
+    updateGeometry();
+    updateCursorWidget();
+    update();
+}
+
 void Q5250ScreenWidget::setColorScheme(const QVector<QColor> &colors) {
     if (colors.size() >= 16) {
         m_colorScheme = colors;
@@ -230,13 +299,12 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
 
     // Input fields overlay
     if (m_showInputFields && m_screenBuffer->isInField(row, col)) {
-        painter.fillRect(cellRect, QColor(0, 128, 255, 64));     // Light blue 25%
+        painter.fillRect(cellRect, m_fieldIndicatorColor);
     }
 
-    // If selected, overlay semi-transparent yellow (25% opacity)
+    // Selection overlay
     if (hasSelection() && isCellSelected(row, col)) {
-        QColor selOverlay(255, 255, 0, static_cast<int>(255 * 0.25)); // 25% alpha
-        painter.fillRect(cellRect, selOverlay);
+        painter.fillRect(cellRect, m_selectionBgColor);
     }
 
     // Non-display fields: draw background only, no text (e.g. password fields)
@@ -259,9 +327,25 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
     // Draw text
     painter.drawText(cellRect, Qt::AlignCenter, ch);
 
-    // Column separator: 1px vertical line on left edge of cell
+    // Column separator: vertical line on left edge of cell
     if (cell.attributes.colSep) {
-        painter.setPen(fgColor);
+        QPen colSepPen;
+        switch (m_colSepStyle) {
+        case ui::themes::TerminalTheme::Dotted:
+            colSepPen = QPen(m_colSepColor, 1, Qt::DotLine);
+            break;
+        case ui::themes::TerminalTheme::Dimmed: {
+            QColor dimmed = m_colSepColor;
+            dimmed.setAlpha(dimmed.alpha() / 2);
+            colSepPen = QPen(dimmed, 1, Qt::SolidLine);
+            break;
+        }
+        case ui::themes::TerminalTheme::Solid:
+        default:
+            colSepPen = QPen(m_colSepColor, 1, Qt::SolidLine);
+            break;
+        }
+        painter.setPen(colSepPen);
         painter.drawLine(cellRect.left(), cellRect.top(), cellRect.left(), cellRect.bottom());
     }
 }
@@ -369,6 +453,85 @@ void Q5250ScreenWidget::renderCursorRules(QPainter &painter) {
     painter.drawLine(vx, 0, vx, screenHeight);
     // Right to left (draw full width; direction doesn't matter visually)
     painter.drawLine(screenWidth, hy, 0, hy);
+    painter.restore();
+}
+
+void Q5250ScreenWidget::renderBackgroundImage(QPainter &painter) {
+    if (m_bgImage.isNull()) return;
+
+    painter.save();
+    painter.setOpacity(m_bgImageOpacity);
+
+    switch (m_bgImageLayout) {
+    case ui::themes::TerminalTheme::Stretch:
+        painter.drawPixmap(rect(), m_bgImage);
+        break;
+    case ui::themes::TerminalTheme::Fit: {
+        QPixmap scaled = m_bgImage.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        int x = (width() - scaled.width()) / 2;
+        int y = (height() - scaled.height()) / 2;
+        painter.drawPixmap(x, y, scaled);
+        break;
+    }
+    case ui::themes::TerminalTheme::Center: {
+        int x = (width() - m_bgImage.width()) / 2;
+        int y = (height() - m_bgImage.height()) / 2;
+        painter.drawPixmap(x, y, m_bgImage);
+        break;
+    }
+    case ui::themes::TerminalTheme::Tile: {
+        for (int y = 0; y < height(); y += m_bgImage.height()) {
+            for (int x = 0; x < width(); x += m_bgImage.width()) {
+                painter.drawPixmap(x, y, m_bgImage);
+            }
+        }
+        break;
+    }
+    }
+
+    painter.restore();
+}
+
+void Q5250ScreenWidget::renderCRTEffect(QPainter &painter) {
+    painter.save();
+
+    // 1. Scanlines: alternating semi-transparent dark horizontal lines
+    if (m_crtScanlineIntensity > 0.01) {
+        int alpha = static_cast<int>(m_crtScanlineIntensity * 180);
+        QColor scanlineColor(0, 0, 0, alpha);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(scanlineColor);
+        for (int y = 0; y < height(); y += 2) {
+            painter.drawRect(0, y, width(), 1);
+        }
+    }
+
+    // 2. Phosphor glow: subtle green-tinted glow overlay with gradient from center
+    if (m_crtGlowRadius > 0.01) {
+        int glowAlpha = static_cast<int>(m_crtGlowRadius * 40);
+        QColor glowColor(m_fgColor.red(), m_fgColor.green(), m_fgColor.blue(), glowAlpha);
+        QRadialGradient gradient(rect().center(), qMax(width(), height()) * 0.7);
+        gradient.setColorAt(0.0, glowColor);
+        gradient.setColorAt(1.0, Qt::transparent);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(gradient);
+        painter.setCompositionMode(QPainter::CompositionMode_Plus);
+        painter.drawRect(rect());
+        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+    }
+
+    // 3. Curvature: vignette darkening at edges to simulate CRT screen curvature
+    if (m_crtCurvature > 0.01) {
+        int vignetteAlpha = static_cast<int>(m_crtCurvature * 255);
+        QRadialGradient vignette(rect().center(), qMax(width(), height()) * 0.6);
+        vignette.setColorAt(0.0, Qt::transparent);
+        vignette.setColorAt(0.7, Qt::transparent);
+        vignette.setColorAt(1.0, QColor(0, 0, 0, vignetteAlpha));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(vignette);
+        painter.drawRect(rect());
+    }
+
     painter.restore();
 }
 

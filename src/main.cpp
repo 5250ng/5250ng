@@ -3,6 +3,8 @@
 #include "session/manager.h"
 #include "ui/main_window.h"
 #include "ui/themes/manager.h"
+#include "ui/themes/font_loader.h"
+#include "ui/themes/terminal_theme_manager.h"
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -87,10 +89,17 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Register bundled terminal fonts before any widget creation
+    ui::themes::loadBundledFonts();
+
     // Load themes early so UI can query theme colors
     ui::themes::ThemeManager::instance().loadBuiltinThemes();
     // Optionally set a default theme
     ui::themes::ThemeManager::instance().setCurrentTheme("dark");
+
+    // Load terminal themes (builtin + user-created)
+    ui::themes::TerminalThemeManager::instance().loadBuiltinThemes();
+    ui::themes::TerminalThemeManager::instance().loadUserThemes();
 
     MainWindow win;
     win.show();

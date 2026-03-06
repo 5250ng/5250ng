@@ -1,6 +1,8 @@
 #pragma once
 
+#include "session_settings_dialog.h"
 #include "ui/themes/manager.h"
+#include "ui/themes/terminal_theme.h"
 #include <QComboBox>
 #include <QDialog>
 #include <QHBoxLayout>
@@ -18,6 +20,16 @@ class SettingsDialog : public QDialog {
     explicit SettingsDialog(QWidget *parent = nullptr);
     ~SettingsDialog();
 
+    /// Access the embedded 5250 theme editor so callers can wire up signals.
+    SessionSettingsDialog *terminalThemeEditor() const { return m_terminalThemePage; }
+
+    /// Pre-select a terminal theme in the embedded editor.
+    void setTerminalTheme(const ui::themes::TerminalTheme &theme);
+
+  signals:
+    void terminalThemeApplyRequested(const ui::themes::TerminalTheme &theme);
+    void terminalThemeApplyToAllRequested(const ui::themes::TerminalTheme &theme);
+
   private slots:
     void onCategoryChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
     void onThemeChanged();
@@ -33,8 +45,11 @@ class SettingsDialog : public QDialog {
     QTreeWidget *m_categoryTree;
     QStackedWidget *m_pages;
 
-    // Theme page widgets
+    // Application Theme page widgets
     QWidget *m_themePage;
     QComboBox *m_themeCombo;
     QPushButton *m_applyThemeBtn;
+
+    // 5250 Theme page (embedded SessionSettingsDialog)
+    SessionSettingsDialog *m_terminalThemePage;
 };

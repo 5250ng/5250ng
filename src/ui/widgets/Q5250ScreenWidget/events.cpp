@@ -30,15 +30,25 @@ bool Q5250ScreenWidget::event(QEvent *ev) {
 }
 
 void Q5250ScreenWidget::paintEvent(QPaintEvent *event) {
+    Q_UNUSED(event);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    // Fill background
+    // Fill background color
     painter.fillRect(rect(), m_bgColor);
 
-    // Render screen
+    // Render background image if present
+    if (m_hasBgImage && !m_bgImage.isNull()) {
+        renderBackgroundImage(painter);
+    }
+
+    // Render screen content
     renderScreen(painter);
 
+    // CRT effect overlay (post-processing)
+    if (m_crtEnabled) {
+        renderCRTEffect(painter);
+    }
 }
 
 void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "network/tn5250/client/client.h"
+#include <QColor>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QWidget>
@@ -23,6 +24,7 @@ class QConnectionStatusWidget : public QWidget {
 
     void setStatusText(const QString &text);
     QString statusText() const;
+    void setTextColor(const QColor &color);
 
   private:
     QLabel *m_dot;

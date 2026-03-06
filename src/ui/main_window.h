@@ -9,6 +9,7 @@
 #include "ui/rendering/tn5250_command_handler.h"
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
+#include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
 #include "ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h"
 #include <QAction>
 #include <QComboBox>
@@ -34,6 +35,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
 
   protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
   private slots:
     void onConnect();
@@ -45,7 +48,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onCloseTabRequested(int index);
     void onRenameTabRequested(int index);
     void onNewSession();
-    void onSessionSettings();
     void onAbout();
     void onTakeScreenshot();
     void onToggleCursorRules();
@@ -58,6 +60,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onSavedSessionChosen(QAction *action);
     void onOpenSettings();
     void onViewSessionLogs();
+    void rebuildQuickThemeMenu();
+    void onQuickThemeChosen(QAction *action);
 
   private:
     void setupUI();
@@ -69,22 +73,27 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
 
     struct Session {
         QWidget *container;
+        ui::widgets::Q5250TerminalView *terminalView;
         ui::widgets::Q5250ScreenWidget *displayWidget;
         tn5250::client::Decoder *parser;
         QThread *thread;
         tn5250::session::Worker *worker;
         ui::widgets::QConnectionStatusWidget *connectionStatus;
         QLabel *coordinatesLabel;
+        QWidget *statusBar;
         session::SessionConfig config;
         ui::widgets::ScreenBuffer::SavedState savedScreen;
         ui::rendering::TN5250CommandHandler *commandHandler;
     };
+
+    void applyThemeToSession(Session *session, const QString &themeId);
 
     QTabWidget *m_tabWidget;
     QVector<Session *> m_sessions;
     int m_activeIndex;
     QWidget *m_emptyPlaceholder;
     QMenu *m_quickOpenMenu;
+    QMenu *m_quickThemeMenu;
     QComboBox *m_emptyOpenCombo;
 
     // Convenience pointers to the active session
