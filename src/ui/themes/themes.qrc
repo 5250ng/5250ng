@@ -7,6 +7,7 @@
     <file>data/terminal/classic_white.json</file>
     <file>data/terminal/modern_dark.json</file>
     <file>data/terminal/ibm_3179.json</file>
+    <file>data/terminal/ibm_infowindow_ii.json</file>
     <file>data/terminal/high_contrast.json</file>
     <file>data/terminal/solarized_dark.json</file>
     <file>data/terminal/amber_phosphor.json</file>

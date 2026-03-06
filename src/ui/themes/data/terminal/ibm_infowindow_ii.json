@@ -1,0 +1,53 @@
+{
+    "id": "ibm_infowindow_ii",
+    "displayName": "IBM InfoWindow II",
+    "builtin": true,
+    "description": "IBM 3472 InfoWindow II — monochrome P39 green phosphor CRT (1988). The workhorse 5250 terminal of the AS/400 era.",
+    "background": {
+        "mode": "color",
+        "color": "#001200",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM 3270",
+        "size": 14
+    },
+    "monochrome": {
+        "enabled": true,
+        "color": "#33ff33"
+    },
+    "colors": {
+        "black":  "#001200",
+        "green":  "#33ff33",
+        "white":  "#33ff33",
+        "blue":   "#33ff33",
+        "red":    "#33ff33",
+        "cyan":   "#33ff33",
+        "pink":   "#33ff33",
+        "yellow": "#33ff33",
+        "cursor": "#33ff33"
+    },
+    "selection": {
+        "background": "#33ff3340",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#33ff3325"
+    },
+    "columnSeparator": {
+        "color": "#1a6b1a",
+        "style": "dimmed"
+    },
+    "cursor": {
+        "shape": "underline",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": true,
+        "scanlineIntensity": 0.18,
+        "phosphorBloom": 0.40,
+        "glowRadius": 0.12,
+        "curvature": 0.06
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0
+}

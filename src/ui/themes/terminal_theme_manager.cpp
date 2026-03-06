@@ -22,6 +22,7 @@ void TerminalThemeManager::loadBuiltinThemes() {
     registerThemeFromJsonResource(":/themes/data/terminal/classic_white.json");
     registerThemeFromJsonResource(":/themes/data/terminal/modern_dark.json");
     registerThemeFromJsonResource(":/themes/data/terminal/ibm_3179.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/ibm_infowindow_ii.json");
     registerThemeFromJsonResource(":/themes/data/terminal/high_contrast.json");
     registerThemeFromJsonResource(":/themes/data/terminal/solarized_dark.json");
     registerThemeFromJsonResource(":/themes/data/terminal/amber_phosphor.json");
