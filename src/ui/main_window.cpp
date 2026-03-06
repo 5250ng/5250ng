@@ -562,7 +562,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             } else if (chosen && chosen->parent() == themeSubMenu) {
                 // Theme was chosen from context menu
                 QString themeId = chosen->data().toString();
-                if (!themeId.isEmpty() && tabIndex < m_sessions.size()) {
+                if (!themeId.isEmpty() && tabIndex >= 0 && tabIndex < m_sessions.size()) {
                     applyThemeToSession(m_sessions[tabIndex], themeId);
                     if (tabIndex == m_activeIndex) {
                         m_currentSession.setTerminalThemeId(themeId);

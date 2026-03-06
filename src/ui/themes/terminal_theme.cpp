@@ -381,6 +381,7 @@ TerminalTheme TerminalTheme::resolved(
     // Always override identity
     result.id          = id;
     result.displayName = displayName;
+    result.description = description;
     result.builtin     = builtin;
     result.parentThemeId = parentThemeId;
 

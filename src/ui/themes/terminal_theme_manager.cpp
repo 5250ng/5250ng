@@ -24,6 +24,12 @@ void TerminalThemeManager::loadBuiltinThemes() {
     registerThemeFromJsonResource(":/themes/data/terminal/ibm_3179.json");
     registerThemeFromJsonResource(":/themes/data/terminal/high_contrast.json");
     registerThemeFromJsonResource(":/themes/data/terminal/solarized_dark.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/amber_phosphor.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/blue_terminal.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/matrix.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/dracula.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/nord.json");
+    registerThemeFromJsonResource(":/themes/data/terminal/monokai.json");
 }
 
 bool TerminalThemeManager::registerThemeFromJsonResource(const QString &resourcePath) {
@@ -162,7 +168,11 @@ bool TerminalThemeManager::saveUserTheme(const TerminalTheme &theme) {
     if (!f.open(QIODevice::WriteOnly)) {
         return false;
     }
-    f.write(doc.toJson(QJsonDocument::Indented));
+    QByteArray data = doc.toJson(QJsonDocument::Indented);
+    if (f.write(data) != data.size()) {
+        f.close();
+        return false;
+    }
     f.close();
 
     // Update registry
@@ -281,7 +291,11 @@ bool TerminalThemeManager::exportTheme(const QString &id, const QString &filePat
     if (!f.open(QIODevice::WriteOnly)) {
         return false;
     }
-    f.write(doc.toJson(QJsonDocument::Indented));
+    QByteArray data = doc.toJson(QJsonDocument::Indented);
+    if (f.write(data) != data.size()) {
+        f.close();
+        return false;
+    }
     f.close();
     return true;
 }

@@ -63,7 +63,7 @@ void ThemePreviewWidget::buildPreviewScreen() {
 
 void ThemePreviewWidget::addText(int row, int col, const QString &text,
                                   int colorIndex, bool reverse, bool underline) {
-    if (row < 0 || row >= kPreviewRows) return;
+    if (row < 0 || row >= kPreviewRows || col < 0) return;
     for (int i = 0; i < text.length() && (col + i) < kPreviewCols; ++i) {
         m_previewScreen[row][col + i] = {text[i], colorIndex, reverse, underline};
     }

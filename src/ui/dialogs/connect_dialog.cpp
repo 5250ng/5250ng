@@ -249,9 +249,9 @@ void ConnectDialog::loadSession(const QString &sessionName) {
         return;
     }
 
-    session::SessionManager *sessionManager = new session::SessionManager(this);
+    session::SessionManager sessionManager(this);
     session::SessionConfig config;
-    if (sessionManager->loadSession(sessionName, config)) {
+    if (sessionManager.loadSession(sessionName, config)) {
         setSessionConfig(config);
         emit sessionSelected(sessionName);
     } else {
@@ -280,8 +280,8 @@ void ConnectDialog::saveCurrentAsSession() {
         return;
     }
 
-    session::SessionManager *sessionManager = new session::SessionManager(this);
-    if (sessionManager->saveSession(config)) {
+    session::SessionManager sessionManager(this);
+    if (sessionManager.saveSession(config)) {
         // Update combo box
         if (m_sessionCombo->findText(sessionName) == -1) {
             m_sessionCombo->addItem(sessionName);
@@ -297,9 +297,8 @@ void ConnectDialog::saveCurrentAsSession() {
 }
 
 QStringList ConnectDialog::availableSessions() const {
-    session::SessionManager *sessionManager =
-        new session::SessionManager(const_cast<ConnectDialog *>(this));
-    return sessionManager->listSessions();
+    session::SessionManager sessionManager;
+    return sessionManager.listSessions();
 }
 
 void ConnectDialog::onConnectClicked() {
