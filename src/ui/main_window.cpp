@@ -248,7 +248,6 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                 bool connected = (state == tn5250::client::TN5250Client::ConnectionState::Connected
                                || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
                 m_connected = connected;
-                m_connectAction->setEnabled(!connected);
                 m_disconnectAction->setEnabled(connected);
             }
         });
@@ -567,7 +566,6 @@ void MainWindow::setActiveSession(int index) {
     bool connected = (state == tn5250::client::TN5250Client::ConnectionState::Connected
                    || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
     m_connected = connected;
-    m_connectAction->setEnabled(!connected);
     m_disconnectAction->setEnabled(connected);
     m_reconnectAction->setEnabled(true);
     m_duplicateAction->setEnabled(true);
