@@ -1,7 +1,7 @@
 #include "../main_window.h"
 #include <QDir>
 #include <QFileDialog>
-#include <QMessageBox>
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QPixmap>
 #include <QWidget>
 
@@ -14,7 +14,7 @@ using namespace core;
  */
 void MainWindow::onTakeScreenshot() {
     if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) {
-        QMessageBox::information(this, "Screenshot", "No active session tab to capture.");
+        ui::widgets::StyledMessageBox::information(this, "Screenshot", "No active session tab to capture.");
         return;
     }
     QString defaultPath = QDir::homePath() + "/tn5250ng-screenshot.png";
@@ -27,6 +27,6 @@ void MainWindow::onTakeScreenshot() {
     QWidget *tabWidgetContainer = m_sessions[m_activeIndex]->container;
     QPixmap pixmap = tabWidgetContainer->grab();
     if (!pixmap.save(fileName, "PNG")) {
-        QMessageBox::warning(this, "Screenshot", "Failed to save screenshot to the selected file.");
+        ui::widgets::StyledMessageBox::warning(this, "Screenshot", "Failed to save screenshot to the selected file.");
     }
 }

@@ -54,6 +54,12 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onToggleCursorRules();
     void onToggleFieldProtection();
     void onToggleInputFields();
+    void onReconnect();
+    void onDuplicateSession();
+    void onToggleFullscreen();
+    void onEditCopy();
+    void onEditPaste();
+    void onEditSelectAll();
     void updateEmptyState();
     void onQuickOpenChanged(const QString &sessionName);
     void rebuildQuickOpenMenu();
@@ -114,6 +120,9 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_connectAction;
     QAction *m_disconnectAction;
     QAction *m_exitAction;
+    QAction *m_reconnectAction;
+    QAction *m_duplicateAction;
+    QAction *m_fullscreenAction;
     QAction *m_cursorRulesAction;
     QAction *m_showFieldProtectionAction;
     QAction *m_showInputFieldsAction;

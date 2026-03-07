@@ -2,7 +2,7 @@
 #include "session/manager.h"
 #include "ui/main_window.h"
 #include <QAction>
-#include <QMessageBox>
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QString>
 
 /**
@@ -21,7 +21,7 @@ void MainWindow::onSavedSessionChosen(QAction *action) {
     if (mgr.loadSession(sessionName, cfg)) {
         connectToServer(cfg);
     } else {
-        QMessageBox::warning(
+        ui::widgets::StyledMessageBox::warning(
             this, "Open Session",
             QString("Failed to open session '%1'.").arg(sessionName)
         );

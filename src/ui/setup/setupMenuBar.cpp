@@ -10,32 +10,9 @@
 #include <QWidget>
 #include <Qt>
 
-/**
- * Build and initialize the main window menu bar.
- *
- * Menus and actions:
- * - File:
- *   - Connect... (Ctrl+N): open the connection dialog
- *   - Disconnect: terminate the current session
- *   - Settings...: open the settings dialog (Application Theme, 5250 Theme)
- *   - Exit (Ctrl+Q): quit the application
- * - Session:
- *   - New (Add Tab): create a new session tab
- *   - Open saved session (submenu): dynamically populated on aboutToShow and
- *     wired so selecting an entry triggers opening that saved session
- *   - Theme (submenu): quick terminal theme picker
- * - Tools:
- *   - Take a Screenshot: capture the active tab as a PNG
- * - Help:
- *   - About: show application information
- *
- * Signals:
- * - The "Open saved session" submenu connects aboutToShow to rebuild the list
- *   (rebuildQuickOpenMenu) and triggered to open the chosen session
- *   (onSavedSessionChosen).
- */
 void MainWindow::setupMenuBar() {
     QMenuBar *bar = titleBar()->menuBar();
+
     // File menu
     QMenu *fileMenu = bar->addMenu("&File");
     m_connectAction =
@@ -44,17 +21,31 @@ void MainWindow::setupMenuBar() {
     m_disconnectAction =
         fileMenu->addAction("&Disconnect", this, &MainWindow::onDisconnect);
     m_disconnectAction->setEnabled(false);
+    m_reconnectAction =
+        fileMenu->addAction("&Reconnect", this, &MainWindow::onReconnect);
+    m_reconnectAction->setEnabled(false);
     fileMenu->addSeparator();
     fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
     fileMenu->addSeparator();
     m_exitAction = fileMenu->addAction("E&xit", this, &QWidget::close);
     m_exitAction->setShortcut(QKeySequence::Quit);
 
+    // Edit menu
+    QMenu *editMenu = bar->addMenu("&Edit");
+    editMenu->addAction("&Copy", this, &MainWindow::onEditCopy);
+    editMenu->addAction("&Paste", this, &MainWindow::onEditPaste);
+    editMenu->addSeparator();
+    editMenu->addAction("Select &All", this, &MainWindow::onEditSelectAll);
+
     // Session menu
     QMenu *sessionMenu = bar->addMenu("&Session");
     QAction *newSessionAction =
         sessionMenu->addAction("&New", this, &MainWindow::onNewSession);
     newSessionAction->setShortcut(QKeySequence::AddTab);
+    m_duplicateAction =
+        sessionMenu->addAction("&Duplicate Session", this, &MainWindow::onDuplicateSession);
+    m_duplicateAction->setEnabled(false);
+    sessionMenu->addSeparator();
     // Quick open saved sessions submenu inside Session menu
     m_quickOpenMenu = sessionMenu->addMenu("Open saved session");
     connect(m_quickOpenMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickOpenMenu);
@@ -63,6 +54,11 @@ void MainWindow::setupMenuBar() {
     m_quickThemeMenu = sessionMenu->addMenu("Theme");
     connect(m_quickThemeMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickThemeMenu);
     connect(m_quickThemeMenu, &QMenu::triggered, this, &MainWindow::onQuickThemeChosen);
+
+    // View menu
+    QMenu *viewMenu = bar->addMenu("&View");
+    m_fullscreenAction = viewMenu->addAction("&Fullscreen", this, &MainWindow::onToggleFullscreen);
+    m_fullscreenAction->setCheckable(true);
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");

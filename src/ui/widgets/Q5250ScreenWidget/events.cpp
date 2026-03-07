@@ -11,6 +11,7 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QMenu>
 #include <QResizeEvent>
 
 namespace ui::widgets {
@@ -220,6 +221,29 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
 }
 
 void Q5250ScreenWidget::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::RightButton) {
+        QMenu menu(this);
+        QAction *copyAction = menu.addAction("Copy");
+        copyAction->setEnabled(hasSelection());
+        QAction *pasteAction = menu.addAction("Paste");
+        QAction *selectAllAction = menu.addAction("Select All");
+        menu.addSeparator();
+        QAction *clearSelAction = menu.addAction("Clear Selection");
+        clearSelAction->setEnabled(hasSelection());
+
+        QAction *chosen = menu.exec(event->globalPosition().toPoint());
+        if (chosen == copyAction) {
+            copySelection();
+        } else if (chosen == pasteAction) {
+            handlePaste();
+        } else if (chosen == selectAllAction) {
+            selectAll();
+        } else if (chosen == clearSelAction) {
+            clearSelection();
+        }
+        event->accept();
+        return;
+    }
     if (event->button() == Qt::LeftButton) {
         QPoint cellPos = screenToCell(event->pos());
         if (m_screenBuffer && cellPos.x() >= 0 && cellPos.y() >= 0 &&

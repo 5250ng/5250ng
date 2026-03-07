@@ -13,8 +13,6 @@ class BaseFramelessDialog : public QDialog {
     ~BaseFramelessDialog() override = default;
 
     void setWindowTitle(const QString &title);
-
-  protected:
     TitleBar *titleBar() const { return m_titleBar; }
     QVBoxLayout *contentLayout() const { return m_contentLayout; }
 

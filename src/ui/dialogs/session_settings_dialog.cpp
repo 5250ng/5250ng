@@ -7,7 +7,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
-#include <QMessageBox>
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QRandomGenerator>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -833,7 +833,7 @@ void SessionSettingsDialog::onSaveTheme() {
     ui::themes::TerminalTheme existing = mgr.theme(m_currentThemeId);
 
     if (existing.builtin) {
-        QMessageBox::warning(this, "Save Theme",
+        ui::widgets::StyledMessageBox::warning(this, "Save Theme",
                              "Cannot overwrite a built-in theme. Use 'Duplicate' first.");
         return;
     }
@@ -842,17 +842,17 @@ void SessionSettingsDialog::onSaveTheme() {
     t.id = m_currentThemeId;
     t.builtin = false;
     mgr.saveUserTheme(t);
-    QMessageBox::information(this, "Save Theme", "Theme saved successfully.");
+    ui::widgets::StyledMessageBox::information(this, "Save Theme", "Theme saved successfully.");
 }
 
 void SessionSettingsDialog::onResetTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     if (!mgr.hasTheme(m_currentThemeId)) return;
 
-    auto result = QMessageBox::question(this, "Reset Theme",
+    auto result = ui::widgets::StyledMessageBox::question(this, "Reset Theme",
         QString("Reset all settings to the stored values of \"%1\"?")
             .arg(m_themeCombo->currentText().remove(" (built-in)")));
-    if (result != QMessageBox::Yes) return;
+    if (result != ui::widgets::StyledMessageBox::Yes) return;
 
     ui::themes::TerminalTheme theme = mgr.resolvedTheme(m_currentThemeId);
     loadThemeToUI(theme);
@@ -863,13 +863,13 @@ void SessionSettingsDialog::onDeleteTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     ui::themes::TerminalTheme t = mgr.theme(m_currentThemeId);
     if (t.builtin) {
-        QMessageBox::warning(this, "Delete Theme", "Cannot delete a built-in theme.");
+        ui::widgets::StyledMessageBox::warning(this, "Delete Theme", "Cannot delete a built-in theme.");
         return;
     }
 
-    auto result = QMessageBox::question(this, "Delete Theme",
+    auto result = ui::widgets::StyledMessageBox::question(this, "Delete Theme",
                                          QString("Delete theme \"%1\"?").arg(t.displayName));
-    if (result != QMessageBox::Yes) return;
+    if (result != ui::widgets::StyledMessageBox::Yes) return;
 
     mgr.deleteUserTheme(m_currentThemeId);
     m_currentThemeId = "classic_green";
@@ -885,9 +885,9 @@ void SessionSettingsDialog::onImportTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     if (mgr.importTheme(path)) {
         populateThemeDropdown();
-        QMessageBox::information(this, "Import", "Theme imported successfully.");
+        ui::widgets::StyledMessageBox::information(this, "Import", "Theme imported successfully.");
     } else {
-        QMessageBox::warning(this, "Import", "Failed to import theme.");
+        ui::widgets::StyledMessageBox::warning(this, "Import", "Failed to import theme.");
     }
 }
 
@@ -904,9 +904,9 @@ void SessionSettingsDialog::onExportTheme() {
     mgr.registerTheme(t);
 
     if (mgr.exportTheme(m_currentThemeId, path)) {
-        QMessageBox::information(this, "Export", "Theme exported successfully.");
+        ui::widgets::StyledMessageBox::information(this, "Export", "Theme exported successfully.");
     } else {
-        QMessageBox::warning(this, "Export", "Failed to export theme.");
+        ui::widgets::StyledMessageBox::warning(this, "Export", "Failed to export theme.");
     }
 }
 

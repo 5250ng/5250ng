@@ -4,7 +4,7 @@
 #include "ui/themes/terminal_theme_manager.h"
 #include <QGroupBox>
 #include <QInputDialog>
-#include <QMessageBox>
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 
 ConnectDialog::ConnectDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
     setupUI();
@@ -255,7 +255,7 @@ void ConnectDialog::loadSession(const QString &sessionName) {
         setSessionConfig(config);
         emit sessionSelected(sessionName);
     } else {
-        QMessageBox::warning(
+        ui::widgets::StyledMessageBox::warning(
             this, "Load Session",
             QString("Failed to load session: %1").arg(sessionName)
         );
@@ -276,7 +276,7 @@ void ConnectDialog::saveCurrentAsSession() {
     config.setName(sessionName);
 
     if (!config.isValid()) {
-        QMessageBox::warning(this, "Save Session", "Invalid session configuration.");
+        ui::widgets::StyledMessageBox::warning(this, "Save Session", "Invalid session configuration.");
         return;
     }
 
@@ -287,12 +287,12 @@ void ConnectDialog::saveCurrentAsSession() {
             m_sessionCombo->addItem(sessionName);
         }
         m_sessionCombo->setCurrentText(sessionName);
-        QMessageBox::information(
+        ui::widgets::StyledMessageBox::information(
             this, "Save Session",
             QString("Session '%1' saved successfully.").arg(sessionName)
         );
     } else {
-        QMessageBox::warning(this, "Save Session", "Failed to save session.");
+        ui::widgets::StyledMessageBox::warning(this, "Save Session", "Failed to save session.");
     }
 }
 
@@ -305,7 +305,7 @@ void ConnectDialog::onConnectClicked() {
     session::SessionConfig config = getSessionConfig();
 
     if (!config.isValid()) {
-        QMessageBox::warning(this, "Connect", "Please fill in all required fields.\n"
+        ui::widgets::StyledMessageBox::warning(this, "Connect", "Please fill in all required fields.\n"
                                               "Hostname is required.");
         return;
     }
@@ -357,11 +357,9 @@ void ConnectDialog::onDeleteSessionClicked() {
     if (sessionName.isEmpty() || sessionName == "(New Session)") {
         return;
     }
-    auto reply = QMessageBox::question(
-        this, "Delete Session", QString("Delete session '%1'?").arg(sessionName),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No
-    );
-    if (reply != QMessageBox::Yes) {
+    auto reply = ui::widgets::StyledMessageBox::question(
+        this, "Delete Session", QString("Delete session '%1'?").arg(sessionName));
+    if (reply != ui::widgets::StyledMessageBox::Yes) {
         return;
     }
     session::SessionManager mgr(this);
@@ -372,9 +370,9 @@ void ConnectDialog::onDeleteSessionClicked() {
         }
         m_sessionCombo->setCurrentText("(New Session)");
         m_deleteSessionButton->setEnabled(false);
-        QMessageBox::information(this, "Delete Session", QString("Session '%1' deleted.").arg(sessionName));
+        ui::widgets::StyledMessageBox::information(this, "Delete Session", QString("Session '%1' deleted.").arg(sessionName));
     } else {
-        QMessageBox::warning(
+        ui::widgets::StyledMessageBox::warning(
             this, "Delete Session",
             QString("Failed to delete session '%1'.").arg(sessionName)
         );

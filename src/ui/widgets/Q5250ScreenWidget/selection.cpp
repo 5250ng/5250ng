@@ -137,4 +137,12 @@ void Q5250ScreenWidget::clearSelection() {
     update();
 }
 
+void Q5250ScreenWidget::selectAll() {
+    if (!m_screenBuffer) return;
+    m_selectionStart = QPoint(0, 0);
+    m_selectionEnd = QPoint(m_screenBuffer->cols() - 1, m_screenBuffer->rows() - 1);
+    m_selecting = false;
+    update();
+}
+
 } // namespace ui::widgets

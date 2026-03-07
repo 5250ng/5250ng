@@ -5,7 +5,9 @@
 #include <QFrame>
 #include <QLabel>
 #include <QMenuBar>
+#include <QMouseEvent>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSizePolicy>
 #include <QTabBar>
 #include <QTabWidget>
@@ -62,6 +64,23 @@ void MainWindow::setupUI() {
     connect(m_tabWidget->tabBar(), &QTabBar::tabMoved, this, &MainWindow::onTabMoved);
     connect(m_tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::onCloseTabRequested);
     m_tabWidget->tabBar()->installEventFilter(this);
+
+    // Double-click empty tab bar area → new session
+    connect(m_tabWidget->tabBar(), &QTabBar::tabBarDoubleClicked, this, [this](int index) {
+        if (index == -1) onNewSession();
+    });
+
+    // Ctrl+Tab / Ctrl+Shift+Tab to cycle tabs
+    auto *nextTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), this);
+    connect(nextTab, &QShortcut::activated, this, [this]() {
+        if (m_tabWidget->count() > 1)
+            m_tabWidget->setCurrentIndex((m_tabWidget->currentIndex() + 1) % m_tabWidget->count());
+    });
+    auto *prevTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab), this);
+    connect(prevTab, &QShortcut::activated, this, [this]() {
+        if (m_tabWidget->count() > 1)
+            m_tabWidget->setCurrentIndex((m_tabWidget->currentIndex() - 1 + m_tabWidget->count()) % m_tabWidget->count());
+    });
 
     // Active session pointers are null until a tab is created
     m_displayWidget = nullptr;

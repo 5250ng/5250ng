@@ -169,6 +169,8 @@ set(UI_SOURCES
     src/ui/widgets/Frameless/BaseFramelessDialog.h
     src/ui/widgets/Frameless/TitleBar.cpp
     src/ui/widgets/Frameless/TitleBar.h
+    src/ui/widgets/Frameless/StyledMessageBox.cpp
+    src/ui/widgets/Frameless/StyledMessageBox.h
     # dialogs
     src/ui/dialogs/log_viewer.cpp
     src/ui/dialogs/log_viewer.h
@@ -206,6 +208,10 @@ set(UI_SOURCES
     src/ui/actions/onSavedSessionChosen.cpp
     src/ui/actions/onTabMoved.cpp
     src/ui/actions/onTakeScreenshot.cpp
+    src/ui/actions/onReconnect.cpp
+    src/ui/actions/onDuplicateSession.cpp
+    src/ui/actions/onToggleFullscreen.cpp
+    src/ui/actions/onEditActions.cpp
     # setup
     src/ui/setup/setupUI.cpp
     src/ui/setup/setupMenuBar.cpp

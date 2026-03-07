@@ -19,6 +19,9 @@ class BaseFramelessWindow : public QMainWindow {
   protected:
     TitleBar *titleBar() const { return m_titleBar; }
     QVBoxLayout *contentLayout() const { return m_contentLayout; }
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
   private:
     QWidget *m_central;
@@ -30,6 +33,16 @@ class BaseFramelessWindow : public QMainWindow {
     // Drag
     bool m_dragging = false;
     QPoint m_dragOffset;
+
+    // Edge resize
+    enum Edge { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 };
+    int m_resizeEdges = None;
+    bool m_resizing = false;
+    QPoint m_resizeOrigin;
+    QRect m_resizeGeom;
+    static constexpr int ResizeMargin = 6;
+    int edgesAt(const QPoint &pos) const;
+    Qt::CursorShape cursorForEdges(int edges) const;
 
     void setupUi();
     void connectControls();
@@ -45,5 +58,3 @@ class BaseFramelessWindow : public QMainWindow {
 };
 
 } // namespace ui::widgets
-
-

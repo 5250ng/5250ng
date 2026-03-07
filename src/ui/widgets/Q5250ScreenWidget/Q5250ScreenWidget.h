@@ -161,9 +161,12 @@ class Q5250ScreenWidget : public QWidget {
     QPoint screenToCell(const QPoint &screenPos) const; // Convert screen coordinates to cell coordinates
     bool isCellSelected(int row,
                         int col) const; // Check if a cell is in the selection
-    bool hasSelection() const;          // Check if there is an active selection
-    void copySelection();               // Copy selected text to clipboard
-    void clearSelection();              // Clear the current selection
+    bool hasSelection() const;
+  public:
+    void copySelection();
+    void clearSelection();
+    void selectAll();
+  private:
     // Input helpers
     ScreenBuffer::Field findNextField(int startRow, int startCol) const;
     ScreenBuffer::Field findPreviousField(int startRow, int startCol) const;
@@ -178,7 +181,9 @@ class Q5250ScreenWidget : public QWidget {
     void handleDup();
     void handleFieldPlus();
     void handleFieldMinus();
+  public:
     void handlePaste();
+  private:
     void rightAdjustField(int row, int col);
 
     ScreenBuffer *m_screenBuffer;

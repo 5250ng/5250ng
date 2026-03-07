@@ -14,20 +14,20 @@ BaseFramelessWindow::BaseFramelessWindow(QWidget *parent)
       m_rootLayout(new QVBoxLayout(m_central)),
       m_contentLayout(new QVBoxLayout(m_content)) {
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
+    setMouseTracking(true);
     setupUi();
     connectControls();
 }
 
 void BaseFramelessWindow::setupUi() {
-    // Root central widget layout
     m_rootLayout->setContentsMargins(0, 0, 0, 0);
     m_rootLayout->setSpacing(0);
     m_rootLayout->addWidget(m_titleBar, 0);
-    // 1px separator under title bar via stylesheet; keep content flush
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
     m_contentLayout->setSpacing(0);
     m_rootLayout->addWidget(m_content, 1);
     m_central->setLayout(m_rootLayout);
+    m_central->setMouseTracking(true);
     setCentralWidget(m_central);
 }
 
@@ -45,6 +45,102 @@ void BaseFramelessWindow::setWindowTitle(const QString &title) {
     QMainWindow::setWindowTitle(title);
     m_titleBar->setTitle(title);
 }
+
+// --- Edge resize helpers ---
+
+int BaseFramelessWindow::edgesAt(const QPoint &pos) const {
+    int edges = None;
+    if (pos.x() <= ResizeMargin)                edges |= Left;
+    if (pos.x() >= width() - ResizeMargin)      edges |= Right;
+    if (pos.y() <= ResizeMargin)                 edges |= Top;
+    if (pos.y() >= height() - ResizeMargin)      edges |= Bottom;
+    return edges;
+}
+
+Qt::CursorShape BaseFramelessWindow::cursorForEdges(int edges) const {
+    if ((edges & (Top | Left)) == (Top | Left))       return Qt::SizeFDiagCursor;
+    if ((edges & (Bottom | Right)) == (Bottom | Right)) return Qt::SizeFDiagCursor;
+    if ((edges & (Top | Right)) == (Top | Right))     return Qt::SizeBDiagCursor;
+    if ((edges & (Bottom | Left)) == (Bottom | Left)) return Qt::SizeBDiagCursor;
+    if (edges & Left)   return Qt::SizeHorCursor;
+    if (edges & Right)  return Qt::SizeHorCursor;
+    if (edges & Top)    return Qt::SizeVerCursor;
+    if (edges & Bottom) return Qt::SizeVerCursor;
+    return Qt::ArrowCursor;
+}
+
+// --- Mouse events for edge resize ---
+
+void BaseFramelessWindow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && !isMaximized()) {
+        int edges = edgesAt(event->pos());
+        if (edges != None) {
+            m_resizing = true;
+            m_resizeEdges = edges;
+            m_resizeOrigin = event->globalPosition().toPoint();
+            m_resizeGeom = geometry();
+            event->accept();
+            return;
+        }
+    }
+    QMainWindow::mousePressEvent(event);
+}
+
+void BaseFramelessWindow::mouseMoveEvent(QMouseEvent *event) {
+    if (m_resizing) {
+        QPoint delta = event->globalPosition().toPoint() - m_resizeOrigin;
+        QRect g = m_resizeGeom;
+        QSize minSz = minimumSize();
+        if (minSz.isEmpty()) minSz = QSize(200, 150);
+
+        if (m_resizeEdges & Right)
+            g.setRight(g.right() + delta.x());
+        if (m_resizeEdges & Bottom)
+            g.setBottom(g.bottom() + delta.y());
+        if (m_resizeEdges & Left) {
+            int newLeft = g.left() + delta.x();
+            if (g.right() - newLeft + 1 >= minSz.width())
+                g.setLeft(newLeft);
+        }
+        if (m_resizeEdges & Top) {
+            int newTop = g.top() + delta.y();
+            if (g.bottom() - newTop + 1 >= minSz.height())
+                g.setTop(newTop);
+        }
+
+        // Enforce minimum size
+        if (g.width() < minSz.width())
+            g.setWidth(minSz.width());
+        if (g.height() < minSz.height())
+            g.setHeight(minSz.height());
+
+        setGeometry(g);
+        event->accept();
+        return;
+    }
+
+    // Update cursor when hovering near edges
+    if (!isMaximized()) {
+        int edges = edgesAt(event->pos());
+        setCursor(cursorForEdges(edges));
+    } else {
+        setCursor(Qt::ArrowCursor);
+    }
+
+    QMainWindow::mouseMoveEvent(event);
+}
+
+void BaseFramelessWindow::mouseReleaseEvent(QMouseEvent *event) {
+    if (m_resizing) {
+        m_resizing = false;
+        m_resizeEdges = None;
+        event->accept();
+        return;
+    }
+    QMainWindow::mouseReleaseEvent(event);
+}
+
+// --- Title bar drag ---
 
 void BaseFramelessWindow::onTitleMousePressed(const QPoint &globalPos) {
     if (isMaximized())
@@ -80,5 +176,3 @@ void BaseFramelessWindow::onMaximizeRestore() {
 void BaseFramelessWindow::onClose() { close(); }
 
 } // namespace ui::widgets
-
-

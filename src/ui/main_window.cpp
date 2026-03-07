@@ -17,6 +17,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -228,7 +229,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
         [this, session](const QString &error) {
             logger::Logger::instance()->error(QString("Connection error: %1").arg(error));
             if (m_sessions.indexOf(session) == m_activeIndex) {
-                QMessageBox::warning(this, "Connection Error", error);
+                ui::widgets::StyledMessageBox::warning(this, "Connection Error", error);
             }
         });
     // App data: feed this session's parser directly
@@ -452,6 +453,8 @@ void MainWindow::setActiveSession(int index) {
         m_connected = false;
         m_connectAction->setEnabled(true);
         m_disconnectAction->setEnabled(false);
+        m_reconnectAction->setEnabled(false);
+        m_duplicateAction->setEnabled(false);
         return;
     }
     m_activeIndex = index;
@@ -467,6 +470,8 @@ void MainWindow::setActiveSession(int index) {
     m_connected = connected;
     m_connectAction->setEnabled(!connected);
     m_disconnectAction->setEnabled(connected);
+    m_reconnectAction->setEnabled(true);
+    m_duplicateAction->setEnabled(true);
     updateCursorCoordinatesFont();
     updateCursorCoordinates();
 }
@@ -577,7 +582,7 @@ void MainWindow::dropEvent(QDropEvent *event) {
         }
     }
     if (imported > 0) {
-        QMessageBox::information(this, "Import Theme",
+        ui::widgets::StyledMessageBox::information(this, "Import Theme",
             QString("Imported %1 theme(s) successfully.").arg(imported));
     }
 }
@@ -639,6 +644,17 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
                     break;
                 }
                 break;
+            }
+        }
+    }
+    // Middle-click on a tab to close it
+    if (obj == m_tabWidget->tabBar() && event->type() == QEvent::MouseButtonRelease) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::MiddleButton) {
+            int tabIndex = m_tabWidget->tabBar()->tabAt(me->pos());
+            if (tabIndex >= 0) {
+                onCloseTabRequested(tabIndex);
+                return true;
             }
         }
     }
