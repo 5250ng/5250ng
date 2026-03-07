@@ -230,8 +230,17 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                 case tn5250::client::TN5250Client::ConnectionState::Negotiating:
                     session->connectionStatus->setStatusText("Waiting for system");
                     break;
-                default:
+                case tn5250::client::TN5250Client::ConnectionState::Disconnected:
                     session->connectionStatus->setStatusText("Not connected");
+                    // Clear the screen when the remote host closes the connection
+                    if (session->displayWidget && session->displayWidget->screenBuffer()) {
+                        session->displayWidget->screenBuffer()->clear();
+                        session->displayWidget->screenBuffer()->clearFields();
+                        session->displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
+                        session->displayWidget->updateScreen();
+                    }
+                    break;
+                default:
                     break;
                 }
             }
