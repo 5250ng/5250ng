@@ -1,0 +1,58 @@
+{
+    "id": "high_contrast",
+    "displayName": "High Contrast",
+    "builtin": true,
+    "background": {
+        "mode": "color",
+        "color": "#000000",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 16
+    },
+    "colors": {
+        "black": "#000000",
+        "green": "#00ff00",
+        "white": "#ffffff",
+        "blue": "#6060ff",
+        "red": "#ff0000",
+        "cyan": "#00ffff",
+        "pink": "#ff00ff",
+        "yellow": "#ffff00",
+        "cursor": "#ffffff"
+    },
+    "selection": {
+        "background": "#ffffff60",
+        "foreground": "#000000",
+        "fieldIndicator": "#ffff0050"
+    },
+    "columnSeparator": {
+        "enabled": false,
+        "color": "#ffffff",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "block",
+        "blinkMs": 400
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.0,
+        "glowRadius": 0.0,
+        "curvature": 0.0
+    },
+    "globalBrightness": 1.2,
+    "globalSaturation": 1.3,
+    "hrule": {
+        "color": "#00ff00"
+    },
+    "footer": {
+        "kbdStateColor": "#ffff00",
+        "systemNameColor": "#00ffff",
+        "historyColor": "#ffa500",
+        "macroColor": "#ff0000",
+        "coordinatesColor": "#00ff00"
+    }
+}
