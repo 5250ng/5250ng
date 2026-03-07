@@ -28,6 +28,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QScreen>
 #include <climits>
 
 /**
@@ -43,7 +44,16 @@ MainWindow::MainWindow(QWidget *parent)
     : ui::widgets::BaseFramelessWindow(parent), m_displayWidget(nullptr),
       m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
     setWindowTitle("5250ng");
-    resize(1128, 836);
+    // DPI-aware initial size: ~70% of primary screen, clamped to reasonable bounds
+    {
+        QSize initial(1128, 836);
+        if (auto *screen = QApplication::primaryScreen()) {
+            QRect avail = screen->availableGeometry();
+            initial = QSize(avail.width() * 7 / 10, avail.height() * 7 / 10);
+        }
+        resize(initial);
+    }
+    setMinimumSize(640, 480);
     setAcceptDrops(true);
 
     setupUI();
@@ -155,7 +165,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     QWidget *footerWidget = new QWidget(session->container);
     footerWidget->setLayout(footerLayout);
     footerWidget->setStyleSheet("background-color: black;");
-    footerWidget->setMinimumHeight(22);
+    // DPI-aware footer height: based on font metrics rather than fixed pixels
+    int footerMinH = qMax(22, QFontMetrics(footerWidget->font()).height() + 8);
+    footerWidget->setMinimumHeight(footerMinH);
     footerWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     session->statusBar = footerWidget;
     tabLayout->addWidget(footerWidget);
@@ -241,7 +253,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     {
         QPushButton *closeBtn = new QPushButton(QString::fromUtf8("\xe2\x9c\x95"), this);
         closeBtn->setFlat(true);
-        closeBtn->setFixedSize(16, 16);
+        // DPI-aware close button size
+        int closeBtnSize = qMax(16, qRound(16 * devicePixelRatioF()));
+        closeBtn->setFixedSize(closeBtnSize, closeBtnSize);
         closeBtn->setToolTip("Close");
         m_tabWidget->tabBar()->setTabButton(newIndex, QTabBar::RightSide, closeBtn);
         QWidget *page = session->container;
@@ -462,19 +476,53 @@ void MainWindow::applyThemeToSession(Session *session, const QString &themeId) {
     if (!mgr.hasTheme(themeId)) return;
 
     auto theme = mgr.resolvedTheme(themeId);
+
+    // Background image stored on session, painted in container's event filter
+    if (theme.backgroundMode == ui::themes::TerminalTheme::Image) {
+        if (!theme.backgroundImagePath.isEmpty()) {
+            session->bgImage = QPixmap(theme.backgroundImagePath);
+        } else if (!theme.backgroundImageData.isEmpty()) {
+            session->bgImage.loadFromData(theme.backgroundImageData);
+        } else {
+            session->bgImage = QPixmap();
+        }
+        session->bgImageLayout = theme.backgroundImageLayout;
+        session->bgImageOpacity = theme.backgroundImageOpacity;
+    } else {
+        session->bgImage = QPixmap();
+    }
+    // Invalidate cached scaled background so it's regenerated on next paint
+    session->bgImageScaled = QPixmap();
+    session->bgImageScaledSize = QSize();
+
+    // Container transparency when background image is active
+    bool hasBgImage = (theme.backgroundMode == ui::themes::TerminalTheme::Image
+                       && theme.screenBackgroundOpacity < 1.0);
+    session->container->setAttribute(Qt::WA_TranslucentBackground, hasBgImage);
+    session->container->setAutoFillBackground(false);
+
     if (session->terminalView) {
         session->terminalView->applyTerminalTheme(theme);
     }
-    QString bgHex = theme.backgroundColor.name(QColor::HexRgb);
     QString fgHex = theme.colorGreen.name(QColor::HexRgb);
+    QColor bgWithAlpha = theme.backgroundColor;
+    if (hasBgImage) {
+        bgWithAlpha.setAlphaF(theme.screenBackgroundOpacity);
+    }
+    QString bgRgba = hasBgImage
+        ? QString("rgba(%1,%2,%3,%4)")
+              .arg(bgWithAlpha.red()).arg(bgWithAlpha.green())
+              .arg(bgWithAlpha.blue()).arg(bgWithAlpha.alphaF(), 0, 'f', 2)
+        : theme.backgroundColor.name(QColor::HexRgb);
     if (session->statusBar) {
         session->statusBar->setStyleSheet(
-            QString("background-color: %1;").arg(bgHex));
+            QString("background-color: %1;").arg(bgRgba));
+        session->statusBar->setAttribute(Qt::WA_TranslucentBackground, hasBgImage);
     }
     if (session->coordinatesLabel) {
         session->coordinatesLabel->setStyleSheet(
             QString("color: %1; background-color: %2; padding: 0px;")
-                .arg(fgHex, bgHex));
+                .arg(fgHex, bgRgba));
     }
     if (session->connectionStatus) {
         session->connectionStatus->setTextColor(theme.colorGreen);
@@ -542,12 +590,54 @@ void MainWindow::dropEvent(QDropEvent *event) {
  * @return true if the event was handled, false to propagate.
  */
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
-    // Resize CRT overlay to match its tab container
+    // Resize CRT overlay to match tab container; repaint bg image
     if (event->type() == QEvent::Resize) {
         for (auto *s : m_sessions) {
-            if (obj == s->container && s->crtOverlay) {
-                s->crtOverlay->setGeometry(s->container->rect());
-                s->crtOverlay->raise();
+            if (obj == s->container) {
+                if (s->crtOverlay) {
+                    s->crtOverlay->setGeometry(s->container->rect());
+                    s->crtOverlay->raise();
+                }
+                break;
+            }
+        }
+    }
+    // Paint background image behind children in the tab container
+    if (event->type() == QEvent::Paint) {
+        for (auto *s : m_sessions) {
+            if (obj == s->container && !s->bgImage.isNull()) {
+                QPainter p(s->container);
+                p.setOpacity(s->bgImageOpacity);
+                QRect r = s->container->rect();
+                switch (s->bgImageLayout) {
+                case ui::themes::TerminalTheme::Stretch:
+                    // Use cached scaled pixmap; regenerate only when size changes
+                    if (s->bgImageScaledSize != r.size()) {
+                        s->bgImageScaled = s->bgImage.scaled(r.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                        s->bgImageScaledSize = r.size();
+                    }
+                    p.drawPixmap(0, 0, s->bgImageScaled);
+                    break;
+                case ui::themes::TerminalTheme::Tile:
+                    for (int y = 0; y < r.height(); y += s->bgImage.height())
+                        for (int x = 0; x < r.width(); x += s->bgImage.width())
+                            p.drawPixmap(x, y, s->bgImage);
+                    break;
+                case ui::themes::TerminalTheme::Center:
+                    p.drawPixmap((r.width() - s->bgImage.width()) / 2,
+                                 (r.height() - s->bgImage.height()) / 2,
+                                 s->bgImage);
+                    break;
+                case ui::themes::TerminalTheme::Fit:
+                    if (s->bgImageScaledSize != r.size()) {
+                        s->bgImageScaled = s->bgImage.scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                        s->bgImageScaledSize = r.size();
+                    }
+                    p.drawPixmap((r.width() - s->bgImageScaled.width()) / 2,
+                                 (r.height() - s->bgImageScaled.height()) / 2,
+                                 s->bgImageScaled);
+                    break;
+                }
                 break;
             }
         }

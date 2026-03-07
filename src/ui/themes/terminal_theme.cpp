@@ -196,6 +196,7 @@ QJsonObject TerminalTheme::toJson() const {
     }
     bg["imageLayout"] = imageLayoutToString(backgroundImageLayout);
     bg["imageOpacity"] = backgroundImageOpacity;
+    bg["screenOpacity"] = screenBackgroundOpacity;
     json["background"] = bg;
 
     // Font
@@ -283,6 +284,7 @@ TerminalTheme TerminalTheme::fromJson(const QJsonObject &json) {
         }
         t.backgroundImageLayout  = imageLayoutFromString(bg["imageLayout"].toString());
         t.backgroundImageOpacity = bg["imageOpacity"].toDouble(1.0);
+        t.screenBackgroundOpacity = bg["screenOpacity"].toDouble(1.0);
     }
 
     // Font
@@ -394,6 +396,7 @@ TerminalTheme TerminalTheme::resolved(
     result.backgroundImageData    = backgroundImageData;
     result.backgroundImageLayout  = backgroundImageLayout;
     result.backgroundImageOpacity = backgroundImageOpacity;
+    result.screenBackgroundOpacity = screenBackgroundOpacity;
 
     result.fontFamily = fontFamily;
     result.fontSize   = fontSize;

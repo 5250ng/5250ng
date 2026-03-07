@@ -157,6 +157,8 @@ set(UI_SOURCES
     src/ui/device/IBM-3179-2.cpp
     src/ui/device/IBM-3179-2.h
     # widgets
+    src/ui/widgets/QBackgroundImageWidget/QBackgroundImageWidget.cpp
+    src/ui/widgets/QBackgroundImageWidget/QBackgroundImageWidget.h
     src/ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.cpp
     src/ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.h
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.cpp

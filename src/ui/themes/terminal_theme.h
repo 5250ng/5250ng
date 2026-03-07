@@ -26,6 +26,7 @@ struct TerminalTheme {
     enum BackgroundImageLayout { Stretch, Tile, Center, Fit };
     BackgroundImageLayout backgroundImageLayout = Stretch;
     double backgroundImageOpacity = 1.0;
+    double screenBackgroundOpacity = 1.0; // opacity of 5250 screen background (< 1 to see image through)
 
     // Font
     QString fontFamily = "IBM 3270";

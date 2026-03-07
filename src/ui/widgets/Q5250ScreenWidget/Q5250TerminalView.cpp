@@ -1,5 +1,6 @@
 #include "Q5250TerminalView.h"
 #include "core/ebcdic.h"
+#include <QEvent>
 
 namespace ui::widgets {
 
@@ -28,6 +29,9 @@ Q5250TerminalView::Q5250TerminalView(QWidget *parent)
     m_footer->setSelectionEnabled(false);
     connect(m_screen, &Q5250ScreenWidget::screenSizeChanged, this, &Q5250TerminalView::onScreenSizeChanged);
     connect(m_screen, &Q5250ScreenWidget::terminalStateChanged, this, &Q5250TerminalView::updateStatusIndicators);
+
+    // Sync footer cell width with main screen after every resize so columns stay aligned
+    m_screen->installEventFilter(this);
 }
 
 void Q5250TerminalView::setScreenSize(int rows, int cols) {
@@ -41,6 +45,17 @@ void Q5250TerminalView::setFont(const QFont &font) {
 }
 
 void Q5250TerminalView::applyTerminalTheme(const ui::themes::TerminalTheme &theme) {
+    // When a background image is active, make all layers transparent
+    // so the image behind the tab container shows through
+    bool transparent = (theme.backgroundMode == ui::themes::TerminalTheme::Image
+                        && theme.screenBackgroundOpacity < 1.0);
+    setAttribute(Qt::WA_TranslucentBackground, transparent);
+    setAutoFillBackground(false);
+
+    // HRule must also be transparent so the background image shows through
+    m_rule->setAttribute(Qt::WA_TranslucentBackground, transparent);
+    m_rule->setAutoFillBackground(false);
+
     m_screen->applyTerminalTheme(theme);
     // Footer always uses the same grid mode so its columns align with the screen
     m_footer->applyTerminalTheme(theme);
@@ -48,6 +63,15 @@ void Q5250TerminalView::applyTerminalTheme(const ui::themes::TerminalTheme &them
     QColor ruleColor = theme.colorGreen;
     ruleColor.setAlpha(100);
     m_rule->setColor(ruleColor);
+}
+
+bool Q5250TerminalView::eventFilter(QObject *obj, QEvent *event) {
+    // After the main screen resizes, propagate its cell width to the footer
+    // so columns stay perfectly aligned regardless of independent sizing
+    if (obj == m_screen && event->type() == QEvent::Resize) {
+        m_footer->overrideCellWidth(m_screen->cellWidthF());
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 void Q5250TerminalView::onScreenSizeChanged(int rows, int cols) {

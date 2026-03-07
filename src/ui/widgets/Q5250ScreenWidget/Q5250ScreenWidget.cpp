@@ -133,20 +133,15 @@ void Q5250ScreenWidget::applyTerminalTheme(const ui::themes::TerminalTheme &them
     // Apply background color
     m_bgColor = theme.backgroundColor;
 
-    // Apply background image
-    if (theme.backgroundMode == ui::themes::TerminalTheme::Image
-        && !theme.backgroundImagePath.isEmpty()) {
-        m_bgImage = QPixmap(theme.backgroundImagePath);
-        m_hasBgImage = !m_bgImage.isNull();
-    } else if (!theme.backgroundImageData.isEmpty()) {
-        m_bgImage.loadFromData(theme.backgroundImageData);
-        m_hasBgImage = !m_bgImage.isNull();
-    } else {
-        m_bgImage = QPixmap();
-        m_hasBgImage = false;
-    }
-    m_bgImageLayout = theme.backgroundImageLayout;
-    m_bgImageOpacity = theme.backgroundImageOpacity;
+    // Background image is now rendered at the tab container level (QBackgroundImageWidget).
+    // When a background image is active, screen background is painted with reduced opacity
+    // so the image shows through.
+    m_bgOpacity = (theme.backgroundMode == ui::themes::TerminalTheme::Image)
+                      ? theme.screenBackgroundOpacity : 1.0;
+    bool transparent = (m_bgOpacity < 1.0);
+    setAttribute(Qt::WA_TranslucentBackground, transparent);
+    setAttribute(Qt::WA_OpaquePaintEvent, !transparent);
+    setAutoFillBackground(false);
 
     // Apply foreground (use green as default foreground)
     m_fgColor = theme.colorGreen;
@@ -219,6 +214,11 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
 
     // Calculate offset to center the screen
     QPoint offset = screenOffset();
+
+    // Clip to widget bounds so grid content doesn't overflow when
+    // the widget is smaller than the calculated grid (e.g., during resize)
+    painter.save();
+    painter.setClipRect(rect());
     painter.translate(offset);
 
     int rows = m_screenBuffer->rows();
@@ -270,6 +270,7 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
     }
 
     // Do not emit cursor notifications from paint path to avoid repaint loops.
+    painter.restore();
 }
 
 void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const ScreenCell &cell) {
@@ -336,20 +337,22 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
 
     // Column separator: vertical line on left edge of cell
     if (cell.attributes.colSep) {
+        // DPI-aware pen width so separators remain visible on high-DPI
+        qreal penW = qMax(1.0, devicePixelRatioF());
         QPen colSepPen;
         switch (m_colSepStyle) {
         case ui::themes::TerminalTheme::Dotted:
-            colSepPen = QPen(m_colSepColor, 1, Qt::DotLine);
+            colSepPen = QPen(m_colSepColor, penW, Qt::DotLine);
             break;
         case ui::themes::TerminalTheme::Dimmed: {
             QColor dimmed = m_colSepColor;
             dimmed.setAlpha(dimmed.alpha() / 2);
-            colSepPen = QPen(dimmed, 1, Qt::SolidLine);
+            colSepPen = QPen(dimmed, penW, Qt::SolidLine);
             break;
         }
         case ui::themes::TerminalTheme::Solid:
         default:
-            colSepPen = QPen(m_colSepColor, 1, Qt::SolidLine);
+            colSepPen = QPen(m_colSepColor, penW, Qt::SolidLine);
             break;
         }
         painter.setPen(colSepPen);
@@ -382,26 +385,17 @@ QPoint Q5250ScreenWidget::screenOffset() const {
         return QPoint(0, 0);
     }
 
-    // Calculate total screen size
-    int screenWidth = m_cellSize.width() * m_screenBuffer->cols();
-    int screenHeight = m_cellSize.height() * m_screenBuffer->rows();
+    // Use floating-point cell dimensions for precise centering
+    int screenWidth = qRound(m_cellWidthF * m_screenBuffer->cols());
+    int screenHeight = qRound(m_cellHeightF * m_screenBuffer->rows());
 
-    // Calculate widget size
     QSize widgetSize = size();
-    int widgetWidth = widgetSize.width();
-    int widgetHeight = widgetSize.height();
+    int offsetX = (widgetSize.width() - screenWidth) / 2;
+    int offsetY = (widgetSize.height() - screenHeight) / 2;
 
-    // Calculate offset to center the screen
-    int offsetX = (widgetWidth - screenWidth) / 2;
-    int offsetY = (widgetHeight - screenHeight) / 2;
-
-    // Ensure non-negative offsets
-    if (offsetX < 0) {
-        offsetX = 0;
-    }
-    if (offsetY < 0) {
-        offsetY = 0;
-    }
+    // Clamp to non-negative; if widget is smaller than grid, anchor top-left
+    if (offsetX < 0) offsetX = 0;
+    if (offsetY < 0) offsetY = 0;
 
     return QPoint(offsetX, offsetY);
 }
@@ -468,42 +462,7 @@ void Q5250ScreenWidget::renderCursorRules(QPainter &painter) {
     painter.restore();
 }
 
-void Q5250ScreenWidget::renderBackgroundImage(QPainter &painter) {
-    if (m_bgImage.isNull()) return;
-
-    painter.save();
-    painter.setOpacity(m_bgImageOpacity);
-
-    switch (m_bgImageLayout) {
-    case ui::themes::TerminalTheme::Stretch:
-        painter.drawPixmap(rect(), m_bgImage);
-        break;
-    case ui::themes::TerminalTheme::Fit: {
-        QPixmap scaled = m_bgImage.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        int x = (width() - scaled.width()) / 2;
-        int y = (height() - scaled.height()) / 2;
-        painter.drawPixmap(x, y, scaled);
-        break;
-    }
-    case ui::themes::TerminalTheme::Center: {
-        int x = (width() - m_bgImage.width()) / 2;
-        int y = (height() - m_bgImage.height()) / 2;
-        painter.drawPixmap(x, y, m_bgImage);
-        break;
-    }
-    case ui::themes::TerminalTheme::Tile: {
-        for (int y = 0; y < height(); y += m_bgImage.height()) {
-            for (int x = 0; x < width(); x += m_bgImage.width()) {
-                painter.drawPixmap(x, y, m_bgImage);
-            }
-        }
-        break;
-    }
-    }
-
-    painter.restore();
-}
-
+// Background image rendering moved to QBackgroundImageWidget (applied at tab level)
 // CRT effect rendering moved to QCRTOverlayWidget (applied at tab level)
 
 void Q5250ScreenWidget::setShowCursorRules(bool enabled) {

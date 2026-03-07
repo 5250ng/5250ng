@@ -30,12 +30,12 @@ Record keystroke sequences and replay them. Essential for repetitive AS/400 work
 
 ### 2. Printer Session Support (3812/SCS)
 
-Implement a virtual printer device so host print jobs can be captured to PDF/file. Many AS/400 workflows rely on printer output.
+Implement a virtual printer device so host print jobs can be captured. Many AS/400 workflows rely on printer output.
 
 **Key features:**
 - Virtual printer device registration with the host
 - SCS (SNA Character Stream) data stream parsing
-- Output to PDF, plain text, or raw SCS files
+- Output to plain text
 - Print queue management UI
 - Auto-open or auto-save options for incoming print jobs
 
@@ -65,17 +65,6 @@ Detect clickable items on screen (menu numbers, function key labels like "F3=Exi
 
 ## Tier 2 — UX & Quality of Life
 
-### 5. Session Scripting (Lua/JS)
-
-Expose a scripting API for automation: connect, wait for screen, send keys, read screen content. Useful for batch operations and testing.
-
-**Key features:**
-- Embedded scripting engine (Lua or JavaScript via Qt QJSEngine)
-- API: `connect()`, `waitForScreen(pattern)`, `sendKeys(keys)`, `readScreen(row, col, len)`
-- Script editor with syntax highlighting
-- Run scripts from command line (headless mode)
-- Script library with examples
-
 ### 6. Screen History / Scrollback
 
 Keep a history of previous screens so users can scroll back to review past output without re-navigating on the host.
@@ -93,47 +82,32 @@ Visual editor to remap physical keys to 5250 functions. Different users have str
 
 **Key features:**
 - Visual keyboard layout display
-- Drag-and-drop or click-to-assign remapping
+- Click-to-assign remapping
 - Preset layouts (IBM default, PC-friendly, custom)
 - Per-session or global keymaps
-- Import/export keymap configurations
+- Import/export keymap configurations (JSON)
 
-### 8. Find on Screen
 
-Ctrl+F text search within the current screen buffer, with highlighting. Simple but very useful on dense 80-column displays.
+### 8. AI Agent Side Panel
 
-**Key features:**
-- Search bar overlay (non-intrusive)
-- Highlight all matches on screen
-- Navigate between matches with Enter/Shift+Enter
-- Case-sensitive and regex options
-- Persist last search term
+Add a collapsible "Agent" tab on the right side of each session tab, providing an embedded AI assistant that understands the current terminal session context.
 
-### 9. Font Scaling / Zoom
-
-Ctrl+/- zoom in/out for accessibility, auto-fitting to window size.
+The agent receives the session's screen history (past screens and user actions) as context, enabling it to answer questions, explain host behavior, and suggest next steps — all without leaving the terminal.
 
 **Key features:**
-- Keyboard shortcuts: Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset)
-- Mouse wheel zoom with Ctrl held
-- Auto-fit mode: scale font to fill window
-- Minimum/maximum zoom bounds
-- Per-session zoom level persistence
+- Collapsible side panel (right-docked) toggled via toolbar button or keyboard shortcut
+- Session-aware context: automatically feeds screen history and user actions (keystrokes, AID keys) to the AI
+- Natural language Q&A about the current session ("What error did I get on the previous screen?", "How do I navigate to WRKSPLF from here?")
+- Suggested actions: the agent can propose keystrokes or macro sequences that the user can accept and execute with one click
+- Explain screen: one-click button to have the agent describe the current screen layout, fields, and available options
+- Configurable AI backend (API endpoint, model, API key) in session settings
+- Conversation history per session, persisted across reconnects
+- Privacy controls: option to redact sensitive fields before sending to the AI backend
+- Token/cost usage indicator in the panel footer
 
 ---
 
 ## Tier 3 — Advanced / Differentiation
-
-### 10. SSH Tunneling
-
-Built-in SSH tunnel configuration so users don't need external tools for secure access to systems without native TLS.
-
-**Key features:**
-- SSH tunnel setup integrated into connection dialog
-- Support for password and key-based authentication
-- Local port forwarding configuration
-- Jump host / bastion host support
-- Tunnel status indicator in status bar
 
 ### 11. Additional Code Pages
 
@@ -169,6 +143,7 @@ Organize saved sessions into groups/folders for users managing many AS/400 syste
 - Color-coded or icon-tagged groups (production, development, test)
 - Quick-connect favorites bar
 - Session search/filter
+- Tab groups
 
 ### 14. Clipboard Integration Enhancements
 
@@ -231,3 +206,5 @@ Show contextual information extracted from screen content heuristics.
 - Macros address the #1 pain point: repetitive navigation
 - Hotspots modernize the interaction model without breaking the terminal paradigm
 - Both can be implemented incrementally alongside existing features
+
+**AI Agent (#8)** is a strong differentiator — no existing 5250 emulator offers an embedded AI assistant with session context. It lowers the barrier for less experienced AS/400 users and can accelerate workflows for experts by suggesting commands and explaining unfamiliar screens.

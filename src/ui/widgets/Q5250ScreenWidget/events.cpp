@@ -34,12 +34,13 @@ void Q5250ScreenWidget::paintEvent(QPaintEvent *event) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    // Fill background color
-    painter.fillRect(rect(), m_bgColor);
-
-    // Render background image if present
-    if (m_hasBgImage && !m_bgImage.isNull()) {
-        renderBackgroundImage(painter);
+    // Fill background color (with opacity for background image transparency)
+    if (m_bgOpacity < 1.0) {
+        QColor bg = m_bgColor;
+        bg.setAlphaF(m_bgOpacity);
+        painter.fillRect(rect(), bg);
+    } else {
+        painter.fillRect(rect(), m_bgColor);
     }
 
     // Render screen content

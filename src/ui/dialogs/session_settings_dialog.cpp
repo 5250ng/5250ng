@@ -220,10 +220,28 @@ QWidget *SessionSettingsDialog::buildBackgroundSection() {
     layoutRow->addWidget(m_bgOpacityLabel);
     v->addLayout(layoutRow);
 
+    // Screen opacity — controls how much the background color covers the image
+    QHBoxLayout *screenOpacityRow = new QHBoxLayout();
+    screenOpacityRow->addWidget(new QLabel("Screen Opacity:"));
+    m_screenOpacitySlider = new QSlider(Qt::Horizontal);
+    m_screenOpacitySlider->setRange(0, 100);
+    m_screenOpacitySlider->setValue(100);
+    m_screenOpacitySlider->setToolTip(
+        "Controls how opaque the terminal background is.\n"
+        "Lower values let the background image show through.");
+    m_screenOpacityLabel = new QLabel("1.00");
+    screenOpacityRow->addWidget(m_screenOpacitySlider, 1);
+    screenOpacityRow->addWidget(m_screenOpacityLabel);
+    v->addLayout(screenOpacityRow);
+
     connect(m_bgColorRadio, &QRadioButton::toggled, this, &SessionSettingsDialog::onBackgroundModeChanged);
     connect(m_bgBrowseBtn, &QPushButton::clicked, this, &SessionSettingsDialog::onBrowseBackgroundImage);
     connect(m_bgOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
         m_bgOpacityLabel->setText(QString::number(val / 100.0, 'f', 2));
+        onThemePropertyChanged();
+    });
+    connect(m_screenOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
+        m_screenOpacityLabel->setText(QString::number(val / 100.0, 'f', 2));
         onThemePropertyChanged();
     });
     connect(m_bgColorSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
@@ -594,6 +612,7 @@ void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme
         ui::themes::TerminalTheme::imageLayoutToString(theme.backgroundImageLayout));
     if (layoutIdx >= 0) m_bgLayoutCombo->setCurrentIndex(layoutIdx);
     m_bgOpacitySlider->setValue(static_cast<int>(theme.backgroundImageOpacity * 100));
+    m_screenOpacitySlider->setValue(static_cast<int>(theme.screenBackgroundOpacity * 100));
 
     // Font
     int fontIdx = m_fontCombo->findText(theme.fontFamily);
@@ -672,6 +691,7 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
     t.backgroundImageLayout = ui::themes::TerminalTheme::imageLayoutFromString(
         m_bgLayoutCombo->currentData().toString());
     t.backgroundImageOpacity = m_bgOpacitySlider->value() / 100.0;
+    t.screenBackgroundOpacity = m_screenOpacitySlider->value() / 100.0;
 
     // Font
     t.fontFamily = m_fontCombo->currentText();
@@ -739,6 +759,7 @@ void SessionSettingsDialog::onBackgroundModeChanged() {
     m_bgBrowseBtn->setEnabled(!isColor);
     m_bgLayoutCombo->setEnabled(!isColor);
     m_bgOpacitySlider->setEnabled(!isColor);
+    m_screenOpacitySlider->setEnabled(!isColor);
     onThemePropertyChanged();
 }
 

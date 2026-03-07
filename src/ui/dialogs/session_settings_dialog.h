@@ -100,6 +100,8 @@ class SessionSettingsDialog : public QDialog {
     QComboBox *m_bgLayoutCombo;
     QSlider *m_bgOpacitySlider;
     QLabel *m_bgOpacityLabel;
+    QSlider *m_screenOpacitySlider;
+    QLabel *m_screenOpacityLabel;
 
     // Font
     QComboBox *m_fontCombo;

@@ -68,17 +68,18 @@ void Q5250ScreenWidget::calculateCellSize() {
 
     if (m_gridMode == ui::themes::TerminalTheme::Wide) {
         // Wide mode: cells fill the entire widget
-        int cellWidth = widgetSize.width() / cols;
-        int cellHeight = widgetSize.height() / rows;
-        if (cellWidth < 1) cellWidth = 1;
-        if (cellHeight < 1) cellHeight = 1;
-        m_cellSize = QSize(cellWidth, cellHeight);
+        // Store precise floating-point dimensions to avoid cumulative rounding drift
+        m_cellWidthF = static_cast<qreal>(widgetSize.width()) / cols;
+        m_cellHeightF = static_cast<qreal>(widgetSize.height()) / rows;
+        if (m_cellWidthF < 1.0) m_cellWidthF = 1.0;
+        if (m_cellHeightF < 1.0) m_cellHeightF = 1.0;
+        m_cellSize = QSize(qRound(m_cellWidthF), qRound(m_cellHeightF));
 
         // Scale font to match cell height
         QFontMetrics fm(m_baseFont);
         int baseFontHeight = fm.height();
-        if (baseFontHeight > 0 && baseFontHeight != cellHeight) {
-            double scaleFactor = static_cast<double>(cellHeight) / baseFontHeight;
+        if (baseFontHeight > 0 && baseFontHeight != m_cellSize.height()) {
+            double scaleFactor = m_cellHeightF / baseFontHeight;
             double newFontSize = m_baseFont.pointSizeF() * scaleFactor;
             if (newFontSize < 1.0) newFontSize = 1.0;
             m_font = m_baseFont;
@@ -106,8 +107,10 @@ void Q5250ScreenWidget::calculateCellSize() {
             finalCellHeight = finalCellWidth / fontAspectRatio;
         }
 
-        m_cellSize = QSize(static_cast<int>(finalCellWidth + 0.5),
-                           static_cast<int>(finalCellHeight + 0.5));
+        // Store precise floating-point dimensions for sub-pixel positioning
+        m_cellWidthF = finalCellWidth;
+        m_cellHeightF = finalCellHeight;
+        m_cellSize = QSize(qRound(finalCellWidth), qRound(finalCellHeight));
 
         int baseFontHeight = fm.height();
         int targetFontHeight = m_cellSize.height();
@@ -118,13 +121,17 @@ void Q5250ScreenWidget::calculateCellSize() {
             if (newFontSize < 1.0) newFontSize = 1.0;
             m_font = m_baseFont;
             m_font.setPointSizeF(newFontSize);
-            // Keep the calculated m_cellSize — it is guaranteed to fit inside
-            // the widget so screenOffset() can center the grid correctly.
-            // Characters are drawn with Qt::AlignCenter inside each cell.
         } else {
             m_font = m_baseFont;
         }
     }
+}
+
+void Q5250ScreenWidget::overrideCellWidth(qreal w) {
+    m_cellWidthF = w;
+    m_cellSize.setWidth(qRound(w));
+    updateCursorWidget();
+    update();
 }
 
 } // namespace ui::widgets

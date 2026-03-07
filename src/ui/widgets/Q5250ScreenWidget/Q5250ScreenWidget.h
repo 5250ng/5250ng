@@ -7,7 +7,6 @@
 #include <QClipboard>
 #include <QKeyEvent>
 #include <QMouseEvent>
-#include <QPixmap>
 #include <QTimer>
 #include <QWidget>
 #include "Q5250Cursor.h"
@@ -142,15 +141,20 @@ class Q5250ScreenWidget : public QWidget {
   private:
     // Rendering
     void renderScreen(QPainter &painter);
-    void renderBackgroundImage(QPainter &painter);
     void renderCell(QPainter &painter, int row, int col, const ScreenCell &cell);
     void renderCursorRules(QPainter &painter);
     void renderSelectionBorder(QPainter &painter);
+    // Background image rendering moved to QBackgroundImageWidget at tab level
     QColor getColorForCode(uint8_t colorCode) const;
     void updateCursorWidget();
 
     // Layout
     void calculateCellSize();
+  public:
+    qreal cellWidthF() const { return m_cellWidthF; }
+    qreal cellHeightF() const { return m_cellHeightF; }
+    void overrideCellWidth(qreal w);
+  private:
     QPoint cellPosition(int row, int col) const;
     QRect cellRect(int row, int col) const;
     QPoint screenOffset() const;                        // Offset to center the screen
@@ -182,18 +186,16 @@ class Q5250ScreenWidget : public QWidget {
     QFont m_baseFont; // Base font set by user
     QFont m_font;     // Scaled font for rendering
     QSize m_cellSize;
+    qreal m_cellWidthF = 8.0;  // Precise cell width for sub-pixel positioning
+    qreal m_cellHeightF = 16.0; // Precise cell height for sub-pixel positioning
     QColor m_bgColor;
     QColor m_fgColor;
     QVector<QColor> m_colorScheme;
     QPoint m_cursorPos;
     Q5250Cursor *m_cursorWidget = nullptr;
 
-    // Background image
-    QPixmap m_bgImage;
-    ui::themes::TerminalTheme::BackgroundImageLayout m_bgImageLayout =
-        ui::themes::TerminalTheme::Stretch;
-    double m_bgImageOpacity = 1.0;
-    bool m_hasBgImage = false;
+    // Background opacity (< 1 when background image is active at tab level)
+    double m_bgOpacity = 1.0;
 
     // Selection & indicator colors (from theme)
     QColor m_selectionBgColor = QColor(255, 255, 0, 64);

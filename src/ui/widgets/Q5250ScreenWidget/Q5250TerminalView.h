@@ -23,6 +23,9 @@ class Q5250TerminalView : public QWidget {
     void applyTerminalTheme(const ui::themes::TerminalTheme &theme);
     void updateStatusIndicators();
 
+  protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
   private slots:
     void onScreenSizeChanged(int rows, int cols);
 

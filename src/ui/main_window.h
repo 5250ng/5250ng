@@ -86,6 +86,13 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         ui::widgets::ScreenBuffer::SavedState savedScreen;
         ui::rendering::TN5250CommandHandler *commandHandler;
         ui::widgets::QCRTOverlayWidget *crtOverlay;
+        // Background image (painted in container's Paint event via event filter)
+        QPixmap bgImage;
+        QPixmap bgImageScaled;       // Cached scaled version
+        QSize bgImageScaledSize;     // Size the cache was generated for
+        ui::themes::TerminalTheme::BackgroundImageLayout bgImageLayout =
+            ui::themes::TerminalTheme::Stretch;
+        double bgImageOpacity = 1.0;
     };
 
     void applyThemeToSession(Session *session, const QString &themeId);

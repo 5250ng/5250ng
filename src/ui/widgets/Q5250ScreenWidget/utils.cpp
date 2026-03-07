@@ -14,17 +14,26 @@ namespace ui::widgets {
 
 /**
  * Return the top-left pixel position of the given cell.
+ *
+ * Uses floating-point cell dimensions to distribute sub-pixel rounding
+ * evenly across the grid, preventing cumulative drift at high column counts.
  */
 QPoint Q5250ScreenWidget::cellPosition(int row, int col) const {
-    return QPoint(col * m_cellSize.width(), row * m_cellSize.height());
+    return QPoint(qRound(col * m_cellWidthF), qRound(row * m_cellHeightF));
 }
 
 /**
  * Compute the pixel rectangle bounding the given cell.
+ *
+ * Width/height are derived from the difference between adjacent cell
+ * positions so that cells tile perfectly without gaps or overlaps.
  */
 QRect Q5250ScreenWidget::cellRect(int row, int col) const {
-    QPoint pos = cellPosition(row, col);
-    return QRect(pos, m_cellSize);
+    int x = qRound(col * m_cellWidthF);
+    int y = qRound(row * m_cellHeightF);
+    int x1 = qRound((col + 1) * m_cellWidthF);
+    int y1 = qRound((row + 1) * m_cellHeightF);
+    return QRect(x, y, x1 - x, y1 - y);
 }
 
 void Q5250ScreenWidget::updateCursorWidget() {
