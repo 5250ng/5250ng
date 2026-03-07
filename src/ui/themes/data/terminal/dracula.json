@@ -1,0 +1,59 @@
+{
+    "id": "dracula",
+    "displayName": "Dracula",
+    "builtin": true,
+    "description": "Popular dark theme with distinctive purple and pink accents.",
+    "background": {
+        "mode": "color",
+        "color": "#282a36",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "colors": {
+        "black": "#282a36",
+        "green": "#50fa7b",
+        "white": "#f8f8f2",
+        "blue": "#6272a4",
+        "red": "#ff5555",
+        "cyan": "#8be9fd",
+        "pink": "#ff79c6",
+        "yellow": "#f1fa8c",
+        "cursor": "#f8f8f2"
+    },
+    "selection": {
+        "background": "#44475a",
+        "foreground": "#f8f8f2",
+        "fieldIndicator": "#44475a60"
+    },
+    "columnSeparator": {
+        "enabled": false,
+        "color": "#44475a",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "bar",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.0,
+        "glowRadius": 0.0,
+        "curvature": 0.0
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0,
+    "hrule": {
+        "color": "#50fa7b"
+    },
+    "footer": {
+        "kbdStateColor": "#f1fa8c",
+        "systemNameColor": "#8be9fd",
+        "historyColor": "#ffb86c",
+        "macroColor": "#ff5555",
+        "coordinatesColor": "#50fa7b"
+    }
+}
