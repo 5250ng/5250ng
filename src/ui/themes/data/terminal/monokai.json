@@ -1,0 +1,59 @@
+{
+    "id": "monokai",
+    "displayName": "Monokai",
+    "builtin": true,
+    "description": "Warm dark theme with vibrant syntax-inspired colors \u2014 a developer favorite.",
+    "background": {
+        "mode": "color",
+        "color": "#272822",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "colors": {
+        "black": "#272822",
+        "green": "#a6e22e",
+        "white": "#f8f8f2",
+        "blue": "#66d9ef",
+        "red": "#f92672",
+        "cyan": "#66d9ef",
+        "pink": "#ae81ff",
+        "yellow": "#e6db74",
+        "cursor": "#f8f8f0"
+    },
+    "selection": {
+        "background": "#49483e",
+        "foreground": "#f8f8f2",
+        "fieldIndicator": "#49483e60"
+    },
+    "columnSeparator": {
+        "enabled": false,
+        "color": "#3e3d32",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "bar",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": false,
+        "scanlineIntensity": 0.0,
+        "glowRadius": 0.0,
+        "curvature": 0.0
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0,
+    "hrule": {
+        "color": "#a6e22e"
+    },
+    "footer": {
+        "kbdStateColor": "#e6db74",
+        "systemNameColor": "#66d9ef",
+        "historyColor": "#fd971f",
+        "macroColor": "#f92672",
+        "coordinatesColor": "#a6e22e"
+    }
+}
