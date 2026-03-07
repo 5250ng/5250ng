@@ -1,0 +1,14 @@
+{
+    "name": "light",
+    "displayName": "Light",
+    "colors": {
+        "mainwindow.background": "#f5f5f5",
+        "mainwindow.text": "#000000",
+        "mainwindow.titlebar.background": "#e8e8e8",
+        "mainwindow.titlebar.hline": "#cccccc",
+        "status.disconnected": "#d32f2f",
+        "status.connecting": "#f57c00",
+        "status.negotiating": "#f57c00",
+        "status.connected": "#2e7d32"
+    }
+}
