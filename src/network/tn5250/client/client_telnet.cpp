@@ -174,6 +174,19 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
             m_eorNegotiated = true;
             logger::Logger::instance()->debug("[TN5250->Client]: EOR negotiated");
             checkHandshakeComplete();
+        } else if (option == TelnetOption::ECHO) {
+            // RFC 1205: WILL ECHO signals the server is ready for 5250 data stream.
+            // The client MUST accept with DO ECHO.
+            sendTelnetCommand(TelnetCommand::DO, TelnetOption::ECHO);
+            logger::Logger::instance()->debug(
+                "[TN5250->Client]: Accepted ECHO (server enters 5250 data stream mode)"
+            );
+        } else if (option == TelnetOption::SUPPRESS_GO_AHEAD) {
+            // RFC 1205: WILL SGA is part of 5250E negotiation — accept it.
+            sendTelnetCommand(TelnetCommand::DO, TelnetOption::SUPPRESS_GO_AHEAD);
+            logger::Logger::instance()->debug(
+                "[TN5250->Client]: Accepted SUPPRESS_GO_AHEAD"
+            );
         } else if (option == TelnetOption::TELNET_START_TLS) {
             handleStartTLS();
         } else {

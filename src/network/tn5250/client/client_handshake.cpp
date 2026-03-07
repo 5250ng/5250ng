@@ -29,15 +29,17 @@ void TN5250Client::performHandshake() {
 }
 
 void TN5250Client::sendDeviceName() {
-    // TN5250 device name negotiation
-    // Format: IAC SB TERMINAL_TYPE IS <device_name> IAC SE
+    // TN5250 TERMINAL_TYPE negotiation
+    // Format: IAC SB TERMINAL_TYPE IS <terminal_type> IAC SE
     // IS = 0 (we're sending our terminal type)
+    // Note: m_terminalType is the terminal MODEL (e.g. "IBM-3179-2"),
+    //       m_deviceName is the virtual device NAME sent via NEW_ENVIRON DEVNAME.
     QByteArray negotiation;
     negotiation.append(static_cast<uint8_t>(TelnetCommand::IAC));
     negotiation.append(static_cast<uint8_t>(TelnetCommand::SB));
     negotiation.append(static_cast<uint8_t>(TelnetOption::TERMINAL_TYPE));
     negotiation.append(static_cast<uint8_t>(0)); // IS = 0
-    negotiation.append(m_deviceName.toUtf8());
+    negotiation.append(m_terminalType.toUtf8());
     negotiation.append(static_cast<uint8_t>(TelnetCommand::IAC));
     negotiation.append(static_cast<uint8_t>(TelnetCommand::SE));
 
@@ -45,7 +47,7 @@ void TN5250Client::sendDeviceName() {
         m_socket->write(negotiation);
         m_terminalTypeSent = true;
         logger::Logger::instance()->debug(
-            QString("[TN5250->Client]: Sent device name: %1").arg(m_deviceName)
+            QString("[TN5250->Client]: Sent terminal type: %1").arg(m_terminalType)
         );
 
         // If binary wasn't explicitly negotiated via responses, assume it's
@@ -75,15 +77,18 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("DEVNAME");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
-    // Empty value = server auto-assigns
+    if (!m_deviceName.isEmpty()) {
+        negotiation.append(m_deviceName.toUtf8());
+    }
 
     // IBMRSEED + IBMSUBSPW: password encryption (RFC 4777)
     bool encrypted = false;
     QByteArray clientSeed;
+    core::CodePage cp(m_codePage);
     if (m_serverSeed.size() == 8 && !m_username.isEmpty() && !m_password.isEmpty()) {
         clientSeed = IBMRSeed::generateClientSeed();
         QByteArray pwSub = IBMRSeed::encryptPassword(
-            m_username, m_password, m_serverSeed, clientSeed);
+            m_username, m_password, m_serverSeed, clientSeed, cp);
         if (!pwSub.isEmpty()) {
             encrypted = true;
             // IBMRSEED VALUE <escaped client seed>
@@ -130,11 +135,11 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
     negotiation.append("USB");
 
-    // CODEPAGE = 37 (EBCDIC US/Canada)
+    // CODEPAGE — use the session's configured code page
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("CODEPAGE");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
-    negotiation.append("37");
+    negotiation.append(QByteArray::number(static_cast<int>(m_codePage)));
 
     // CHARSET = 697 (EBCDIC character set)
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
@@ -148,9 +153,11 @@ void TN5250Client::sendNewEnviron() {
     if (m_socket) {
         m_socket->write(negotiation);
         logger::Logger::instance()->debug(
-            QString("[TN5250->Client]: Sent NEW_ENVIRON: DEVNAME=(auto) IBMRSEED=%1"
-                    " IBMSUBSVAR=(empty) KBDTYPE=USB CODEPAGE=37 CHARSET=697")
-                .arg(encrypted ? "encrypted" : "(empty)"));
+            QString("[TN5250->Client]: Sent NEW_ENVIRON: DEVNAME=%1 IBMRSEED=%2"
+                    " IBMSUBSVAR=(empty) KBDTYPE=USB CODEPAGE=%3 CHARSET=697")
+                .arg(m_deviceName.isEmpty() ? "(auto)" : m_deviceName)
+                .arg(encrypted ? "encrypted" : "(empty)")
+                .arg(static_cast<int>(m_codePage)));
     }
 }
 

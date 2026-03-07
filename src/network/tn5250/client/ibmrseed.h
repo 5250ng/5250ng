@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/codepage.h"
 #include <QByteArray>
 #include <QString>
 #include <cstdint>
@@ -17,6 +18,13 @@ class IBMRSeed {
                                       const QByteArray &serverSeed,
                                       const QByteArray &clientSeed);
 
+    // Overload using an explicit code page (thread-safe, no global state)
+    static QByteArray encryptPassword(const QString &userId,
+                                      const QString &password,
+                                      const QByteArray &serverSeed,
+                                      const QByteArray &clientSeed,
+                                      const core::CodePage &cp);
+
     // Generate a random 8-byte client seed
     static QByteArray generateClientSeed();
 
@@ -28,6 +36,7 @@ class IBMRSeed {
   private:
     // Step 1: Convert password to 8-byte EBCDIC uppercase, padded with 0x40
     static QByteArray padPasswordEBCDIC(const QString &password);
+    static QByteArray padPasswordEBCDIC(const QString &password, const core::CodePage &cp);
 
     // Step 2: XOR each byte with 0x55
     static QByteArray xorWith55(const QByteArray &data);
@@ -46,6 +55,7 @@ class IBMRSeed {
 
     // Pad user ID to 8 bytes EBCDIC uppercase
     static QByteArray padUserIdEBCDIC(const QString &userId, int len);
+    static QByteArray padUserIdEBCDIC(const QString &userId, int len, const core::CodePage &cp);
 
     // Big-endian 8-byte addition: a + b
     static QByteArray addBigEndian8(const QByteArray &a, const QByteArray &b);

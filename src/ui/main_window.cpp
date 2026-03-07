@@ -254,9 +254,11 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     connect(session->worker, &tn5250::session::Worker::errorOccurred, this,
         [this, session](const QString &error) {
             logger::Logger::instance()->error(QString("Connection error: %1").arg(error));
-            if (m_sessions.indexOf(session) == m_activeIndex) {
-                ui::widgets::StyledMessageBox::warning(this, "Connection Error", error);
+            int idx = m_sessions.indexOf(session);
+            if (idx >= 0 && idx != m_activeIndex) {
+                m_tabWidget->setCurrentIndex(idx);
             }
+            ui::widgets::StyledMessageBox::warning(this, "Connection Error", error);
         });
     // App data: feed this session's parser directly
     connect(session->worker, &tn5250::session::Worker::appData, this, [this, session](const QByteArray &bytes) {
@@ -561,6 +563,7 @@ void MainWindow::setActiveSession(int index) {
     m_parser = s->parser;
     m_cursorCoordinates = s->coordinatesLabel;
     m_currentSession = s->config;
+    core::EBCDIC::setCodePage(s->config.codePage());
     // Sync menu actions with this session's actual connection state
     auto state = s->connectionStatus->state();
     bool connected = (state == tn5250::client::TN5250Client::ConnectionState::Connected

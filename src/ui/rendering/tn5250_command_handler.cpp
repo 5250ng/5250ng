@@ -182,7 +182,7 @@ void TN5250CommandHandler::onClearScreenRequested() {
 
 void TN5250CommandHandler::onKeyboardUnlockRequested() {
     logger::Logger::instance()->debug("CommandHandler: Keyboard unlock requested by host");
-    if (m_displayWidget) {
+    if (m_displayWidget && m_displayWidget->isVisible()) {
         m_displayWidget->setFocus();
     }
 }
@@ -272,7 +272,8 @@ void TN5250CommandHandler::processDeferredCC2(uint8_t cc2) {
                 }
             }
         }
-        m_displayWidget->setFocus();
+        if (m_displayWidget->isVisible())
+            m_displayWidget->setFocus();
     }
     if (cc2 & 0x20) {
         QApplication::beep();
@@ -434,7 +435,8 @@ void TN5250CommandHandler::onInviteReceived() {
     // Invite unlocks the keyboard for user input
     m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
     m_displayWidget->setCursorBlinkRate(250);
-    m_displayWidget->setFocus();
+    if (m_displayWidget->isVisible())
+        m_displayWidget->setFocus();
     LOG_DEBUG("CommandHandler: Invite received - keyboard unlocked");
 }
 

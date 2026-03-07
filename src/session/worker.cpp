@@ -24,7 +24,14 @@ void Worker::start() {
     }
     m_client = new tn5250::client::TN5250Client(this);
     m_client->setDeviceName(m_config.deviceName());
+    // Terminal type is the 5250 model identifier, derived from screen size
+    if (m_config.screenRows() > 24 || m_config.screenCols() > 80) {
+        m_client->setTerminalType(QStringLiteral("IBM-3477-FC"));
+    } else {
+        m_client->setTerminalType(QStringLiteral("IBM-3179-2"));
+    }
     m_client->setCredentials(m_config.username(), m_config.password());
+    m_client->setCodePage(m_config.codePage());
 
     connect(m_client, &tn5250::client::TN5250Client::connected, this, &Worker::connected);
     connect(m_client, &tn5250::client::TN5250Client::disconnected, this, &Worker::disconnected);

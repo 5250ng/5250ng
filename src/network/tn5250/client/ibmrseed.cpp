@@ -22,6 +22,15 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
                                      const QString &password,
                                      const QByteArray &serverSeed,
                                      const QByteArray &clientSeed) {
+    core::CodePage cp(core::CodePage::ID::CP037);
+    return encryptPassword(userId, password, serverSeed, clientSeed, cp);
+}
+
+QByteArray IBMRSeed::encryptPassword(const QString &userId,
+                                     const QString &password,
+                                     const QByteArray &serverSeed,
+                                     const QByteArray &clientSeed,
+                                     const core::CodePage &cp) {
     if (serverSeed.size() != 8 || clientSeed.size() != 8) {
         logger::Logger::instance()->error(
             "[IBMRSEED]: Invalid seed size (expected 8 bytes each)");
@@ -29,7 +38,7 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
     }
 
     // Step 1: Pad password to 8 bytes EBCDIC uppercase
-    QByteArray pwEBCDIC = padPasswordEBCDIC(password);
+    QByteArray pwEBCDIC = padPasswordEBCDIC(password, cp);
 
     // Step 2: XOR each byte with 0x55
     QByteArray xored = xorWith55(pwEBCDIC);
@@ -38,7 +47,7 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
     QByteArray shifted = leftShift1(xored);
 
     // Step 4: DES-ECB encrypt userID with shifted key → PW_TOKEN
-    QByteArray userIdPadded = padUserIdEBCDIC(userId, 8);
+    QByteArray userIdPadded = padUserIdEBCDIC(userId, 8, cp);
     QByteArray pwToken = desEcbEncrypt(shifted, userIdPadded);
     if (pwToken.isEmpty()) {
         logger::Logger::instance()->error("[IBMRSEED]: DES-ECB encrypt failed");
@@ -54,7 +63,7 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
 
     // Step 7: Build 40-byte block and DES-CBC encrypt
     // Pad userID to 16 bytes (two 8-byte halves) for XOR with RDrSEQ
-    QByteArray userId16 = padUserIdEBCDIC(userId, 16);
+    QByteArray userId16 = padUserIdEBCDIC(userId, 16, cp);
     QByteArray userPart1 = userId16.left(8);
     QByteArray userPart2 = userId16.mid(8, 8);
 
@@ -120,9 +129,14 @@ QByteArray IBMRSeed::escapeNewEnviron(const QByteArray &data) {
 }
 
 QByteArray IBMRSeed::padPasswordEBCDIC(const QString &password) {
+    core::CodePage cp(core::CodePage::ID::CP037);
+    return padPasswordEBCDIC(password, cp);
+}
+
+QByteArray IBMRSeed::padPasswordEBCDIC(const QString &password, const core::CodePage &cp) {
     // Convert to uppercase, then to EBCDIC, pad/truncate to 8 bytes with 0x40
     QString upper = password.toUpper();
-    QByteArray ebcdic = core::EBCDIC::stringToEBCDIC(upper);
+    QByteArray ebcdic = cp.fromUnicode(upper);
 
     // Truncate to 8 or pad with EBCDIC space (0x40)
     if (ebcdic.size() > 8) {
@@ -238,9 +252,14 @@ QByteArray IBMRSeed::desCbcEncrypt(const QByteArray &key,
 }
 
 QByteArray IBMRSeed::padUserIdEBCDIC(const QString &userId, int len) {
+    core::CodePage cp(core::CodePage::ID::CP037);
+    return padUserIdEBCDIC(userId, len, cp);
+}
+
+QByteArray IBMRSeed::padUserIdEBCDIC(const QString &userId, int len, const core::CodePage &cp) {
     // Convert to uppercase, then to EBCDIC, pad/truncate to len bytes with 0x40
     QString upper = userId.toUpper();
-    QByteArray ebcdic = core::EBCDIC::stringToEBCDIC(upper);
+    QByteArray ebcdic = cp.fromUnicode(upper);
 
     if (ebcdic.size() > len) {
         ebcdic.truncate(len);

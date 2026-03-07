@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/codepage.h"
 #include "network/tn5250/telnet/commands.h"
 #include "network/tn5250/telnet/options.h"
 #include <QByteArray>
@@ -47,10 +48,18 @@ class TN5250Client : public QObject {
     void setDeviceName(const QString &deviceName);
     QString deviceName() const { return m_deviceName; }
 
+    // Terminal type sent in TERMINAL_TYPE negotiation (e.g. "IBM-3179-2")
+    void setTerminalType(const QString &type) { m_terminalType = type; }
+    QString terminalType() const { return m_terminalType; }
+
     // Credentials for IBMRSEED password encryption (RFC 4777)
     void setCredentials(const QString &username, const QString &password);
     QString username() const { return m_username; }
     QString password() const { return m_password; }
+
+    // EBCDIC code page for this session (used in NEW_ENVIRON and password encryption)
+    void setCodePage(core::CodePage::ID cp) { m_codePage = cp; }
+    core::CodePage::ID codePage() const { return m_codePage; }
 
   signals:
     void connected();
@@ -103,8 +112,10 @@ class TN5250Client : public QObject {
     QString m_hostname;
     quint16 m_port;
     QString m_deviceName;
+    QString m_terminalType = QStringLiteral("IBM-3179-2");
     QString m_username;
     QString m_password;
+    core::CodePage::ID m_codePage = core::CodePage::ID::CP037;
 
     // IBMRSEED state (RFC 4777)
     QByteArray m_serverSeed;  // 8-byte seed from server's NEW_ENVIRON SEND
