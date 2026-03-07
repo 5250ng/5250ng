@@ -1,0 +1,58 @@
+{
+    "background": {
+        "color": "#000000",
+        "imageLayout": "stretch",
+        "imageOpacity": 1,
+        "mode": "color",
+        "screenOpacity": 1
+    },
+    "builtin": false,
+    "cellGridColor": "#28ffffff",
+    "colors": {
+        "black": "#000000",
+        "blue": "#99c1f1",
+        "cursor": "#00ff00",
+        "cyan": "#00ffff",
+        "green": "#6fff88",
+        "pink": "#ff55ff",
+        "red": "#ff5555",
+        "white": "#ffffff",
+        "yellow": "#ffff55"
+    },
+    "columnSeparator": {
+        "color": "#808080",
+        "enabled": true,
+        "style": "solid"
+    },
+    "crtEffect": {
+        "curvature": 0.1,
+        "enabled": false,
+        "glowRadius": 0.2,
+        "phosphorBloom": 0,
+        "scanlineIntensity": 0.3
+    },
+    "cursor": {
+        "blinkMs": 530,
+        "shape": "block"
+    },
+    "displayName": "Classic Green Screen",
+    "font": {
+        "family": "DejaVu Sans Mono",
+        "size": 14
+    },
+    "footer": {
+        "coordinatesColor": "#99c1f1"
+    },
+    "globalBrightness": 1,
+    "globalSaturation": 1,
+    "gridMode": "packed",
+    "hrule": {
+        "color": "#ed333b"
+    },
+    "id": "classic_green",
+    "selection": {
+        "background": "#ff0040",
+        "fieldIndicator": "#0080ff40",
+        "foreground": "#ffffff"
+    }
+}
