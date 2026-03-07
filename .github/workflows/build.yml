@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  linux:
+    name: Linux Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            libgl1-mesa-dev \
+            libssl-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-0 \
+            xvfb \
+            cmake \
+            g++ \
+            build-essential
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        run: cd build && xvfb-run ctest --output-on-failure
+
+  macos:
+    name: macOS Build & Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install qt@6 openssl cmake
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6);$(brew --prefix openssl)"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        run: cd build && ctest --output-on-failure
+
+  windows:
+    name: Windows Build & Test
+    runs-on: windows-latest
+    env:
+      OPENSSL_ROOT_DIR: "C:/Program Files/OpenSSL-Win64"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.5.0'
+          cache: true
+
+      - name: Install OpenSSL
+        run: choco install openssl -y
+
+      - name: Configure CMake
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=ON
+          -DOPENSSL_ROOT_DIR="${{ env.OPENSSL_ROOT_DIR }}"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run unit tests
+        run: |
+          cd build
+          ctest -C Release --output-on-failure -E "test_tn5250_connection"
+
+      - name: Run integration tests (allow failure)
+        continue-on-error: true
+        run: |
+          cd build
+          ctest -C Release --output-on-failure -R "test_tn5250_connection"
