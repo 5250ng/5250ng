@@ -1,0 +1,13 @@
+{
+    "name": "dark",
+    "displayName": "Dark",
+    "colors": {
+        "mainwindow.background": "#1e1e1e",
+        "mainwindow.titlebar.background": "#252526",
+        "mainwindow.titlebar.hline": "#3c3c3c",
+        "status.disconnected": "#d32f2f",
+        "status.connecting": "#f57c00",
+        "status.negotiating": "#f57c00",
+        "status.connected": "#2e7d32"
+    }
+}
