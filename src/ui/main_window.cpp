@@ -45,12 +45,22 @@ MainWindow::MainWindow(QWidget *parent)
     : ui::widgets::BaseFramelessWindow(parent), m_displayWidget(nullptr),
       m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
     setWindowTitle("5250ng");
-    // DPI-aware initial size: ~70% of primary screen, clamped to reasonable bounds
+    // Size the window to fit a classic 24×80 terminal using the default font
     {
-        QSize initial(1128, 836);
+        QFont termFont("Courier", 12);
+        QFontMetrics fm(termFont);
+        int cellW = fm.horizontalAdvance('M');
+        int cellH = fm.height();
+        // 24 rows + 1 footer row for the terminal content
+        int contentW = cellW * 80;
+        int contentH = cellH * 25;
+        // Add estimated chrome: title bar, tab bar, hrule, status footer
+        int chromeH = 90;
+        QSize initial(contentW, contentH + chromeH);
+        // Clamp to available screen size
         if (auto *screen = QApplication::primaryScreen()) {
             QRect avail = screen->availableGeometry();
-            initial = QSize(avail.width() * 7 / 10, avail.height() * 7 / 10);
+            initial = initial.boundedTo(QSize(avail.width() * 9 / 10, avail.height() * 9 / 10));
         }
         resize(initial);
     }
