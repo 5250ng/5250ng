@@ -1,0 +1,13 @@
+{
+    "name": "highcontrast",
+    "displayName": "High Contrast",
+    "colors": {
+        "mainwindow.background": "#000000",
+        "mainwindow.titlebar.background": "#000000",
+        "mainwindow.titlebar.hline": "#ffffff",
+        "status.disconnected": "#ff4444",
+        "status.connecting": "#ffaa00",
+        "status.negotiating": "#ffaa00",
+        "status.connected": "#44ff44"
+    }
+}
