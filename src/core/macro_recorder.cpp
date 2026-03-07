@@ -184,8 +184,8 @@ bool MacroRecorder::saveMacro(const Macro &macro, const QString &filePath) {
     if (!file.open(QIODevice::WriteOnly))
         return false;
     QJsonDocument doc(macro.toJson());
-    file.write(doc.toJson(QJsonDocument::Indented));
-    return true;
+    QByteArray data = doc.toJson(QJsonDocument::Indented);
+    return file.write(data) == data.size();
 }
 
 Macro MacroRecorder::loadMacro(const QString &filePath) {

@@ -28,9 +28,9 @@ const ScreenSnapshot &ScreenHistory::at(int index) const {
 
 QVector<int> ScreenHistory::search(const QString &text) const {
     QVector<int> results;
-    QByteArray searchBytes = text.toUtf8();
     for (int i = 0; i < m_history.size(); ++i) {
-        if (m_history[i].cellData.contains(searchBytes))
+        QString screenText = QString::fromUtf8(m_history[i].cellData);
+        if (screenText.contains(text, Qt::CaseInsensitive))
             results.append(i);
     }
     return results;

@@ -3,6 +3,7 @@
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QApplication>
 #include <QDir>
+#include <QPointer>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -142,19 +143,21 @@ void MainWindow::onPlayMacro() {
     core::Macro macro = allMacros[idx];
 
     // Connect async playback — recorder emits steps one at a time with delays
+    // Use QPointer to guard against session being closed during playback
+    QPointer<ui::widgets::Q5250ScreenWidget> displayGuard = s->displayWidget;
     auto conn = std::make_shared<QMetaObject::Connection>();
     auto finishConn = std::make_shared<QMetaObject::Connection>();
 
     *conn = connect(s->macroRecorder, &core::MacroRecorder::playbackStep, this,
-        [s](const core::MacroStep &step) {
-            if (!s->displayWidget) return;
+        [displayGuard](const core::MacroStep &step) {
+            if (displayGuard.isNull()) return;
             if (step.type == core::MacroStep::KeyPress) {
                 QKeyEvent ev(QEvent::KeyPress, step.key, step.mods, step.text);
-                QApplication::sendEvent(s->displayWidget, &ev);
+                QApplication::sendEvent(displayGuard.data(), &ev);
             } else if (step.type == core::MacroStep::AIDKey) {
                 QByteArray aid;
                 aid.append(static_cast<char>(step.aidByte));
-                s->displayWidget->processEncodedInput(aid, true);
+                displayGuard->processEncodedInput(aid, true);
             }
         });
 

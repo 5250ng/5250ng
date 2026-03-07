@@ -10,8 +10,10 @@ SessionLogger::~SessionLogger() {
 }
 
 bool SessionLogger::start(const QString &filePath, Verbosity verbosity) {
-    QMutexLocker lock(&m_mutex);
+    // Stop outside the lock to avoid recursive locking deadlock
     if (m_active) stop();
+
+    QMutexLocker lock(&m_mutex);
 
     m_filePath = filePath;
     m_verbosity = verbosity;

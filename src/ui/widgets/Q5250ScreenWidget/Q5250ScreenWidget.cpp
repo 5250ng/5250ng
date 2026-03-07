@@ -420,7 +420,9 @@ QPoint Q5250ScreenWidget::screenToCell(const QPoint &screenPos) const {
     // Adjust screen position by offset
     QPoint adjustedPos = screenPos - offset;
 
-    // Calculate cell coordinates
+    // Calculate cell coordinates (guard against zero cell size)
+    if (m_cellSize.width() <= 0 || m_cellSize.height() <= 0)
+        return QPoint(-1, -1);
     int col = adjustedPos.x() / m_cellSize.width();
     int row = adjustedPos.y() / m_cellSize.height();
 
