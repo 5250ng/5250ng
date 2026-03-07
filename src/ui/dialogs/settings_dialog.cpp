@@ -1,7 +1,7 @@
 #include "settings_dialog.h"
 #include <QApplication>
 
-SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent) {
+SettingsDialog::SettingsDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
     setupUI();
     ensureThemesLoaded();
 }
@@ -18,7 +18,9 @@ void SettingsDialog::setupUI() {
     setWindowTitle("Settings");
     resize(850, 650);
 
-    QVBoxLayout *rootLayout = new QVBoxLayout(this);
+    QVBoxLayout *rootLayout = contentLayout();
+    rootLayout->setContentsMargins(8, 8, 8, 8);
+    rootLayout->setSpacing(6);
     m_splitter = new QSplitter(Qt::Horizontal, this);
 
     // Left: category tree

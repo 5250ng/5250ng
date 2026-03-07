@@ -17,6 +17,8 @@ class TitleBar : public QWidget {
     ~TitleBar() override = default;
 
     QMenuBar *menuBar() const { return m_menuBar; }
+    void setTitle(const QString &title);
+    void setMinMaxVisible(bool visible);
 
   signals:
     void minimizeRequested();

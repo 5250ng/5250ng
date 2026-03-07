@@ -165,6 +165,8 @@ set(UI_SOURCES
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h
     src/ui/widgets/Frameless/BaseFramelessWindow.cpp
     src/ui/widgets/Frameless/BaseFramelessWindow.h
+    src/ui/widgets/Frameless/BaseFramelessDialog.cpp
+    src/ui/widgets/Frameless/BaseFramelessDialog.h
     src/ui/widgets/Frameless/TitleBar.cpp
     src/ui/widgets/Frameless/TitleBar.h
     # dialogs

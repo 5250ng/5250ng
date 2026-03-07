@@ -41,6 +41,11 @@ void BaseFramelessWindow::connectControls() {
     connect(m_titleBar, &TitleBar::mouseDoubleClicked, this, &BaseFramelessWindow::onTitleMouseDoubleClicked);
 }
 
+void BaseFramelessWindow::setWindowTitle(const QString &title) {
+    QMainWindow::setWindowTitle(title);
+    m_titleBar->setTitle(title);
+}
+
 void BaseFramelessWindow::onTitleMousePressed(const QPoint &globalPos) {
     if (isMaximized())
         return;

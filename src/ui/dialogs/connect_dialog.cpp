@@ -6,7 +6,7 @@
 #include <QInputDialog>
 #include <QMessageBox>
 
-ConnectDialog::ConnectDialog(QWidget *parent) : QDialog(parent) {
+ConnectDialog::ConnectDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
     setupUI();
     updateUI();
 }
@@ -18,7 +18,9 @@ void ConnectDialog::setupUI() {
     setModal(true);
     resize(400, 300);
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    QVBoxLayout *mainLayout = contentLayout();
+    mainLayout->setContentsMargins(8, 8, 8, 8);
+    mainLayout->setSpacing(6);
 
     // Session management group
     QGroupBox *sessionGroup = new QGroupBox("Saved Sessions", this);
@@ -161,8 +163,6 @@ void ConnectDialog::setupUI() {
     buttonLayout->addWidget(m_connectButton);
     buttonLayout->addWidget(m_cancelButton);
     mainLayout->addLayout(buttonLayout);
-
-    setLayout(mainLayout);
 
     // Connect signals
     connect(m_connectButton, &QPushButton::clicked, this, &ConnectDialog::onConnectClicked);

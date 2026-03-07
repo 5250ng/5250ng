@@ -67,6 +67,16 @@ TitleBar::TitleBar(QWidget *parent)
     applyTheme();
 }
 
+void TitleBar::setTitle(const QString &title) {
+    if (m_titleLabel)
+        m_titleLabel->setText(title);
+}
+
+void TitleBar::setMinMaxVisible(bool visible) {
+    m_minButton->setVisible(visible);
+    m_maxButton->setVisible(visible);
+}
+
 bool TitleBar::eventFilter(QObject *obj, QEvent *event) {
     if (obj == m_menuBar) {
         if (event->type() == QEvent::MouseButtonPress) {

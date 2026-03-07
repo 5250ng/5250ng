@@ -3,8 +3,8 @@
 #include "session_settings_dialog.h"
 #include "ui/themes/manager.h"
 #include "ui/themes/terminal_theme.h"
+#include "ui/widgets/Frameless/BaseFramelessDialog.h"
 #include <QComboBox>
-#include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -13,7 +13,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
-class SettingsDialog : public QDialog {
+class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     Q_OBJECT
 
   public:
