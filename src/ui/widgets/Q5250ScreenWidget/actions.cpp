@@ -12,7 +12,13 @@
 
 namespace ui::widgets {
 
-void Q5250ScreenWidget::onScreenChanged() { update(); }
+void Q5250ScreenWidget::onScreenChanged() {
+    // Push to screen history and refresh hotspots on each screen update
+    pushScreenToHistory();
+    if (m_hotspotDetector.isEnabled())
+        refreshHotspots();
+    update();
+}
 
 void Q5250ScreenWidget::onCursorMoved(const QPoint &pos) {
     Q_UNUSED(pos);

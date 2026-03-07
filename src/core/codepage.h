@@ -24,6 +24,10 @@ class CodePage {
         CP285 = 285,   // UK
         CP297 = 297,   // France
         CP500 = 500,   // International
+        CP870 = 870,   // Eastern Europe (Latin-2)
+        CP420 = 420,   // Arabic
+        CP424 = 424,   // Hebrew
+        CP838 = 838,   // Thai
     };
 
     explicit CodePage(ID id = ID::CP037);
@@ -63,6 +67,10 @@ class CodePage {
     void initCP285();
     void initCP297();
     void initCP500();
+    void initCP870();
+    void initCP420();
+    void initCP424();
+    void initCP838();
 };
 
 } // namespace core

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/macro_recorder.h"
+#include "core/session_logger.h"
 #include "logger/logger.h"
 #include "network/tn5250/client/client.h"
 #include "network/tn5250/client/decoder.h"
@@ -60,6 +62,14 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onEditCopy();
     void onEditPaste();
     void onEditSelectAll();
+    void onToggleHotspots();
+    void onToggleMacroRecording();
+    void onPlayMacro();
+    void onManageMacros();
+    void onToggleSessionLogging();
+    void onHistoryBack();
+    void onHistoryForward();
+    void onHistoryExit();
     void updateEmptyState();
     void onQuickOpenChanged(const QString &sessionName);
     void rebuildQuickOpenMenu();
@@ -87,6 +97,9 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         tn5250::session::Worker *worker;
         ui::widgets::QConnectionStatusWidget *connectionStatus;
         QLabel *coordinatesLabel;
+        QLabel *kbdStateLabel;     // Keyboard lock/insert indicator
+        QLabel *systemNameLabel;   // Detected system name
+        QLabel *historyLabel;      // Screen history position
         QWidget *statusBar;
         session::SessionConfig config;
         ui::widgets::ScreenBuffer::SavedState savedScreen;
@@ -99,6 +112,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         ui::themes::TerminalTheme::BackgroundImageLayout bgImageLayout =
             ui::themes::TerminalTheme::Stretch;
         double bgImageOpacity = 1.0;
+        core::MacroRecorder *macroRecorder = nullptr;
+        core::SessionLogger *sessionLogger = nullptr;
     };
 
     void applyThemeToSession(Session *session, const QString &themeId);
@@ -123,6 +138,9 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_reconnectAction;
     QAction *m_duplicateAction;
     QAction *m_fullscreenAction;
+    QAction *m_hotspotsAction;
+    QAction *m_macroRecordAction;
+    QAction *m_sessionLoggingAction;
     QAction *m_cursorRulesAction;
     QAction *m_showFieldProtectionAction;
     QAction *m_showInputFieldsAction;

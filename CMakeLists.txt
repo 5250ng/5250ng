@@ -35,6 +35,14 @@ set(CORE_SOURCES
     src/core/codepage.h
     src/core/keyboard_encoder.cpp
     src/core/keyboard_encoder.h
+    src/core/hotspot_detector.cpp
+    src/core/hotspot_detector.h
+    src/core/screen_history.cpp
+    src/core/screen_history.h
+    src/core/macro_recorder.cpp
+    src/core/macro_recorder.h
+    src/core/session_logger.cpp
+    src/core/session_logger.h
 )
 
 set(SESSION_SOURCES
@@ -212,6 +220,10 @@ set(UI_SOURCES
     src/ui/actions/onDuplicateSession.cpp
     src/ui/actions/onToggleFullscreen.cpp
     src/ui/actions/onEditActions.cpp
+    src/ui/actions/onHotspots.cpp
+    src/ui/actions/onMacros.cpp
+    src/ui/actions/onSessionLogging.cpp
+    src/ui/actions/onScreenHistory.cpp
     # setup
     src/ui/setup/setupUI.cpp
     src/ui/setup/setupMenuBar.cpp

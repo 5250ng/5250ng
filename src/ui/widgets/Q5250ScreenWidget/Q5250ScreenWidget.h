@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core/ebcdic.h"
+#include "core/hotspot_detector.h"
 #include "core/keyboard_encoder.h"
+#include "core/screen_history.h"
 #include "screen_buffer.h"
 #include "ui/themes/terminal_theme.h"
 #include <QClipboard>
@@ -43,6 +45,19 @@ class Q5250ScreenWidget : public QWidget {
     void setShowInputFields(bool enabled);
     void toggleInputFields();
     bool showInputFields() const { return m_showInputFields; }
+
+    // Hotspots
+    void setHotspotsEnabled(bool enabled);
+    void toggleHotspots();
+    bool hotspotsEnabled() const { return m_hotspotDetector.isEnabled(); }
+    const QVector<core::Hotspot> &hotspots() const { return m_hotspots; }
+
+    // Screen history
+    core::ScreenHistory *screenHistory() { return &m_screenHistory; }
+    bool isViewingHistory() const { return m_historyIndex >= 0; }
+    int historyIndex() const { return m_historyIndex; }
+    void viewHistoryScreen(int index);
+    void exitHistoryView();
 
     // Screen buffer access
     ScreenBuffer *screenBuffer() { return m_screenBuffer; }
@@ -119,6 +134,10 @@ class Q5250ScreenWidget : public QWidget {
     void attentionRequested();
     void systemRequestRequested();
     void terminalStateChanged();
+    void hotspotActivated(const core::Hotspot &hotspot);
+    void historyViewChanged(int index, int total);
+    void keyRecorded(int key, Qt::KeyboardModifiers mods, const QString &text);
+    void aidKeyRecorded(uint8_t aidByte);
 
   protected:
     bool event(QEvent *event) override;
@@ -246,6 +265,17 @@ class Q5250ScreenWidget : public QWidget {
     uint8_t m_cmdKeyMask[3];           // SOH command key masks
     QVector<ScreenCell> m_savedErrorLine; // Saved error line contents for Error Reset
     uint8_t m_readType = 0x52; // 0x52=READ_MDT (default), 0x42=READ_INPUT
+
+    // Hotspot detection
+    core::HotspotDetector m_hotspotDetector;
+    QVector<core::Hotspot> m_hotspots;
+    void refreshHotspots();
+    void renderHotspots(QPainter &painter);
+
+    // Screen history / scrollback
+    core::ScreenHistory m_screenHistory;
+    int m_historyIndex = -1; // -1 = live screen
+    void pushScreenToHistory();
 };
 
 } // namespace ui::widgets

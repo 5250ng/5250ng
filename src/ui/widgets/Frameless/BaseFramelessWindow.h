@@ -22,6 +22,7 @@ class BaseFramelessWindow : public QMainWindow {
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
   private:
     QWidget *m_central;
@@ -46,6 +47,7 @@ class BaseFramelessWindow : public QMainWindow {
 
     void setupUi();
     void connectControls();
+    void updateResizeBorder();
 
   private slots:
     void onTitleMousePressed(const QPoint &globalPos);

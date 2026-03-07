@@ -116,6 +116,9 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
         }
     }
 
+    // Emit key recording signal for macro capture (all terminal-relevant keys)
+    emit keyRecorded(event->key(), event->modifiers(), event->text());
+
     // Handle local-only keys (block-mode: these never go to the host)
     if (m_screenBuffer) {
         switch (event->key()) {
@@ -270,6 +273,15 @@ void Q5250ScreenWidget::mouseMoveEvent(QMouseEvent *event) {
             update(); // Repaint to show updated selection
         }
     }
+    // Hotspot hover cursor
+    if (m_hotspotDetector.isEnabled() && !(event->buttons() & Qt::LeftButton)) {
+        QPoint cellPos = screenToCell(event->pos());
+        if (cellPos.x() >= 0 && cellPos.y() >= 0) {
+            const core::Hotspot *hs = core::HotspotDetector::hotspotAt(
+                m_hotspots, cellPos.y(), cellPos.x());
+            setCursor(hs ? Qt::PointingHandCursor : Qt::IBeamCursor);
+        }
+    }
     QWidget::mouseMoveEvent(event);
 }
 
@@ -279,6 +291,20 @@ void Q5250ScreenWidget::mouseReleaseEvent(QMouseEvent *event) {
             // If no drag occurred (same cell), treat as simple click: move cursor
             if (m_selectionStart == m_selectionEnd &&
                 m_selectionStart.x() >= 0 && m_selectionStart.y() >= 0) {
+                // Check for hotspot click
+                if (m_hotspotDetector.isEnabled()) {
+                    const core::Hotspot *hs = core::HotspotDetector::hotspotAt(
+                        m_hotspots, m_selectionStart.y(), m_selectionStart.x());
+                    if (hs) {
+                        emit hotspotActivated(*hs);
+                        m_selectionStart = QPoint(-1, -1);
+                        m_selectionEnd = QPoint(-1, -1);
+                        m_selecting = false;
+                        update();
+                        event->accept();
+                        return;
+                    }
+                }
                 m_screenBuffer->setCursorPosition(m_selectionStart.y(), m_selectionStart.x());
                 // Clear selection on simple click
                 m_selectionStart = QPoint(-1, -1);
@@ -386,6 +412,7 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
             .arg(aidResponse.size())
             .arg(QString::fromLatin1(aidResponse.left(64).toHex())));
         emit inputReady(aidResponse);
+        emit aidKeyRecorded(firstByte);
         // Lock keyboard after sending AID — host must unlock via CC bytes
         setKeyboardState(KeyboardState::Locked);
 

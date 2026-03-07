@@ -37,10 +37,14 @@ class TestCodePage : public QObject {
 
 void TestCodePage::testSupportedCodePages() {
     QList<CodePage::ID> pages = CodePage::supportedCodePages();
-    QCOMPARE(pages.size(), 9);
+    QCOMPARE(pages.size(), 13);
     QVERIFY(pages.contains(CodePage::ID::CP037));
     QVERIFY(pages.contains(CodePage::ID::CP273));
     QVERIFY(pages.contains(CodePage::ID::CP500));
+    QVERIFY(pages.contains(CodePage::ID::CP870));
+    QVERIFY(pages.contains(CodePage::ID::CP420));
+    QVERIFY(pages.contains(CodePage::ID::CP424));
+    QVERIFY(pages.contains(CodePage::ID::CP838));
 }
 
 void TestCodePage::testCodePageNames() {

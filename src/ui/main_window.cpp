@@ -157,6 +157,24 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     session->connectionStatus->setState(tn5250::client::TN5250Client::ConnectionState::Disconnected);
     session->connectionStatus->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     footerLayout->addWidget(session->connectionStatus, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    // Keyboard state indicator
+    session->kbdStateLabel = new QLabel("", session->container);
+    session->kbdStateLabel->setStyleSheet(
+        "color: yellow; background-color: black; padding: 0px 4px;");
+    footerLayout->addWidget(session->kbdStateLabel);
+
+    // System name indicator (detected from screen content)
+    session->systemNameLabel = new QLabel("", session->container);
+    session->systemNameLabel->setStyleSheet(
+        "color: cyan; background-color: black; padding: 0px 4px;");
+    footerLayout->addWidget(session->systemNameLabel);
+
+    // Screen history position indicator
+    session->historyLabel = new QLabel("", session->container);
+    session->historyLabel->setStyleSheet(
+        "color: orange; background-color: black; padding: 0px 4px;");
+    footerLayout->addWidget(session->historyLabel);
+
     footerLayout->addStretch();
     session->coordinatesLabel = new QLabel("0/0", session->container);
     session->coordinatesLabel->setStyleSheet(
@@ -318,6 +336,78 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                     QString("%1/%2").arg(pos.y() + 1).arg(pos.x() + 1));
             });
     }
+
+    // Wire terminal state to status bar indicators
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::terminalStateChanged, this,
+        [session]() {
+            if (!session->displayWidget || !session->kbdStateLabel) return;
+            QString state;
+            switch (session->displayWidget->keyboardState()) {
+            case ui::widgets::KeyboardState::Locked:
+                state = "KBD LOCKED";
+                break;
+            case ui::widgets::KeyboardState::ErrorLocked:
+                state = "ERROR";
+                break;
+            case ui::widgets::KeyboardState::SystemRequest:
+                state = "SYSREQ";
+                break;
+            default:
+                if (session->displayWidget->insertMode())
+                    state = "INS";
+                break;
+            }
+            session->kbdStateLabel->setText(state);
+            if (session->displayWidget->messageWaiting())
+                session->kbdStateLabel->setText(state.isEmpty() ? "MW" : state + " MW");
+        });
+
+    // Wire history view changes
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::historyViewChanged, this,
+        [session](int index, int total) {
+            if (!session->historyLabel) return;
+            if (index < 0) {
+                session->historyLabel->setText("");
+            } else {
+                session->historyLabel->setText(
+                    QString("HISTORY %1/%2").arg(index + 1).arg(total));
+            }
+        });
+
+    // Create per-session macro recorder and session logger
+    session->macroRecorder = new core::MacroRecorder(session->container);
+    session->sessionLogger = new core::SessionLogger(session->container);
+
+    // Wire keyboard events to macro recorder for real-time capture
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::keyRecorded, this,
+        [session](int key, Qt::KeyboardModifiers mods, const QString &text) {
+            if (session->macroRecorder && session->macroRecorder->isRecording())
+                session->macroRecorder->recordKeyPress(key, mods, text);
+        });
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::aidKeyRecorded, this,
+        [session](uint8_t aidByte) {
+            if (session->macroRecorder && session->macroRecorder->isRecording())
+                session->macroRecorder->recordAIDKey(aidByte);
+        });
+
+    // Wire hotspot activation — send AID key or type menu number
+    connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::hotspotActivated, this,
+        [session](const core::Hotspot &hotspot) {
+            if (!session->displayWidget) return;
+            if (hotspot.type == core::Hotspot::FunctionKey && hotspot.aidByte != 0) {
+                QByteArray aid;
+                aid.append(static_cast<char>(hotspot.aidByte));
+                session->displayWidget->processEncodedInput(aid, true);
+            } else if (hotspot.type == core::Hotspot::MenuItem && !hotspot.menuNumber.isEmpty()) {
+                // Type the menu number and press Enter
+                for (QChar ch : hotspot.menuNumber) {
+                    QKeyEvent ev(QEvent::KeyPress, 0, Qt::NoModifier, QString(ch));
+                    session->displayWidget->processKeyEvent(&ev);
+                }
+                QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+                session->displayWidget->processKeyEvent(&enter);
+            }
+        });
 
     // Set active pointers and connect signals for this session
     setActiveSession(newIndex);

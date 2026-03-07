@@ -20,7 +20,9 @@ BaseFramelessWindow::BaseFramelessWindow(QWidget *parent)
 }
 
 void BaseFramelessWindow::setupUi() {
-    m_rootLayout->setContentsMargins(0, 0, 0, 0);
+    // Leave a resize grip border around the content so mouse events
+    // reach the window (not swallowed by child widgets).
+    m_rootLayout->setContentsMargins(ResizeMargin, ResizeMargin, ResizeMargin, ResizeMargin);
     m_rootLayout->setSpacing(0);
     m_rootLayout->addWidget(m_titleBar, 0);
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
@@ -174,5 +176,21 @@ void BaseFramelessWindow::onMaximizeRestore() {
 }
 
 void BaseFramelessWindow::onClose() { close(); }
+
+void BaseFramelessWindow::changeEvent(QEvent *event) {
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange) {
+        updateResizeBorder();
+    }
+}
+
+void BaseFramelessWindow::updateResizeBorder() {
+    // No resize border when maximized or fullscreen — reclaim the space
+    if (isMaximized() || isFullScreen()) {
+        m_rootLayout->setContentsMargins(0, 0, 0, 0);
+    } else {
+        m_rootLayout->setContentsMargins(ResizeMargin, ResizeMargin, ResizeMargin, ResizeMargin);
+    }
+}
 
 } // namespace ui::widgets

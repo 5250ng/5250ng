@@ -264,6 +264,11 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
         renderSelectionBorder(painter);
     }
 
+    // Hotspot underlines
+    if (m_hotspotDetector.isEnabled()) {
+        renderHotspots(painter);
+    }
+
     // Cursor rules overlay (dashed crosshair aligned with cursor cell)
     if (m_showCursorRules) {
         renderCursorRules(painter);
@@ -501,6 +506,84 @@ void Q5250ScreenWidget::setShowInputFields(bool enabled) {
 
 void Q5250ScreenWidget::toggleInputFields() {
     m_showInputFields = !m_showInputFields;
+    update();
+}
+
+// --- Hotspots ---
+
+void Q5250ScreenWidget::setHotspotsEnabled(bool enabled) {
+    m_hotspotDetector.setEnabled(enabled);
+    if (enabled) refreshHotspots();
+    else m_hotspots.clear();
+    update();
+}
+
+void Q5250ScreenWidget::toggleHotspots() {
+    setHotspotsEnabled(!m_hotspotDetector.isEnabled());
+}
+
+void Q5250ScreenWidget::refreshHotspots() {
+    if (!m_hotspotDetector.isEnabled() || !m_screenBuffer) {
+        m_hotspots.clear();
+        return;
+    }
+    int rows = m_screenBuffer->rows();
+    int cols = m_screenBuffer->cols();
+    QVector<QChar> text(rows * cols);
+    for (int r = 0; r < rows; ++r)
+        for (int c = 0; c < cols; ++c)
+            text[r * cols + c] = core::EBCDIC::ebcdicToChar(m_screenBuffer->cell(r, c).character);
+    m_hotspots = m_hotspotDetector.detect(text, rows, cols);
+}
+
+void Q5250ScreenWidget::renderHotspots(QPainter &painter) {
+    if (m_hotspots.isEmpty()) return;
+
+    QPen pen(QColor(0, 180, 255, 180));
+    pen.setWidth(1);
+    pen.setStyle(Qt::DashLine);
+    painter.setPen(pen);
+
+    for (const auto &h : m_hotspots) {
+        QRect start = cellRect(h.row, h.startCol);
+        QRect end = cellRect(h.row, h.endCol);
+        int y = end.bottom();
+        painter.drawLine(start.left(), y, end.right(), y);
+    }
+}
+
+// --- Screen History ---
+
+void Q5250ScreenWidget::pushScreenToHistory() {
+    if (!m_screenBuffer) return;
+    core::ScreenSnapshot snap;
+    snap.timestamp = QDateTime::currentDateTime();
+    snap.rows = m_screenBuffer->rows();
+    snap.cols = m_screenBuffer->cols();
+    QPoint cur = m_screenBuffer->cursorPosition();
+    snap.cursorRow = cur.y();
+    snap.cursorCol = cur.x();
+
+    // Serialize screen text as UTF-8
+    QString text;
+    text.reserve(snap.rows * snap.cols);
+    for (int r = 0; r < snap.rows; ++r)
+        for (int c = 0; c < snap.cols; ++c)
+            text.append(core::EBCDIC::ebcdicToChar(m_screenBuffer->cell(r, c).character));
+    snap.cellData = text.toUtf8();
+    m_screenHistory.push(snap);
+}
+
+void Q5250ScreenWidget::viewHistoryScreen(int index) {
+    if (index < 0 || index >= m_screenHistory.count()) return;
+    m_historyIndex = index;
+    emit historyViewChanged(index, m_screenHistory.count());
+    update();
+}
+
+void Q5250ScreenWidget::exitHistoryView() {
+    m_historyIndex = -1;
+    emit historyViewChanged(-1, m_screenHistory.count());
     update();
 }
 

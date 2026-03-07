@@ -59,12 +59,27 @@ void MainWindow::setupMenuBar() {
     QMenu *viewMenu = bar->addMenu("&View");
     m_fullscreenAction = viewMenu->addAction("&Fullscreen", this, &MainWindow::onToggleFullscreen);
     m_fullscreenAction->setCheckable(true);
+    m_hotspotsAction = viewMenu->addAction("&Hotspots", this, &MainWindow::onToggleHotspots);
+    m_hotspotsAction->setCheckable(true);
+    viewMenu->addSeparator();
+    viewMenu->addAction("History &Back", this, &MainWindow::onHistoryBack);
+    viewMenu->addAction("History &Forward", this, &MainWindow::onHistoryForward);
+    viewMenu->addAction("&Exit History", this, &MainWindow::onHistoryExit);
+
+    // Macros menu
+    QMenu *macrosMenu = bar->addMenu("&Macros");
+    m_macroRecordAction = macrosMenu->addAction("&Record/Stop", this, &MainWindow::onToggleMacroRecording);
+    m_macroRecordAction->setCheckable(true);
+    macrosMenu->addAction("&Play Last...", this, &MainWindow::onPlayMacro);
+    macrosMenu->addAction("&Manage Macros...", this, &MainWindow::onManageMacros);
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");
     toolsMenu->addAction("&Take a Screenshot", this, &MainWindow::onTakeScreenshot);
     m_cursorRulesAction = toolsMenu->addAction("Show &cursor rules", this, &MainWindow::onToggleCursorRules);
     m_cursorRulesAction->setCheckable(true);
+    m_sessionLoggingAction = toolsMenu->addAction("Session &Logging", this, &MainWindow::onToggleSessionLogging);
+    m_sessionLoggingAction->setCheckable(true);
     // Advanced submenu
     QMenu *advancedMenu = toolsMenu->addMenu("&Advanced");
     m_showFieldProtectionAction = advancedMenu->addAction("Show &field protection", this, &MainWindow::onToggleFieldProtection);
