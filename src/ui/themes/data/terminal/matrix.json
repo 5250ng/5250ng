@@ -1,0 +1,60 @@
+{
+    "id": "matrix",
+    "displayName": "Matrix",
+    "builtin": true,
+    "description": "Digital rain aesthetic \u2014 high-saturation green on deep black.",
+    "background": {
+        "mode": "color",
+        "color": "#000800",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "colors": {
+        "black": "#000800",
+        "green": "#00ff41",
+        "white": "#88ff88",
+        "blue": "#009930",
+        "red": "#33ff33",
+        "cyan": "#44ff88",
+        "pink": "#22dd55",
+        "yellow": "#66ff66",
+        "cursor": "#00ff41"
+    },
+    "selection": {
+        "background": "#00ff4140",
+        "foreground": "#000000",
+        "fieldIndicator": "#00ff4125"
+    },
+    "columnSeparator": {
+        "enabled": false,
+        "color": "#004400",
+        "style": "dimmed"
+    },
+    "cursor": {
+        "shape": "block",
+        "blinkMs": 400
+    },
+    "crtEffect": {
+        "enabled": true,
+        "scanlineIntensity": 0.25,
+        "phosphorBloom": 0.35,
+        "glowRadius": 0.2,
+        "curvature": 0.06
+    },
+    "globalBrightness": 1.1,
+    "globalSaturation": 1.4,
+    "hrule": {
+        "color": "#00ff41"
+    },
+    "footer": {
+        "kbdStateColor": "#66ff66",
+        "systemNameColor": "#44ff88",
+        "historyColor": "#00cc00",
+        "macroColor": "#33ff33",
+        "coordinatesColor": "#00ff41"
+    }
+}
