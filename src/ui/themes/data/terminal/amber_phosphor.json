@@ -1,0 +1,64 @@
+{
+    "id": "amber_phosphor",
+    "displayName": "Amber Phosphor",
+    "builtin": true,
+    "description": "Monochrome amber CRT terminal \u2014 warm phosphor glow reminiscent of early 1980s displays.",
+    "background": {
+        "mode": "color",
+        "color": "#1a0800",
+        "imageLayout": "stretch",
+        "imageOpacity": 1.0
+    },
+    "font": {
+        "family": "IBM Plex Mono",
+        "size": 14
+    },
+    "monochrome": {
+        "enabled": true,
+        "color": "#ffb000"
+    },
+    "colors": {
+        "black": "#1a0800",
+        "green": "#ffb000",
+        "white": "#ffb000",
+        "blue": "#ffb000",
+        "red": "#ffb000",
+        "cyan": "#ffb000",
+        "pink": "#ffb000",
+        "yellow": "#ffb000",
+        "cursor": "#ffb000"
+    },
+    "selection": {
+        "background": "#ffb00040",
+        "foreground": "#ffffff",
+        "fieldIndicator": "#ffb00030"
+    },
+    "columnSeparator": {
+        "enabled": false,
+        "color": "#664400",
+        "style": "solid"
+    },
+    "cursor": {
+        "shape": "underline",
+        "blinkMs": 530
+    },
+    "crtEffect": {
+        "enabled": true,
+        "scanlineIntensity": 0.2,
+        "phosphorBloom": 0.45,
+        "glowRadius": 0.15,
+        "curvature": 0.08
+    },
+    "globalBrightness": 1.0,
+    "globalSaturation": 1.0,
+    "hrule": {
+        "color": "#ffb000"
+    },
+    "footer": {
+        "kbdStateColor": "#ffb000",
+        "systemNameColor": "#ffb000",
+        "historyColor": "#ffcc00",
+        "macroColor": "#ffb000",
+        "coordinatesColor": "#ffb000"
+    }
+}
