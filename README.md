@@ -14,8 +14,7 @@
 
 **5250ng** is a full-featured 5250ng terminal emulator built with **Qt6** and **C++17**. It implements the complete 5250ng protocol ([RFC 1205](https://datatracker.ietf.org/doc/html/rfc1205)) for connecting to IBM AS/400 and IBM i systems, with a modern UI, multi-session tabs, macro recording, file transfer, and custom terminal themes.
 
-<!-- TODO: Screenshot of the main window connected to an AS/400 with the ibm_3179 theme,
-     showing a typical green-screen application. Save as .github/screenshots/main_window.png -->
+<img src="./.github/i5_OS_Login.png" width=48%> <img src="./.github/i5_OS_Main_Menu.png" width=48%>
 
 ## Features
 
