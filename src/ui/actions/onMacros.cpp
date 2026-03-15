@@ -15,6 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
+#include "core/scripting/script_compiler.h"
+#include "core/scripting/script_executor.h"
+#include "core/scripting/script_parser.h"
 #include "ui/widgets/Frameless/BaseFramelessDialog.h"
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QApplication>
@@ -485,5 +488,319 @@ void MainWindow::onExportMacro() {
     if (core::MacroRecorder::saveMacro(macros[idx], savePath)) {
         ui::widgets::StyledMessageBox::information(this, "Export Macro",
             QString("Macro '%1' exported successfully.").arg(macros[idx].name));
+    }
+}
+
+static QString scriptsDir() {
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                  + "/scripts";
+    QDir().mkpath(dir);
+    return dir;
+}
+
+void MainWindow::onPlayScript() {
+    if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) return;
+    Session *s = m_sessions[m_activeIndex];
+
+    // Check if a script is already running
+    if (s->scriptExecutor && s->scriptExecutor->isRunning()) {
+        s->scriptExecutor->stop();
+        if (s->macroLabel) s->macroLabel->setText("");
+        return;
+    }
+
+    // Collect available script files from scripts dir and allow opening any file
+    QStringList scriptFiles;
+    QDir dir(scriptsDir());
+    for (const auto &entry : dir.entryInfoList({"*.5250script"}, QDir::Files, QDir::Name))
+        scriptFiles << entry.absoluteFilePath();
+
+    // Dialog to select script or open from file
+    auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+    dlg->setWindowTitle("Play Script");
+    dlg->setFixedSize(400, 380);
+
+    auto *list = new QListWidget(dlg);
+    for (const auto &path : scriptFiles) {
+        QFileInfo fi(path);
+        list->addItem(fi.baseName());
+    }
+    if (list->count() > 0) list->setCurrentRow(0);
+
+    auto *btnLayout = new QHBoxLayout();
+    auto *browseBtn = new QPushButton("Browse...", dlg);
+    auto *playBtn = new QPushButton("Play", dlg);
+    auto *cancelBtn = new QPushButton("Cancel", dlg);
+    btnLayout->addWidget(browseBtn);
+    btnLayout->addStretch();
+    btnLayout->addWidget(playBtn);
+    btnLayout->addWidget(cancelBtn);
+
+    dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
+    dlg->contentLayout()->setSpacing(8);
+    dlg->contentLayout()->addWidget(new QLabel("Select a script to play:", dlg));
+    dlg->contentLayout()->addWidget(list, 1);
+    dlg->contentLayout()->addLayout(btnLayout);
+
+    QString chosenPath;
+    connect(browseBtn, &QPushButton::clicked, dlg, [&chosenPath, dlg]() {
+        chosenPath = QFileDialog::getOpenFileName(dlg, "Open Script",
+            QString(), "5250Script files (*.5250script);;All files (*)");
+        if (!chosenPath.isEmpty()) dlg->accept();
+    });
+    connect(playBtn, &QPushButton::clicked, dlg, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, dlg, &QDialog::reject);
+    connect(list, &QListWidget::itemDoubleClicked, dlg, &QDialog::accept);
+
+    int result = dlg->exec();
+    int idx = list->currentRow();
+    delete dlg;
+
+    if (result != QDialog::Accepted) return;
+
+    // Determine which file to load
+    if (chosenPath.isEmpty()) {
+        if (idx < 0 || idx >= scriptFiles.size()) return;
+        chosenPath = scriptFiles[idx];
+    }
+
+    // Load script text
+    QFile file(chosenPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        ui::widgets::StyledMessageBox::information(this, "Play Script",
+            "Could not open script file.");
+        return;
+    }
+    QString scriptText = QString::fromUtf8(file.readAll());
+    file.close();
+
+    // Parse
+    core::scripting::ScriptParser parser;
+    auto parseResult = parser.parse(scriptText);
+    if (parseResult.hasErrors()) {
+        QStringList errMsgs;
+        for (const auto &e : parseResult.errors)
+            errMsgs << QString("Line %1: %2").arg(e.line).arg(e.message);
+        ui::widgets::StyledMessageBox::information(this, "Script Error",
+            "Script has errors:\n\n" + errMsgs.join("\n"));
+        return;
+    }
+
+    // Create executor
+    if (!s->scriptExecutor) {
+        s->scriptExecutor = new core::scripting::ScriptExecutor(s->container);
+    }
+    s->scriptExecutor->setScreenWidget(s->displayWidget);
+
+    // Wire signals
+    QPointer<ui::widgets::Q5250ScreenWidget> displayGuard = s->displayWidget;
+    QPointer<core::scripting::ScriptExecutor> execGuard = s->scriptExecutor;
+    QPointer<QLabel> macroLabelGuard = s->macroLabel;
+
+    auto connKeyPress = std::make_shared<QMetaObject::Connection>();
+    auto connAID = std::make_shared<QMetaObject::Connection>();
+    auto connMoveCursor = std::make_shared<QMetaObject::Connection>();
+    auto connMoveStep = std::make_shared<QMetaObject::Connection>();
+    auto connMoveField = std::make_shared<QMetaObject::Connection>();
+    auto connScreen = std::make_shared<QMetaObject::Connection>();
+    auto connState = std::make_shared<QMetaObject::Connection>();
+    auto connFinish = std::make_shared<QMetaObject::Connection>();
+    auto connError = std::make_shared<QMetaObject::Connection>();
+    auto connLog = std::make_shared<QMetaObject::Connection>();
+    auto connPause = std::make_shared<QMetaObject::Connection>();
+
+    // Key injection
+    *connKeyPress = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::injectKeyPress, this,
+        [displayGuard](int key, Qt::KeyboardModifiers mods, const QString &text) {
+            if (displayGuard.isNull()) return;
+            QKeyEvent ev(QEvent::KeyPress, key, mods, text);
+            QApplication::sendEvent(displayGuard.data(), &ev);
+        });
+
+    // AID key injection — map AID byte to Qt key event (same logic as macro playback)
+    *connAID = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::injectAIDKey, this,
+        [displayGuard](uint8_t aid) {
+            if (displayGuard.isNull()) return;
+            int qtKey = 0;
+            Qt::KeyboardModifiers mods = Qt::NoModifier;
+            if (aid == 0xF1) { qtKey = Qt::Key_Return; }
+            else if (aid == 0x70) { qtKey = Qt::Key_Escape; mods = Qt::ControlModifier; }
+            else if (aid == 0x71) { qtKey = Qt::Key_SysReq; }
+            else if (aid >= 0x31 && aid <= 0x3C) { qtKey = Qt::Key_F1 + (aid - 0x31); }
+            else if (aid >= 0xB1 && aid <= 0xBC) { qtKey = Qt::Key_F1 + (aid - 0xB1); mods = Qt::ShiftModifier; }
+            else if (aid == 0xF3) { qtKey = Qt::Key_F1; mods = Qt::ControlModifier; }
+            else if (aid == 0xF4) { qtKey = Qt::Key_PageDown; }
+            else if (aid == 0xF5) { qtKey = Qt::Key_PageUp; }
+            else if (aid == 0xF6) { qtKey = Qt::Key_Print; }
+            else if (aid == 0xBD) { qtKey = Qt::Key_Pause; mods = Qt::ControlModifier; }
+            else return;
+            QKeyEvent ev(QEvent::KeyPress, qtKey, mods, QString());
+            QApplication::sendEvent(displayGuard.data(), &ev);
+        });
+
+    // Cursor movement
+    *connMoveCursor = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::moveCursor, this,
+        [displayGuard](int row, int col) {
+            if (displayGuard.isNull()) return;
+            displayGuard->moveCursor(row, col);
+        });
+
+    *connMoveStep = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::moveCursorStep, this,
+        [displayGuard](const QString &dir) {
+            if (displayGuard.isNull()) return;
+            if (dir == "UP") displayGuard->moveCursorUp();
+            else if (dir == "DOWN") displayGuard->moveCursorDown();
+            else if (dir == "LEFT") displayGuard->moveCursorLeft();
+            else if (dir == "RIGHT") displayGuard->moveCursorRight();
+        });
+
+    // GOTO INPUTFIELD n / NEXT / PREVIOUS
+    *connMoveField = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::gotoInputField, this,
+        [displayGuard](int fieldIndex) {
+            if (displayGuard.isNull()) return;
+            auto *buf = displayGuard->screenBuffer();
+            if (!buf) return;
+            const auto &fields = buf->fields();
+
+            // Build list of input (unprotected) fields
+            QVector<const ui::widgets::ScreenBuffer::Field *> inputFields;
+            for (const auto &f : fields) {
+                if (!f.protected_field)
+                    inputFields.append(&f);
+            }
+            if (inputFields.isEmpty()) return;
+
+            if (fieldIndex == -1) {
+                // NEXT: find first input field after cursor
+                displayGuard->moveToNextField();
+            } else if (fieldIndex == -2) {
+                // PREVIOUS: find input field before cursor
+                displayGuard->moveToPreviousField();
+            } else if (fieldIndex >= 1 && fieldIndex <= inputFields.size()) {
+                // Absolute index (1-based)
+                auto *f = inputFields[fieldIndex - 1];
+                displayGuard->moveCursor(f->startRow, f->startCol);
+            }
+        });
+
+    // Screen change notifications to executor
+    *connScreen = connect(s->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
+        s->scriptExecutor, &core::scripting::ScriptExecutor::notifyScreenChanged);
+
+    *connState = connect(s->displayWidget, &ui::widgets::Q5250ScreenWidget::terminalStateChanged,
+        s->scriptExecutor, &core::scripting::ScriptExecutor::notifyTerminalStateChanged);
+
+    // Finish
+    *connFinish = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionFinished, this,
+        [=]() {
+            QObject::disconnect(*connKeyPress);
+            QObject::disconnect(*connAID);
+            QObject::disconnect(*connMoveCursor);
+            QObject::disconnect(*connMoveStep);
+            QObject::disconnect(*connMoveField);
+            QObject::disconnect(*connScreen);
+            QObject::disconnect(*connState);
+            QObject::disconnect(*connFinish);
+            QObject::disconnect(*connError);
+            QObject::disconnect(*connLog);
+            QObject::disconnect(*connPause);
+            if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
+        });
+
+    // Error
+    *connError = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionError, this,
+        [this](int line, const QString &msg) {
+            ui::widgets::StyledMessageBox::information(this, "Script Error",
+                QString("Line %1: %2").arg(line).arg(msg));
+        });
+
+    // Log
+    *connLog = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::logMessage, this,
+        [this](const QString &msg) {
+            if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
+                auto *s = m_sessions[m_activeIndex];
+                if (s->sessionLogger)
+                    s->sessionLogger->logEvent(QString("[SCRIPT] %1").arg(msg));
+            }
+        });
+
+    // Pause
+    *connPause = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::pauseRequested, this,
+        [this, execGuard]() {
+            ui::widgets::StyledMessageBox::information(this, "Script Paused",
+                "Script execution paused.\nClick OK to continue.");
+            if (!execGuard.isNull()) execGuard->resumeAfterPause();
+        });
+
+    // Show indicator
+    if (s->macroLabel) {
+        s->macroLabel->setText("SCRIPT");
+        s->macroLabel->setStyleSheet(
+            "color: #00ccff; background-color: black; padding: 0px 4px; font-weight: bold;");
+    }
+
+    s->scriptExecutor->execute(parseResult);
+}
+
+void MainWindow::onSaveAsScript() {
+    if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) return;
+
+    // Load all saved macros
+    QVector<core::Macro> macros = core::MacroRecorder::loadAllMacros(macrosDir());
+    if (macros.isEmpty()) {
+        ui::widgets::StyledMessageBox::information(this, "Save as Script",
+            "No macros available to convert.\n\nRecord a macro first.");
+        return;
+    }
+
+    // Dialog to pick a macro
+    auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+    dlg->setWindowTitle("Save Macro as Script");
+    dlg->setFixedSize(400, 320);
+
+    auto *list = new QListWidget(dlg);
+    for (const auto &m : macros)
+        list->addItem(QString("%1  (%2 steps)").arg(m.name).arg(m.steps.size()));
+    if (list->count() > 0) list->setCurrentRow(0);
+
+    auto *btnLayout = new QHBoxLayout();
+    auto *saveBtn = new QPushButton("Save as Script", dlg);
+    auto *cancelBtn = new QPushButton("Cancel", dlg);
+    btnLayout->addStretch();
+    btnLayout->addWidget(saveBtn);
+    btnLayout->addWidget(cancelBtn);
+
+    dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
+    dlg->contentLayout()->setSpacing(8);
+    dlg->contentLayout()->addWidget(new QLabel("Select a macro to convert:", dlg));
+    dlg->contentLayout()->addWidget(list, 1);
+    dlg->contentLayout()->addLayout(btnLayout);
+
+    connect(saveBtn, &QPushButton::clicked, dlg, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, dlg, &QDialog::reject);
+
+    int result = dlg->exec();
+    int idx = list->currentRow();
+    delete dlg;
+
+    if (result != QDialog::Accepted) return;
+    if (idx < 0 || idx >= macros.size()) return;
+
+    // Convert
+    QString scriptText = core::scripting::ScriptCompiler::macroToScript(macros[idx]);
+
+    // Save
+    QString safeName = core::MacroRecorder::sanitizeFileName(macros[idx].name);
+    QString defaultPath = scriptsDir() + "/" + safeName + ".5250script";
+    QString savePath = QFileDialog::getSaveFileName(this, "Save Script",
+        defaultPath, "5250Script files (*.5250script);;All files (*)");
+    if (savePath.isEmpty()) return;
+
+    QFile file(savePath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        file.write(scriptText.toUtf8());
+        file.close();
+        ui::widgets::StyledMessageBox::information(this, "Save as Script",
+            QString("Script saved to:\n%1").arg(savePath));
     }
 }

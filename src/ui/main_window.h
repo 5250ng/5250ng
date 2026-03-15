@@ -18,6 +18,7 @@
 
 #include "core/match_replace_engine.h"
 #include "core/macro_recorder.h"
+#include "core/scripting/script_executor.h"
 #include "core/session_logger.h"
 #include "logger/logger.h"
 #include "network/tn5250/client/client.h"
@@ -91,6 +92,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onManageMacros();
     void onImportMacro();
     void onExportMacro();
+    void onPlayScript();
+    void onSaveAsScript();
     void onToggleSessionLogging();
     void onHistoryBack();
     void onHistoryForward();
@@ -146,6 +149,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
             ui::themes::TerminalTheme::Stretch;
         double bgImageOpacity = 1.0;
         core::MacroRecorder *macroRecorder = nullptr;
+        core::scripting::ScriptExecutor *scriptExecutor = nullptr;
         core::SessionLogger *sessionLogger = nullptr;
         core::MatchReplaceEngine *matchReplace = nullptr;
     };

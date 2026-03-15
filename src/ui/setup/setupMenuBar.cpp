@@ -95,6 +95,9 @@ void MainWindow::setupMenuBar() {
     macrosMenu->addSeparator();
     macrosMenu->addAction("&Import Macro...", this, &MainWindow::onImportMacro);
     macrosMenu->addAction("&Export Macro...", this, &MainWindow::onExportMacro);
+    macrosMenu->addSeparator();
+    macrosMenu->addAction("Play &Script...", this, &MainWindow::onPlayScript);
+    macrosMenu->addAction("Save as Scrip&t...", this, &MainWindow::onSaveAsScript);
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");

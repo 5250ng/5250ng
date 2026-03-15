@@ -45,6 +45,16 @@ set(CORE_SOURCES
     src/core/session_logger.h
     src/core/match_replace_engine.cpp
     src/core/match_replace_engine.h
+    src/core/scripting/script_token.h
+    src/core/scripting/script_ast.h
+    src/core/scripting/script_lexer.cpp
+    src/core/scripting/script_lexer.h
+    src/core/scripting/script_parser.cpp
+    src/core/scripting/script_parser.h
+    src/core/scripting/script_executor.cpp
+    src/core/scripting/script_executor.h
+    src/core/scripting/script_compiler.cpp
+    src/core/scripting/script_compiler.h
 )
 
 set(SESSION_SOURCES
@@ -366,6 +376,10 @@ if(BUILD_TESTS)
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
     add_tn5250_test(test_password_encrypt tests/unit/test_password_encrypt.cpp)
+
+    # Scripting tests
+    add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
+    add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
