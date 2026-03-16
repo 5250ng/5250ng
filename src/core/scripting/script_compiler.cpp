@@ -28,6 +28,7 @@ QString ScriptCompiler::macroToScript(const Macro &macro) {
     lines << QString("# @script.version = \"1.0\"");
     lines << "";
 
+    core::MacroConfig::instance().load();
     bool recordTimings = core::MacroConfig::instance().recordTimings();
 
     // Coalesce consecutive KeyPress steps into TYPE lines
@@ -88,10 +89,17 @@ QString ScriptCompiler::macroToScript(const Macro &macro) {
             break;
         }
 
-        case MacroStep::AIDKey:
+        case MacroStep::AIDKey: {
             flushString();
-            lines << QString("PRESS %1").arg(aidByteToKeyword(step.aidByte));
+            QString keyword = aidByteToKeyword(step.aidByte);
+            if (keyword.startsWith('#')) {
+                // Unknown AID byte — emit as a comment, not as a PRESS command
+                lines << keyword;
+            } else {
+                lines << QString("PRESS %1").arg(keyword);
+            }
             break;
+        }
 
         case MacroStep::Delay:
             if (recordTimings) {

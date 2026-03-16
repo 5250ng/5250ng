@@ -84,7 +84,10 @@ enum class TokenType {
     VARIABLE,        // $FOO
 
     // End of line / end of file
-    EOL, EOF_TOKEN
+    EOL, EOF_TOKEN,
+
+    // Unknown character (unexpected input — lets the parser emit an error)
+    UNKNOWN
 };
 
 struct ScriptToken {

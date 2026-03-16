@@ -200,7 +200,10 @@ TokenLine ScriptLexer::tokenizeLine(const QString &line, int lineNumber) {
             if (line[pos] == '"') {
                 tokens.append(readStringLiteral(line, pos, lineNumber));
             } else {
-                QString payload = line.mid(pos);
+                // Unquoted message: consume up to first unquoted '#' (inline comment)
+                int hashPos = pos;
+                while (hashPos < line.length() && line[hashPos] != '#') hashPos++;
+                QString payload = line.mid(pos, hashPos - pos).trimmed();
                 tokens.append(ScriptToken(TokenType::STRING_LITERAL, payload, lineNumber, pos + 1));
             }
         }
@@ -302,9 +305,11 @@ ScriptToken ScriptLexer::nextToken(const QString &line, int &pos, int lineNumber
     if (ch.isLetter() || ch == '_')
         return readWord(line, pos, lineNumber);
 
-    // Unknown character — skip it
+    // Unknown character — return UNKNOWN token so the parser can report the error
+    // without truncating the rest of the line
+    int col = pos + 1;
     pos++;
-    return ScriptToken(TokenType::EOF_TOKEN, QString(ch), lineNumber, pos);
+    return ScriptToken(TokenType::UNKNOWN, QString(ch), lineNumber, col);
 }
 
 ScriptToken ScriptLexer::readStringLiteral(const QString &line, int &pos, int lineNumber) {

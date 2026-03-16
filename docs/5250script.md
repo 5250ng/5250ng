@@ -20,7 +20,7 @@ EXPECT TEXT "MAIN MENU"
 LOG "Login successful"
 ```
 
-Save as `login.5250script`, then run it from **Macros > Play Script...** in 5250ng.
+Save as `login.5250script`, then run it from **Scripts > Scripts > Run** in 5250ng.
 
 ---
 
@@ -481,22 +481,24 @@ GOTO start
 
 ---
 
-## Converting Macros to Scripts
+## Recording Scripts
 
-Recorded macros (JSON) can be converted to `.5250script` files:
+Scripts can be recorded directly from the **Scripts** menu:
 
-1. Open **Macros > Save as Script...**
-2. Select the macro to convert
-3. Choose a save location
+1. Click **Scripts > Record** to start recording your terminal session
+2. Interact with the terminal as normal
+3. Click **Scripts > Record** again to stop recording
+4. Enter a name for the script and click **Save**
 
-The converter coalesces consecutive keystrokes into `TYPE` lines and maps keys to `PRESS` commands. The generated script is a faithful, linear replay — you can then edit it to add EXPECT waits, loops, and error handling.
+The recorder coalesces consecutive keystrokes into `TYPE` lines and maps keys to `PRESS` commands. The generated script is a faithful, linear replay — you can then edit it to add EXPECT waits, loops, and error handling.
 
 ---
 
 ## Running Scripts
 
-1. **Macros > Play Script...** — select from saved scripts or browse for a file
-2. While a script is running, the status bar shows **SCRIPT** in cyan
-3. To stop a running script, select **Macros > Play Script...** again (acts as a toggle)
+1. **Scripts > Scripts > [script name] > Run** — run a saved script
+2. **Scripts > New Script...** — create a new script from a template and open it in your editor
+3. While a script is running, the status bar shows **SCRIPT** in cyan
+4. To stop a running script, click **Scripts > Stop**
 
 Scripts are stored in the application data directory under `scripts/`. On Linux this is typically `~/.local/share/5250ng/scripts/`.

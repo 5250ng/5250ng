@@ -23,14 +23,17 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMap>
 #include <QPointer>
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QUrl>
+#include <memory>
 
 static QString scriptsDir() {
     QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
@@ -110,6 +113,11 @@ void MainWindow::onRecordScript() {
                 ui::widgets::StyledMessageBox::information(this, "Script Saved",
                     QString("Script '%1' saved with %2 steps.")
                         .arg(name).arg(macro.steps.size()));
+            } else {
+                // Save failed — show the generated script so the user can recover it manually
+                ui::widgets::StyledMessageBox::information(this, "Save Failed",
+                    QString("Could not save script to:\n%1\n\nGenerated script:\n\n%2")
+                        .arg(path, scriptText));
             }
         } else {
             s->macroRecorder->discardRecording();
@@ -482,7 +490,7 @@ void MainWindow::onNewScript() {
             "# @script.version = \"1.0\"\n"
             "# @menu.path = \"%1\"\n"
             "\n"
-            "WAIT SCREEN\n"
+            "EXPECT KEYBOARD UNLOCKED\n"
             "TYPE \"hello\"\n"
             "PRESS ENTER\n"
         ).arg(name).toUtf8());
