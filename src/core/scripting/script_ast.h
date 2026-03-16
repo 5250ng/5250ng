@@ -19,6 +19,7 @@
 #include <QMap>
 #include <QString>
 #include <QVector>
+#include <cstdint>
 #include <memory>
 
 namespace core::scripting {

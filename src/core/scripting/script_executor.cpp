@@ -21,6 +21,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QRandomGenerator>
+#include <algorithm>
 
 namespace core::scripting {
 
@@ -102,9 +103,21 @@ void ScriptExecutor::notifyTerminalStateChanged() {
 
     // Check if we're waiting for keyboard unlock after an AID key
     if (m_waitingForUnlock && m_screenWidget) {
-        if (m_screenWidget->keyboardState() == ui::widgets::KeyboardState::Unlocked) {
+        auto ks = m_screenWidget->keyboardState();
+        if (ks == ui::widgets::KeyboardState::Unlocked) {
             m_waitingForUnlock = false;
             scheduleNextStep(50); // Small delay after unlock
+        } else if (ks == ui::widgets::KeyboardState::ErrorLocked) {
+            // Terminal entered error-locked state — trigger ON ERROR handler if set
+            m_waitingForUnlock = false;
+            if (!m_onErrorLabel.isEmpty()) {
+                gotoLabel(m_onErrorLabel);
+                scheduleNextStep();
+            } else {
+                emit executionError(0, "Terminal entered error-locked state");
+                stop();
+            }
+            return;
         }
     }
 

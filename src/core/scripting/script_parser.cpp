@@ -16,6 +16,7 @@
 
 #include "script_parser.h"
 #include "script_compiler.h"
+#include <functional>
 
 namespace core::scripting {
 
@@ -389,9 +390,12 @@ std::shared_ptr<ASTNode> ScriptParser::parseExpect(const TokenLine &tokens) {
     if (subType == TokenType::TEXT) {
         // EXPECT TEXT "str" [AT row col | AT ROW row]
         idx++;
-        if (idx < tokens.size() && tokens[idx].type == TokenType::STRING_LITERAL)
+        if (idx < tokens.size() && tokens[idx].type == TokenType::STRING_LITERAL) {
             node->stringValue = tokens[idx++].value;
-
+        } else {
+            error(node->line, "EXPECT TEXT requires a quoted string");
+            return node;
+        }
         if (idx < tokens.size() && tokens[idx].type == TokenType::AT) {
             idx++;
             if (idx < tokens.size() && tokens[idx].type == TokenType::ROW) {
@@ -435,9 +439,16 @@ std::shared_ptr<ASTNode> ScriptParser::parseExpect(const TokenLine &tokens) {
         if (idx < tokens.size() && tokens[idx].type == TokenType::AT) idx++;
         node->intValue = (idx < tokens.size()) ? tokens[idx++].value.toInt() : 1;
         node->intValue2 = (idx < tokens.size()) ? tokens[idx++].value.toInt() : 1;
-        if (idx < tokens.size() && tokens[idx].type == TokenType::CONTAINS) idx++;
-        if (idx < tokens.size() && tokens[idx].type == TokenType::STRING_LITERAL)
-            node->stringValue = tokens[idx].value;
+        if (idx >= tokens.size() || tokens[idx].type != TokenType::CONTAINS) {
+            error(node->line, "EXPECT FIELD requires CONTAINS keyword");
+            return node;
+        }
+        idx++; // skip CONTAINS
+        if (idx >= tokens.size() || tokens[idx].type != TokenType::STRING_LITERAL) {
+            error(node->line, "EXPECT FIELD CONTAINS requires a quoted string");
+            return node;
+        }
+        node->stringValue = tokens[idx].value;
     } else if (subType == TokenType::MESSAGEWAITING) {
         node->expectType = ExpectType::MessageWaiting;
     } else {
@@ -582,8 +593,15 @@ std::shared_ptr<ASTNode> ScriptParser::parseOn(const TokenLine &tokens) {
     }
 
     // tokens[2] should be GOTO
-    if (tokens.size() > 3)
-        node->stringValue = tokens[3].value; // label name
+    if (tokens[2].type != TokenType::GOTO) {
+        error(node->line, "ON TIMEOUT/ERROR requires GOTO keyword");
+        return node;
+    }
+    if (tokens[3].type == TokenType::EOF_TOKEN) {
+        error(node->line, "ON TIMEOUT/ERROR GOTO requires a label name");
+        return node;
+    }
+    node->stringValue = tokens[3].value; // label name
     return node;
 }
 

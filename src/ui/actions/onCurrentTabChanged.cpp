@@ -32,5 +32,13 @@ void MainWindow::onCurrentTabChanged(int index) {
             bool recording = s->macroRecorder && s->macroRecorder->isRecording();
             m_scriptRecordAction->setChecked(recording);
         }
+        // Sync stop-action enabled state: stop should be enabled when recording,
+        // playing a macro, or running a script on the newly active session
+        if (m_scriptStopAction) {
+            bool active = (s->macroRecorder &&
+                           (s->macroRecorder->isRecording() || s->macroRecorder->isPlaying())) ||
+                          (s->scriptExecutor && s->scriptExecutor->isRunning());
+            m_scriptStopAction->setEnabled(active);
+        }
     }
 }
