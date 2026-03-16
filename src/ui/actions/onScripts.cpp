@@ -534,3 +534,177 @@ void MainWindow::onOpenScriptsFolder() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(scriptsDir()));
 }
 
+// ---------------------------------------------------------------------------
+// Run startup script for a session (with $USERNAME and $PASSWORD pre-seeded)
+// ---------------------------------------------------------------------------
+
+void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
+    if (!s || !s->displayWidget) return;
+
+    // Make sure this session is active so the UI indicators work
+    int idx = m_sessions.indexOf(s);
+    if (idx >= 0 && idx != m_activeIndex)
+        setActiveSession(idx);
+
+    // Set initial variables from session credentials
+    QHash<QString, QString> initialVars;
+    if (!s->config.username().isEmpty())
+        initialVars["$USERNAME"] = s->config.username();
+    if (!s->config.password().isEmpty())
+        initialVars["$PASSWORD"] = s->config.password();
+
+    // Load script text
+    QFile file(scriptPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QString scriptText = QString::fromUtf8(file.readAll());
+    file.close();
+
+    // Parse
+    core::scripting::ScriptParser parser;
+    auto parseResult = parser.parse(scriptText);
+    if (parseResult.hasErrors()) return;
+
+    // Create executor
+    if (!s->scriptExecutor) {
+        s->scriptExecutor = new core::scripting::ScriptExecutor(s->container);
+    }
+    s->scriptExecutor->setScreenWidget(s->displayWidget);
+    s->scriptExecutor->setInitialVariables(initialVars);
+
+    // Wire signals (same as onRunScript)
+    QPointer<ui::widgets::Q5250ScreenWidget> displayGuard = s->displayWidget;
+    QPointer<core::scripting::ScriptExecutor> execGuard = s->scriptExecutor;
+    QPointer<QLabel> macroLabelGuard = s->macroLabel;
+    QPointer<QAction> stopActionGuard = m_scriptStopAction;
+
+    auto connKeyPress = std::make_shared<QMetaObject::Connection>();
+    auto connAID = std::make_shared<QMetaObject::Connection>();
+    auto connMoveCursor = std::make_shared<QMetaObject::Connection>();
+    auto connMoveStep = std::make_shared<QMetaObject::Connection>();
+    auto connMoveField = std::make_shared<QMetaObject::Connection>();
+    auto connScreen = std::make_shared<QMetaObject::Connection>();
+    auto connState = std::make_shared<QMetaObject::Connection>();
+    auto connFinish = std::make_shared<QMetaObject::Connection>();
+    auto connError = std::make_shared<QMetaObject::Connection>();
+    auto connLog = std::make_shared<QMetaObject::Connection>();
+    auto connPause = std::make_shared<QMetaObject::Connection>();
+
+    *connKeyPress = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::injectKeyPress, this,
+        [displayGuard](int key, Qt::KeyboardModifiers mods, const QString &text) {
+            if (displayGuard.isNull()) return;
+            QKeyEvent ev(QEvent::KeyPress, key, mods, text);
+            QApplication::sendEvent(displayGuard.data(), &ev);
+        });
+
+    *connAID = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::injectAIDKey, this,
+        [displayGuard](uint8_t aid) {
+            if (displayGuard.isNull()) return;
+            int qtKey = 0;
+            Qt::KeyboardModifiers mods = Qt::NoModifier;
+            if (aid == 0xF1) { qtKey = Qt::Key_Return; }
+            else if (aid == 0x70) { qtKey = Qt::Key_Escape; mods = Qt::ControlModifier; }
+            else if (aid == 0x71) { qtKey = Qt::Key_SysReq; }
+            else if (aid >= 0x31 && aid <= 0x3C) { qtKey = Qt::Key_F1 + (aid - 0x31); }
+            else if (aid >= 0xB1 && aid <= 0xBC) { qtKey = Qt::Key_F1 + (aid - 0xB1); mods = Qt::ShiftModifier; }
+            else if (aid == 0xF3) { qtKey = Qt::Key_F1; mods = Qt::ControlModifier; }
+            else if (aid == 0xF4) { qtKey = Qt::Key_PageDown; }
+            else if (aid == 0xF5) { qtKey = Qt::Key_PageUp; }
+            else if (aid == 0xF6) { qtKey = Qt::Key_Print; }
+            else if (aid == 0xBD) { qtKey = Qt::Key_Pause; mods = Qt::ControlModifier; }
+            else return;
+            QKeyEvent ev(QEvent::KeyPress, qtKey, mods, QString());
+            QApplication::sendEvent(displayGuard.data(), &ev);
+        });
+
+    *connMoveCursor = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::moveCursor, this,
+        [displayGuard](int row, int col) {
+            if (displayGuard.isNull()) return;
+            displayGuard->moveCursor(row, col);
+        });
+
+    *connMoveStep = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::moveCursorStep, this,
+        [displayGuard](const QString &dir) {
+            if (displayGuard.isNull()) return;
+            if (dir == "UP") displayGuard->moveCursorUp();
+            else if (dir == "DOWN") displayGuard->moveCursorDown();
+            else if (dir == "LEFT") displayGuard->moveCursorLeft();
+            else if (dir == "RIGHT") displayGuard->moveCursorRight();
+        });
+
+    *connMoveField = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::gotoInputField, this,
+        [displayGuard](int fieldIndex) {
+            if (displayGuard.isNull()) return;
+            auto *buf = displayGuard->screenBuffer();
+            if (!buf) return;
+            const auto &fields = buf->fields();
+            QVector<const ui::widgets::ScreenBuffer::Field *> inputFields;
+            for (const auto &f : fields) {
+                if (!f.protected_field)
+                    inputFields.append(&f);
+            }
+            if (inputFields.isEmpty()) return;
+            if (fieldIndex == -1) {
+                displayGuard->moveToNextField();
+            } else if (fieldIndex == -2) {
+                displayGuard->moveToPreviousField();
+            } else if (fieldIndex >= 1 && fieldIndex <= inputFields.size()) {
+                auto *f = inputFields[fieldIndex - 1];
+                displayGuard->moveCursor(f->startRow, f->startCol);
+            }
+        });
+
+    *connScreen = connect(s->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
+        s->scriptExecutor, &core::scripting::ScriptExecutor::notifyScreenChanged);
+
+    *connState = connect(s->displayWidget, &ui::widgets::Q5250ScreenWidget::terminalStateChanged,
+        s->scriptExecutor, &core::scripting::ScriptExecutor::notifyTerminalStateChanged);
+
+    *connFinish = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionFinished, this,
+        [=]() {
+            QObject::disconnect(*connKeyPress);
+            QObject::disconnect(*connAID);
+            QObject::disconnect(*connMoveCursor);
+            QObject::disconnect(*connMoveStep);
+            QObject::disconnect(*connMoveField);
+            QObject::disconnect(*connScreen);
+            QObject::disconnect(*connState);
+            QObject::disconnect(*connFinish);
+            QObject::disconnect(*connError);
+            QObject::disconnect(*connLog);
+            QObject::disconnect(*connPause);
+            if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
+            if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
+        });
+
+    *connError = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionError, this,
+        [this](int line, const QString &msg) {
+            ui::widgets::StyledMessageBox::information(this, "Script Error",
+                QString("Line %1: %2").arg(line).arg(msg));
+        });
+
+    *connLog = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::logMessage, this,
+        [this](const QString &msg) {
+            if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
+                auto *s = m_sessions[m_activeIndex];
+                if (s->sessionLogger)
+                    s->sessionLogger->logEvent(QString("[SCRIPT] %1").arg(msg));
+            }
+        });
+
+    *connPause = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::pauseRequested, this,
+        [this, execGuard]() {
+            ui::widgets::StyledMessageBox::information(this, "Script Paused",
+                "Script execution paused.\nClick OK to continue.");
+            if (!execGuard.isNull()) execGuard->resumeAfterPause();
+        });
+
+    if (s->macroLabel) {
+        s->macroLabel->setText("SCRIPT");
+        s->macroLabel->setStyleSheet(
+            "color: #00ccff; background-color: black; padding: 0px 4px; font-weight: bold;");
+    }
+    m_scriptStopAction->setEnabled(true);
+
+    s->scriptExecutor->execute(parseResult);
+}
+

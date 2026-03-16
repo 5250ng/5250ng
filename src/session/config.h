@@ -65,6 +65,10 @@ class SessionConfig : public QObject {
     QString terminalThemeId() const { return m_terminalThemeId; }
     void setTerminalThemeId(const QString &id) { m_terminalThemeId = id; }
 
+    // Startup script (persisted — path relative to scripts dir)
+    QString startupScript() const { return m_startupScript; }
+    void setStartupScript(const QString &script) { m_startupScript = script; }
+
     // Credentials (transient — not serialized to JSON)
     QString username() const { return m_username; }
     void setUsername(const QString &username) { m_username = username; }
@@ -92,6 +96,7 @@ class SessionConfig : public QObject {
     int m_screenCols;
     core::CodePage::ID m_codePage;
     QString m_terminalThemeId;
+    QString m_startupScript;
     QString m_username;
     QString m_password;
 

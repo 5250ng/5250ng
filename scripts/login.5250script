@@ -1,0 +1,43 @@
+# @script.name = "Login With AutoSignoff"
+# @script.author = "Remi GASCOU (Podalirius)"
+# @script.description = "Logs in to the system and auto signoff the last job if needed"
+# @script.version = "1.0"
+# @menu.path = "Login/Login With AutoSignoff"
+
+# Login to the system and auto signoff the last job if needed.
+DEF login($username, $password)
+    MOVE CURSOR AT (1,1)
+    MOVE CURSOR AT NEXT INPUTFIELD
+    TYPE "$username"
+    MOVE CURSOR AT NEXT INPUTFIELD
+    TYPE "$password"
+    PRESS ENTER
+    autosignoff($username, $password)
+ENDDEF
+
+# Auto signoff the last job if needed.
+DEF autosignoff($username, $password)
+    EXTRACT $title LINE 1
+    IF $title CONTAINS "Attempt to Recover Interactive Job" THEN
+        MOVE CURSOR AT (1,1)
+        MOVE CURSOR AT NEXT INPUTFIELD
+        TYPE "90"
+        PRESS ENTER
+        PRESS ENTER
+        login($username, $password)
+    ENDIF
+ENDDEF
+
+#===============================================================
+
+# When used as a startup script, $USERNAME and $PASSWORD are
+# automatically set from the session credentials.
+# Fallback to defaults if not provided.
+IF $USERNAME == "0" THEN
+    SET $USERNAME "QSECOFR"
+ENDIF
+IF $PASSWORD == "0" THEN
+    SET $PASSWORD "QSECOFR0"
+ENDIF
+
+login($USERNAME, $PASSWORD)

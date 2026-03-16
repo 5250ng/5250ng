@@ -41,6 +41,10 @@ ui::widgets::ScreenBuffer *ScriptExecutor::screenBuffer() const {
     return m_screenWidget ? m_screenWidget->screenBuffer() : nullptr;
 }
 
+void ScriptExecutor::setInitialVariables(const QHash<QString, QString> &vars) {
+    m_initialVariables = vars;
+}
+
 void ScriptExecutor::execute(const ParseResult &parseResult) {
     if (m_running) return;
 
@@ -63,6 +67,11 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     setVariable("$EXPECT_RESULT", "OK");
     setVariable("$REPEAT_INDEX", "0");
     updateBuiltinVariables();
+
+    // Apply initial variables (e.g. $USERNAME, $PASSWORD from session config)
+    for (auto it = m_initialVariables.constBegin(); it != m_initialVariables.constEnd(); ++it) {
+        setVariable(it.key(), it.value());
+    }
 
     // Push root frame
     m_execStack.append({&m_parseResult.root->children, 0, 0, 0});

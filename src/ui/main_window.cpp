@@ -29,8 +29,10 @@
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFrame>
+#include <QStandardPaths>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -288,8 +290,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     connect(session->thread, &QThread::finished, session->worker, &QObject::deleteLater);
     // Per-session state handling - always updates this session's status widget,
     // and only touches global menu actions when this is the active tab.
+    auto startupScriptRan = std::make_shared<bool>(false);
     connect(session->worker, &tn5250::session::Worker::stateChanged, this,
-        [this, session](tn5250::client::TN5250Client::ConnectionState state) {
+        [this, session, startupScriptRan](tn5250::client::TN5250Client::ConnectionState state) {
             if (session->connectionStatus) {
                 session->connectionStatus->setState(state);
                 switch (state) {
@@ -298,6 +301,19 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                         QString("Connected to %1:%2")
                             .arg(session->config.hostname())
                             .arg(session->config.port()));
+                    // Run startup script once on first connect
+                    if (!*startupScriptRan && !session->config.startupScript().isEmpty()) {
+                        *startupScriptRan = true;
+                        QString scriptPath = QStandardPaths::writableLocation(
+                            QStandardPaths::AppDataLocation)
+                            + "/scripts/" + session->config.startupScript();
+                        if (QFile::exists(scriptPath)) {
+                            // Delay to let the terminal finish setup
+                            QTimer::singleShot(500, this, [this, session, scriptPath]() {
+                                runStartupScript(session, scriptPath);
+                            });
+                        }
+                    }
                     break;
                 case tn5250::client::TN5250Client::ConnectionState::Connecting:
                     session->connectionStatus->setStatusText("Connecting");
