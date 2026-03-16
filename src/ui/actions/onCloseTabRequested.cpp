@@ -43,6 +43,11 @@ void MainWindow::onCloseTabRequested(int index) {
         s->macroRecorder->stopPlayback();
         s->macroRecorder->disconnect();
     }
+    // Stop script execution if running
+    if (s->scriptExecutor) {
+        s->scriptExecutor->stop();
+        s->scriptExecutor->disconnect();
+    }
     // Stop session logging
     if (s->sessionLogger && s->sessionLogger->isActive()) {
         s->sessionLogger->stop();
