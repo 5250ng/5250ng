@@ -663,8 +663,13 @@ QString ScriptExecutor::interpolateVariables(const QString &text) const {
                 int start = i;
                 i++; // skip $
                 while (i < text.length() && (text[i].isLetterOrNumber() || text[i] == '_')) i++;
-                QString varName = text.mid(start, i - start);
-                result += resolveVariable(varName);
+                if (i - start <= 1) {
+                    // Lone $ with no variable name — emit literal $
+                    result += '$';
+                } else {
+                    QString varName = text.mid(start, i - start);
+                    result += resolveVariable(varName);
+                }
             }
         } else {
             result += text[i];
