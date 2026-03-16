@@ -84,6 +84,7 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     QGroupBox *m_displayGroup;
     QComboBox *m_codePageCombo;
     QComboBox *m_themeCombo;
+    QComboBox *m_startupScriptCombo;
 
     session::SessionConfig m_currentConfig;
     QVector<tn5250::devices::Device> m_supported;

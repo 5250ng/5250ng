@@ -41,6 +41,7 @@ class ScriptExecutor : public QObject {
     void execute(const ParseResult &parseResult);
     void stop();
     bool isRunning() const { return m_running; }
+    void setInitialVariables(const QHash<QString, QString> &vars);
 
   signals:
     // Key injection — connect these to MainWindow lambdas that synthesize QKeyEvents
@@ -97,6 +98,7 @@ class ScriptExecutor : public QObject {
 
     // Variables
     QHash<QString, QString> m_variables;
+    QHash<QString, QString> m_initialVariables;
     QString resolveVariable(const QString &name) const;
     void setVariable(const QString &name, const QString &value);
     QString interpolateVariables(const QString &text) const;

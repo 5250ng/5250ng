@@ -18,7 +18,10 @@
 #include "core/codepage.h"
 #include "session/manager.h"
 #include "ui/themes/terminal_theme_manager.h"
+#include <QDir>
+#include <QFileInfo>
 #include <QGroupBox>
+#include <QStandardPaths>
 #include <QInputDialog>
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 
@@ -170,6 +173,21 @@ void ConnectDialog::setupUI() {
     themeGroup->setLayout(themeLayout);
     mainLayout->addWidget(themeGroup);
 
+    // Startup script group
+    QGroupBox *scriptGroup = new QGroupBox("Startup Script", this);
+    QFormLayout *scriptLayout = new QFormLayout(scriptGroup);
+    m_startupScriptCombo = new QComboBox(this);
+    m_startupScriptCombo->addItem("(None)", QString());
+    QString sDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                   + "/scripts";
+    QDir scriptDir(sDir);
+    for (const QFileInfo &fi : scriptDir.entryInfoList({"*.5250script"}, QDir::Files, QDir::Name)) {
+        m_startupScriptCombo->addItem(fi.baseName(), fi.fileName());
+    }
+    scriptLayout->addRow("Run on connect:", m_startupScriptCombo);
+    scriptGroup->setLayout(scriptLayout);
+    mainLayout->addWidget(scriptGroup);
+
     // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     m_connectButton = new QPushButton("Connect", this);
@@ -232,6 +250,14 @@ void ConnectDialog::updateUI() {
     if (themeIdx >= 0) {
         m_themeCombo->setCurrentIndex(themeIdx);
     }
+
+    // Startup script
+    int scriptIdx = m_startupScriptCombo->findData(m_currentConfig.startupScript());
+    if (scriptIdx >= 0) {
+        m_startupScriptCombo->setCurrentIndex(scriptIdx);
+    } else {
+        m_startupScriptCombo->setCurrentIndex(0); // (None)
+    }
 }
 
 session::SessionConfig ConnectDialog::getSessionConfig() const {
@@ -252,6 +278,7 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setCodePage(static_cast<core::CodePage::ID>(
         m_codePageCombo->currentData().toInt()));
     config.setTerminalThemeId(m_themeCombo->currentData().toString());
+    config.setStartupScript(m_startupScriptCombo->currentData().toString());
     return config;
 }
 
