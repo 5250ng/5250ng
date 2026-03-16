@@ -169,6 +169,7 @@ struct ParseResult {
     QVector<ParseError> errors;
     QMap<QString, int> labels;  // label name -> index in root->children
     QMap<QString, std::shared_ptr<ASTNode>> functions;  // name -> FunctionDef node
+    QMap<QString, QString> metadata;  // script metadata from # @key = "value" comments
 
     bool hasErrors() const { return !errors.isEmpty(); }
 };

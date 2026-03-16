@@ -22,9 +22,10 @@ namespace core::scripting {
 QString ScriptCompiler::macroToScript(const Macro &macro) {
     QStringList lines;
 
-    lines << QString("# %1").arg(macro.name);
+    lines << QString("# @script.name = \"%1\"").arg(macro.name);
     if (!macro.description.isEmpty())
-        lines << QString("# %1").arg(macro.description);
+        lines << QString("# @script.description = \"%1\"").arg(macro.description);
+    lines << QString("# @script.version = \"1.0\"");
     lines << "";
 
     bool recordTimings = core::MacroConfig::instance().recordTimings();
@@ -142,6 +143,23 @@ QString ScriptCompiler::aidByteToKeyword(uint8_t aidByte) {
     case 0xF6: return "PRINT";
     default:   return QString("# Unknown AID: 0x%1").arg(aidByte, 2, 16, QChar('0'));
     }
+}
+
+ScriptMetadata ScriptCompiler::extractMetadata(const QString &scriptText) {
+    ScriptMetadata meta;
+    static const QRegularExpression re(R"DELIM(^#\s*@([\w.]+)\s*=\s*"([^"]*)")DELIM");
+    const QStringList lines = scriptText.split('\n');
+    for (const QString &line : lines) {
+        const QString trimmed = line.trimmed();
+        if (trimmed.isEmpty())
+            continue;
+        if (!trimmed.startsWith('#'))
+            break;
+        auto match = re.match(trimmed);
+        if (match.hasMatch())
+            meta.values.insert(match.captured(1), match.captured(2));
+    }
+    return meta;
 }
 
 } // namespace core::scripting

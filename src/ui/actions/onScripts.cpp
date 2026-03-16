@@ -169,15 +169,52 @@ void MainWindow::rebuildScriptsSubmenu() {
         return;
     }
 
+    // Track created submenus by path prefix for reuse
+    QMap<QString, QMenu *> submenus;
+
     for (const QFileInfo &fi : entries) {
         QString path = fi.absoluteFilePath();
-        QString name = fi.baseName();
-        QMenu *sub = m_scriptsSubmenu->addMenu(name);
-        connect(sub->addAction("Run"), &QAction::triggered, this,
+
+        // Read file to extract metadata
+        QFile file(path);
+        core::scripting::ScriptMetadata meta;
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            meta = core::scripting::ScriptCompiler::extractMetadata(
+                QString::fromUtf8(file.readAll()));
+            file.close();
+        }
+
+        QString displayName = meta.name().isEmpty() ? fi.baseName() : meta.name();
+        QString menuPath = meta.menuPath().isEmpty() ? displayName : meta.menuPath();
+
+        // Split menu path and create nested submenus
+        QStringList parts = menuPath.split('/', Qt::SkipEmptyParts);
+        if (parts.isEmpty())
+            parts << displayName;
+
+        // The leaf name is the last part
+        QString leafName = parts.takeLast();
+
+        // Walk the path, creating submenus as needed
+        QMenu *parent = m_scriptsSubmenu;
+        QString currentPath;
+        for (const QString &part : parts) {
+            if (!currentPath.isEmpty())
+                currentPath += '/';
+            currentPath += part;
+            if (!submenus.contains(currentPath)) {
+                submenus[currentPath] = parent->addMenu(part);
+            }
+            parent = submenus[currentPath];
+        }
+
+        // Add the leaf menu with Run/Edit/Delete actions
+        QMenu *leaf = parent->addMenu(leafName);
+        connect(leaf->addAction("Run"), &QAction::triggered, this,
             [this, path]() { onRunScript(path); });
-        connect(sub->addAction("Edit"), &QAction::triggered, this,
+        connect(leaf->addAction("Edit"), &QAction::triggered, this,
             [this, path]() { onEditScript(path); });
-        connect(sub->addAction("Delete"), &QAction::triggered, this,
+        connect(leaf->addAction("Delete"), &QAction::triggered, this,
             [this, path]() { onDeleteScript(path); });
     }
 }
@@ -440,8 +477,10 @@ void MainWindow::onNewScript() {
     QFile file(path);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         file.write(QString(
-            "// %1\n"
-            "// Created with 5250ng\n"
+            "# @script.name = \"%1\"\n"
+            "# @script.description = \"\"\n"
+            "# @script.version = \"1.0\"\n"
+            "# @menu.path = \"%1\"\n"
             "\n"
             "WAIT SCREEN\n"
             "TYPE \"hello\"\n"

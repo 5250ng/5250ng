@@ -15,13 +15,16 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "script_parser.h"
+#include "script_compiler.h"
 
 namespace core::scripting {
 
 ScriptParser::ScriptParser() {}
 
 ParseResult ScriptParser::parse(const QString &source) {
-    return parse(m_lexer.tokenize(source));
+    auto result = parse(m_lexer.tokenize(source));
+    result.metadata = ScriptCompiler::extractMetadata(source).values;
+    return result;
 }
 
 ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
