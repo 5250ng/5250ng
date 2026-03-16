@@ -41,6 +41,8 @@ set(CORE_SOURCES
     src/core/screen_history.h
     src/core/macro_recorder.cpp
     src/core/macro_recorder.h
+    src/core/macro_config.cpp
+    src/core/macro_config.h
     src/core/session_logger.cpp
     src/core/session_logger.h
     src/core/match_replace_engine.cpp

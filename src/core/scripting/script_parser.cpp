@@ -45,6 +45,14 @@ ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
         int line = tl[0].line;
 
         // Block terminators
+        if (first == TokenType::ENDDEF) {
+            if (blockStack.isEmpty() || blockStack.last().node->type != NodeType::FunctionDef) {
+                error(line, "ENDDEF without matching DEF");
+            } else {
+                blockStack.removeLast();
+            }
+            continue;
+        }
         if (first == TokenType::ENDIF) {
             if (blockStack.isEmpty() || blockStack.last().node->type != NodeType::If) {
                 error(line, "ENDIF without matching IF");
@@ -82,6 +90,12 @@ ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
             continue;
         }
 
+        // DEF must be at top level
+        if (first == TokenType::DEF && !blockStack.isEmpty()) {
+            error(line, "DEF must be at the top level (not inside IF/WHILE/REPEAT/DEF)");
+            continue;
+        }
+
         // Parse the line into an AST node
         auto node = parseLine(tl);
         if (!node) continue;
@@ -96,7 +110,8 @@ ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
         target.append(node);
 
         // If the node starts a new block, push it
-        if (node->type == NodeType::If || node->type == NodeType::While || node->type == NodeType::Repeat) {
+        if (node->type == NodeType::If || node->type == NodeType::While ||
+            node->type == NodeType::Repeat || node->type == NodeType::FunctionDef) {
             blockStack.append({node, false});
         }
     }
@@ -108,16 +123,31 @@ ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
         case NodeType::If: keyword = "IF"; break;
         case NodeType::While: keyword = "WHILE"; break;
         case NodeType::Repeat: keyword = "REPEAT"; break;
+        case NodeType::FunctionDef: keyword = "DEF"; break;
         default: keyword = "block"; break;
         }
         error(frame.node->line, QString("Unclosed %1 block").arg(keyword));
     }
 
-    // Resolve labels
+    // Extract function definitions from root children into result.functions
     ParseResult result;
     result.root = root;
-    result.errors = m_errors;
 
+    QVector<std::shared_ptr<ASTNode>> mainChildren;
+    for (const auto &child : root->children) {
+        if (child->type == NodeType::FunctionDef) {
+            const QString &name = child->stringValue;
+            if (result.functions.contains(name)) {
+                error(child->line, QString("Duplicate function '%1'").arg(name));
+            }
+            result.functions[name] = child;
+        } else {
+            mainChildren.append(child);
+        }
+    }
+    root->children = mainChildren;
+
+    // Resolve labels (after function extraction so indices are correct)
     for (int i = 0; i < root->children.size(); ++i) {
         if (root->children[i]->type == NodeType::Label) {
             const QString &name = root->children[i]->stringValue;
@@ -129,20 +159,46 @@ ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
         }
     }
 
-    // Verify GOTO targets exist
-    for (const auto &child : root->children) {
-        if (child->type == NodeType::Goto) {
-            if (!result.labels.contains(child->stringValue)) {
-                error(child->line,
-                      QString("GOTO target '%1' not found").arg(child->stringValue));
+    // Validate GOTO targets and CALL targets (recursive walk)
+    std::function<void(const QVector<std::shared_ptr<ASTNode>> &)> validateNodes;
+    validateNodes = [&](const QVector<std::shared_ptr<ASTNode>> &nodes) {
+        for (const auto &child : nodes) {
+            if (child->type == NodeType::Goto) {
+                if (!result.labels.contains(child->stringValue)) {
+                    error(child->line,
+                          QString("GOTO target '%1' not found").arg(child->stringValue));
+                }
             }
-        }
-        if (child->type == NodeType::OnTimeout || child->type == NodeType::OnError) {
-            if (!result.labels.contains(child->stringValue)) {
-                error(child->line,
-                      QString("ON handler target '%1' not found").arg(child->stringValue));
+            if (child->type == NodeType::OnTimeout || child->type == NodeType::OnError) {
+                if (!result.labels.contains(child->stringValue)) {
+                    error(child->line,
+                          QString("ON handler target '%1' not found").arg(child->stringValue));
+                }
             }
+            if (child->type == NodeType::FunctionCall) {
+                if (!result.functions.contains(child->stringValue)) {
+                    error(child->line,
+                          QString("CALL target '%1' not found").arg(child->stringValue));
+                } else {
+                    auto &func = result.functions[child->stringValue];
+                    if (child->argValues.size() != func->paramNames.size()) {
+                        error(child->line,
+                              QString("CALL '%1' expects %2 arguments, got %3")
+                                  .arg(child->stringValue)
+                                  .arg(func->paramNames.size())
+                                  .arg(child->argValues.size()));
+                    }
+                }
+            }
+            if (!child->children.isEmpty())
+                validateNodes(child->children);
+            if (!child->elseChildren.isEmpty())
+                validateNodes(child->elseChildren);
         }
+    };
+    validateNodes(root->children);
+    for (const auto &func : result.functions) {
+        validateNodes(func->children);
     }
 
     result.errors = m_errors;
@@ -267,6 +323,13 @@ std::shared_ptr<ASTNode> ScriptParser::parseLine(const TokenLine &tokens) {
             error(node->line, "GOTO requires a label name");
         return node;
 
+    // Functions
+    case TokenType::DEF: return parseDef(tokens);
+    case TokenType::CALL: return parseCall(tokens);
+    case TokenType::RETURN:
+        node->type = NodeType::Return;
+        return node;
+
     // Error handling
     case TokenType::ON: return parseOn(tokens);
     case TokenType::ABORT:
@@ -286,6 +349,11 @@ std::shared_ptr<ASTNode> ScriptParser::parseLine(const TokenLine &tokens) {
         return node;
 
     default:
+        // Bare function call: identifier(args...)
+        if (first == TokenType::STRING_LITERAL && tokens.size() >= 2 &&
+            tokens[1].type == TokenType::LPAREN) {
+            return parseCall(tokens);
+        }
         error(tokens[0].line, QString("Unexpected token: %1").arg(tokens[0].value));
         return nullptr;
     }
@@ -420,8 +488,13 @@ std::shared_ptr<ASTNode> ScriptParser::parseExtract(const TokenLine &tokens) {
         } else {
             error(node->line, "EXTRACT CURSOR requires ROW or COL");
         }
+    } else if (tokens[idx].type == TokenType::LINE) {
+        // EXTRACT $var LINE row
+        node->extractType = ExtractType::LineAt;
+        idx++;
+        node->intValue = (idx < tokens.size()) ? tokens[idx].value.toInt() : 1;
     } else {
-        error(node->line, "EXTRACT requires FROM, FIELD, or CURSOR");
+        error(node->line, "EXTRACT requires FROM, FIELD, CURSOR, or LINE");
     }
 
     return node;
@@ -651,6 +724,7 @@ bool ScriptParser::parseCondition(const TokenLine &tokens, int startIndex,
     case TokenType::OP_GT: op = CompareOp::Gt; break;
     case TokenType::OP_LE: op = CompareOp::Le; break;
     case TokenType::OP_GE: op = CompareOp::Ge; break;
+    case TokenType::CONTAINS: op = CompareOp::Contains; break;
     default:
         error(tokens[startIndex].line, "Expected comparison operator");
         return false;
@@ -658,6 +732,75 @@ bool ScriptParser::parseCondition(const TokenLine &tokens, int startIndex,
 
     right = tokens[startIndex + 2].value;
     return true;
+}
+
+std::shared_ptr<ASTNode> ScriptParser::parseDef(const TokenLine &tokens) {
+    auto node = std::make_shared<ASTNode>();
+    node->type = NodeType::FunctionDef;
+    node->line = tokens[0].line;
+
+    if (tokens.size() < 2) {
+        error(node->line, "DEF requires a function name");
+        return node;
+    }
+
+    // DEF name([$p1, $p2, ...])
+    node->stringValue = tokens[1].value; // function name
+
+    int idx = 2;
+    if (idx < tokens.size() && tokens[idx].type == TokenType::LPAREN) {
+        idx++; // skip (
+        while (idx < tokens.size() && tokens[idx].type != TokenType::RPAREN) {
+            if (tokens[idx].type == TokenType::VARIABLE) {
+                node->paramNames.append(tokens[idx].value);
+            } else if (tokens[idx].type == TokenType::COMMA) {
+                // skip comma
+            } else {
+                error(node->line, QString("Expected parameter variable, got '%1'").arg(tokens[idx].value));
+            }
+            idx++;
+        }
+        // skip )
+    }
+
+    return node;
+}
+
+std::shared_ptr<ASTNode> ScriptParser::parseCall(const TokenLine &tokens) {
+    auto node = std::make_shared<ASTNode>();
+    node->type = NodeType::FunctionCall;
+    node->line = tokens[0].line;
+
+    // Bare call: name(args...)  vs  CALL name(args...)
+    bool bareCall = (tokens[0].type != TokenType::CALL);
+    int nameIdx = bareCall ? 0 : 1;
+
+    if (nameIdx >= tokens.size()) {
+        error(node->line, "CALL requires a function name");
+        return node;
+    }
+
+    node->stringValue = tokens[nameIdx].value; // function name
+
+    int idx = nameIdx + 1;
+    if (idx < tokens.size() && tokens[idx].type == TokenType::LPAREN) {
+        idx++; // skip (
+        while (idx < tokens.size() && tokens[idx].type != TokenType::RPAREN) {
+            if (tokens[idx].type == TokenType::STRING_LITERAL ||
+                tokens[idx].type == TokenType::NUMBER_LITERAL ||
+                tokens[idx].type == TokenType::VARIABLE) {
+                node->argValues.append(tokens[idx].value);
+            } else if (tokens[idx].type == TokenType::COMMA) {
+                // skip comma
+            } else {
+                error(node->line, QString("Unexpected argument token '%1'").arg(tokens[idx].value));
+            }
+            idx++;
+        }
+        // skip )
+    }
+
+    return node;
 }
 
 void ScriptParser::error(int line, const QString &msg) {

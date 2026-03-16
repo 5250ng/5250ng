@@ -55,6 +55,8 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     m_jitterMax = 0;
     m_waitingForUnlock = false;
     m_expectActive = false;
+    m_functions = parseResult.functions;
+    m_callStack.clear();
 
     // Initialize built-in variables
     setVariable("$EXPECT_RESULT", "OK");
@@ -74,6 +76,7 @@ void ScriptExecutor::stop() {
     m_expectActive = false;
     m_waitingForUnlock = false;
     m_execStack.clear();
+    m_callStack.clear();
     emit executionFinished();
 }
 
@@ -155,6 +158,12 @@ void ScriptExecutor::executeStep() {
         }
 
         m_execStack.removeLast();
+
+        // Implicit return: if we've popped back to the call frame's depth, return from function
+        if (!m_callStack.isEmpty() &&
+            m_execStack.size() == m_callStack.last().execStackDepth) {
+            returnFromFunction();
+        }
     }
 
     // All done
@@ -348,6 +357,67 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         break;
     }
 
+    case NodeType::FunctionCall: {
+        if (!m_functions.contains(node->stringValue)) {
+            emit executionError(node->line,
+                                QString("Function '%1' not defined").arg(node->stringValue));
+            stop();
+            return;
+        }
+        if (m_callStack.size() >= 100) {
+            emit executionError(node->line, "Maximum recursion depth (100) exceeded");
+            stop();
+            return;
+        }
+        auto &func = m_functions[node->stringValue];
+        if (node->argValues.size() != func->paramNames.size()) {
+            emit executionError(node->line,
+                                QString("Function '%1' expects %2 arguments, got %3")
+                                    .arg(node->stringValue)
+                                    .arg(func->paramNames.size())
+                                    .arg(node->argValues.size()));
+            stop();
+            return;
+        }
+        // Create call frame: save current param values
+        CallFrame frame;
+        frame.execStackDepth = m_execStack.size();
+        frame.paramNames = func->paramNames;
+        for (const QString &param : func->paramNames) {
+            if (m_variables.contains(param))
+                frame.savedVariables[param] = m_variables[param];
+        }
+        // Bind arguments to parameters
+        for (int i = 0; i < func->paramNames.size(); ++i) {
+            QString argVal = interpolateVariables(node->argValues[i]);
+            setVariable(func->paramNames[i], argVal);
+        }
+        m_callStack.append(frame);
+        m_execStack.append({&func->children, 0, 0, 0});
+        scheduleNextStep();
+        break;
+    }
+
+    case NodeType::Return: {
+        if (m_callStack.isEmpty()) {
+            emit executionError(node->line, "RETURN outside of function");
+            stop();
+            return;
+        }
+        // Pop exec frames down to call frame depth
+        while (m_execStack.size() > m_callStack.last().execStackDepth) {
+            m_execStack.removeLast();
+        }
+        returnFromFunction();
+        scheduleNextStep();
+        break;
+    }
+
+    case NodeType::FunctionDef:
+        // Should never be executed (extracted from root), skip
+        scheduleNextStep();
+        break;
+
     case NodeType::Goto:
         gotoLabel(node->stringValue);
         scheduleNextStep();
@@ -411,6 +481,14 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
                 value = QString::number(pos.x() + 1); // 1-based
             }
             break;
+        case ExtractType::LineAt: {
+            int row = node->intValue - 1; // 1-based to 0-based
+            auto *buf = screenBuffer();
+            if (buf && row >= 0 && row < buf->rows()) {
+                value = readScreenText(row, 0, buf->cols());
+            }
+            break;
+        }
         }
         setVariable(node->varName, value);
         scheduleNextStep();
@@ -508,6 +586,10 @@ void ScriptExecutor::endExpect(bool success) {
 // --- Condition evaluation ---
 
 bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const QString &right) const {
+    // CONTAINS is always a string operation
+    if (op == CompareOp::Contains)
+        return left.contains(right);
+
     // Try numeric comparison first
     bool leftIsNum = false, rightIsNum = false;
     int leftNum = left.toInt(&leftIsNum);
@@ -521,6 +603,7 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
         case CompareOp::Gt: return leftNum > rightNum;
         case CompareOp::Le: return leftNum <= rightNum;
         case CompareOp::Ge: return leftNum >= rightNum;
+        case CompareOp::Contains: break; // handled above
         }
     }
 
@@ -533,6 +616,7 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
     case CompareOp::Gt: return cmp > 0;
     case CompareOp::Le: return cmp <= 0;
     case CompareOp::Ge: return cmp >= 0;
+    case CompareOp::Contains: break; // handled above
     }
     return false;
 }
@@ -576,6 +660,11 @@ QString ScriptExecutor::interpolateVariables(const QString &text) const {
 // --- GOTO ---
 
 void ScriptExecutor::gotoLabel(const QString &label) {
+    if (!m_callStack.isEmpty()) {
+        emit executionError(0, "GOTO is not allowed inside functions");
+        stop();
+        return;
+    }
     if (!m_parseResult.labels.contains(label)) {
         emit executionError(0, QString("Label '%1' not found").arg(label));
         stop();
@@ -586,6 +675,24 @@ void ScriptExecutor::gotoLabel(const QString &label) {
     m_execStack.clear();
     int targetIndex = m_parseResult.labels[label] + 1; // +1 to skip the LABEL node itself
     m_execStack.append({&m_parseResult.root->children, targetIndex, 0, 0});
+}
+
+// --- Function return ---
+
+void ScriptExecutor::returnFromFunction() {
+    if (m_callStack.isEmpty()) return;
+
+    CallFrame frame = m_callStack.last();
+    m_callStack.removeLast();
+
+    // Restore saved parameter variables
+    for (const QString &param : frame.paramNames) {
+        if (frame.savedVariables.contains(param)) {
+            m_variables[param] = frame.savedVariables[param];
+        } else {
+            m_variables.remove(param);
+        }
+    }
 }
 
 // --- Built-in variables ---

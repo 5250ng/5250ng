@@ -108,6 +108,12 @@ void ScriptLexer::initKeywords() {
     m_keywords["LABEL"]      = TokenType::LABEL;
     m_keywords["GOTO"]       = TokenType::GOTO;
 
+    // Functions
+    m_keywords["DEF"]        = TokenType::DEF;
+    m_keywords["ENDDEF"]     = TokenType::ENDDEF;
+    m_keywords["CALL"]       = TokenType::CALL;
+    m_keywords["RETURN"]     = TokenType::RETURN;
+
     // Error handling
     m_keywords["ON"]       = TokenType::ON;
     m_keywords["ABORT"]    = TokenType::ABORT;
@@ -131,6 +137,7 @@ void ScriptLexer::initKeywords() {
     m_keywords["LENGTH"]          = TokenType::LENGTH;
     m_keywords["FROM"]            = TokenType::FROM;
     m_keywords["COL"]             = TokenType::COL;
+    m_keywords["LINE"]            = TokenType::LINE;
     m_keywords["ERROR"]           = TokenType::ERROR;
     m_keywords["TIMEOUT"]         = TokenType::TIMEOUT;
     m_keywords["INPUTFIELD"]      = TokenType::INPUTFIELD;

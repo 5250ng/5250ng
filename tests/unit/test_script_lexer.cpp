@@ -54,6 +54,7 @@ class TestScriptLexer : public QObject {
     void testLogCommand();
     void testAbortCommand();
     void testRepeat();
+    void testDefCallReturn();
 
   private:
     ScriptLexer *m_lexer;
@@ -405,6 +406,59 @@ void TestScriptLexer::testRepeat() {
     QCOMPARE(result[0][0].type, TokenType::REPEAT);
     QCOMPARE(result[0][1].type, TokenType::NUMBER_LITERAL);
     QCOMPARE(result[0][1].value, "3");
+}
+
+void TestScriptLexer::testDefCallReturn() {
+    // DEF with parameters
+    auto result = m_lexer->tokenize("DEF login($user, $pass)");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::DEF);
+    QCOMPARE(result[0][1].type, TokenType::STRING_LITERAL); // function name as identifier
+    QCOMPARE(result[0][1].value, "login");
+    QCOMPARE(result[0][2].type, TokenType::LPAREN);
+    QCOMPARE(result[0][3].type, TokenType::VARIABLE);
+    QCOMPARE(result[0][3].value, "$user");
+    QCOMPARE(result[0][4].type, TokenType::COMMA);
+    QCOMPARE(result[0][5].type, TokenType::VARIABLE);
+    QCOMPARE(result[0][5].value, "$pass");
+    QCOMPARE(result[0][6].type, TokenType::RPAREN);
+
+    // ENDDEF
+    result = m_lexer->tokenize("ENDDEF");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::ENDDEF);
+
+    // CALL with arguments
+    result = m_lexer->tokenize("CALL login(\"admin\", \"secret123\")");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::CALL);
+    QCOMPARE(result[0][1].value, "login");
+    QCOMPARE(result[0][2].type, TokenType::LPAREN);
+    QCOMPARE(result[0][3].type, TokenType::STRING_LITERAL);
+    QCOMPARE(result[0][3].value, "admin");
+    QCOMPARE(result[0][4].type, TokenType::COMMA);
+    QCOMPARE(result[0][5].type, TokenType::STRING_LITERAL);
+    QCOMPARE(result[0][5].value, "secret123");
+    QCOMPARE(result[0][6].type, TokenType::RPAREN);
+
+    // CALL with variable arguments
+    result = m_lexer->tokenize("CALL login($user, $pass)");
+    QCOMPARE(result[0][3].type, TokenType::VARIABLE);
+    QCOMPARE(result[0][3].value, "$user");
+    QCOMPARE(result[0][5].type, TokenType::VARIABLE);
+    QCOMPARE(result[0][5].value, "$pass");
+
+    // RETURN
+    result = m_lexer->tokenize("RETURN");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::RETURN);
+
+    // DEF with zero args
+    result = m_lexer->tokenize("DEF doSomething()");
+    QCOMPARE(result[0][0].type, TokenType::DEF);
+    QCOMPARE(result[0][1].value, "doSomething");
+    QCOMPARE(result[0][2].type, TokenType::LPAREN);
+    QCOMPARE(result[0][3].type, TokenType::RPAREN);
 }
 
 QTEST_MAIN(TestScriptLexer)

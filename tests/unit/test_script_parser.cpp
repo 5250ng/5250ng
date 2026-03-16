@@ -67,6 +67,19 @@ class TestScriptParser : public QObject {
     void testDuplicateLabel();
     void testMissingGotoTarget();
     void testFullLoginScript();
+    void testFunctionDefAndCall();
+    void testFunctionZeroArgs();
+    void testFunctionReturn();
+    void testNestedDefError();
+    void testDefInsideBlockError();
+    void testCallUndefinedFunction();
+    void testCallWrongArgCount();
+    void testDuplicateFunction();
+    void testFunctionExtractedFromRoot();
+    void testFunctionWithLoginScript();
+    void testBareCallSyntax();
+    void testExtractLine();
+    void testIfContains();
 
   private:
     ScriptParser *m_parser;
@@ -542,6 +555,270 @@ void TestScriptParser::testFullLoginScript() {
     QVERIFY(!result.hasErrors());
     QVERIFY(result.labels.contains("login"));
     QVERIFY(result.root->children.size() > 5);
+}
+
+void TestScriptParser::testFunctionDefAndCall() {
+    auto result = m_parser->parse(
+        "DEF login($user, $pass)\n"
+        "    TYPE \"$user\"\n"
+        "    MOVE CURSOR AT NEXT INPUTFIELD\n"
+        "    TYPE \"$pass\"\n"
+        "    ENTER\n"
+        "ENDDEF\n"
+        "\n"
+        "CALL login(\"admin\", \"secret123\")\n"
+    );
+    QVERIFY(!result.hasErrors());
+    // Function should be extracted from root
+    QVERIFY(result.functions.contains("login"));
+    auto func = result.functions["login"];
+    QCOMPARE(func->type, NodeType::FunctionDef);
+    QCOMPARE(func->stringValue, "login");
+    QCOMPARE(func->paramNames.size(), 2);
+    QCOMPARE(func->paramNames[0], "$user");
+    QCOMPARE(func->paramNames[1], "$pass");
+    QCOMPARE(func->children.size(), 4);
+
+    // Root should only contain the CALL
+    QCOMPARE(result.root->children.size(), 1);
+    auto call = result.root->children[0];
+    QCOMPARE(call->type, NodeType::FunctionCall);
+    QCOMPARE(call->stringValue, "login");
+    QCOMPARE(call->argValues.size(), 2);
+    QCOMPARE(call->argValues[0], "admin");
+    QCOMPARE(call->argValues[1], "secret123");
+}
+
+void TestScriptParser::testFunctionZeroArgs() {
+    auto result = m_parser->parse(
+        "DEF doNothing()\n"
+        "    LOG \"nothing\"\n"
+        "ENDDEF\n"
+        "CALL doNothing()\n"
+    );
+    QVERIFY(!result.hasErrors());
+    QVERIFY(result.functions.contains("doNothing"));
+    QCOMPARE(result.functions["doNothing"]->paramNames.size(), 0);
+    QCOMPARE(result.root->children[0]->argValues.size(), 0);
+}
+
+void TestScriptParser::testFunctionReturn() {
+    auto result = m_parser->parse(
+        "DEF earlyReturn($x)\n"
+        "    IF $x == \"done\"\n"
+        "        RETURN\n"
+        "    ENDIF\n"
+        "    LOG \"still going\"\n"
+        "ENDDEF\n"
+        "CALL earlyReturn(\"done\")\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto func = result.functions["earlyReturn"];
+    // IF node + LOG node
+    QCOMPARE(func->children.size(), 2);
+    // IF body should have RETURN
+    auto ifNode = func->children[0];
+    QCOMPARE(ifNode->type, NodeType::If);
+    QCOMPARE(ifNode->children.size(), 1);
+    QCOMPARE(ifNode->children[0]->type, NodeType::Return);
+}
+
+void TestScriptParser::testNestedDefError() {
+    auto result = m_parser->parse(
+        "DEF outer()\n"
+        "    DEF inner()\n"
+        "        LOG \"nested\"\n"
+        "    ENDDEF\n"
+        "ENDDEF\n"
+    );
+    QVERIFY(result.hasErrors());
+    bool found = false;
+    for (const auto &e : result.errors) {
+        if (e.message.contains("DEF must be at the top level")) found = true;
+    }
+    QVERIFY(found);
+}
+
+void TestScriptParser::testDefInsideBlockError() {
+    auto result = m_parser->parse(
+        "IF $X == 1\n"
+        "    DEF bad()\n"
+        "        LOG \"inside if\"\n"
+        "    ENDDEF\n"
+        "ENDIF\n"
+    );
+    QVERIFY(result.hasErrors());
+    bool found = false;
+    for (const auto &e : result.errors) {
+        if (e.message.contains("DEF must be at the top level")) found = true;
+    }
+    QVERIFY(found);
+}
+
+void TestScriptParser::testCallUndefinedFunction() {
+    auto result = m_parser->parse("CALL nonexistent()");
+    QVERIFY(result.hasErrors());
+    bool found = false;
+    for (const auto &e : result.errors) {
+        if (e.message.contains("CALL target") && e.message.contains("not found")) found = true;
+    }
+    QVERIFY(found);
+}
+
+void TestScriptParser::testCallWrongArgCount() {
+    auto result = m_parser->parse(
+        "DEF greet($name)\n"
+        "    LOG $name\n"
+        "ENDDEF\n"
+        "CALL greet(\"a\", \"b\")\n"
+    );
+    QVERIFY(result.hasErrors());
+    bool found = false;
+    for (const auto &e : result.errors) {
+        if (e.message.contains("expects 1 arguments, got 2")) found = true;
+    }
+    QVERIFY(found);
+}
+
+void TestScriptParser::testDuplicateFunction() {
+    auto result = m_parser->parse(
+        "DEF foo()\n"
+        "    LOG \"first\"\n"
+        "ENDDEF\n"
+        "DEF foo()\n"
+        "    LOG \"second\"\n"
+        "ENDDEF\n"
+    );
+    QVERIFY(result.hasErrors());
+    bool found = false;
+    for (const auto &e : result.errors) {
+        if (e.message.contains("Duplicate function")) found = true;
+    }
+    QVERIFY(found);
+}
+
+void TestScriptParser::testFunctionExtractedFromRoot() {
+    auto result = m_parser->parse(
+        "LABEL start\n"
+        "DEF myFunc()\n"
+        "    LOG \"in func\"\n"
+        "ENDDEF\n"
+        "LOG \"main\"\n"
+        "CALL myFunc()\n"
+    );
+    QVERIFY(!result.hasErrors());
+    // Root should have: LABEL, LOG, CALL (no FunctionDef)
+    QCOMPARE(result.root->children.size(), 3);
+    QCOMPARE(result.root->children[0]->type, NodeType::Label);
+    QCOMPARE(result.root->children[1]->type, NodeType::Log);
+    QCOMPARE(result.root->children[2]->type, NodeType::FunctionCall);
+    // Label index should be correct after extraction
+    QVERIFY(result.labels.contains("start"));
+    QCOMPARE(result.labels["start"], 0);
+}
+
+void TestScriptParser::testFunctionWithLoginScript() {
+    QString script =
+        "DEF login($user, $pass)\n"
+        "    TYPE \"$user\"\n"
+        "    MOVE CURSOR AT NEXT INPUTFIELD\n"
+        "    TYPE \"$pass\"\n"
+        "    PRESS ENTER\n"
+        "ENDDEF\n"
+        "\n"
+        "EXPECT TEXT \"Sign On\"\n"
+        "CALL login(\"admin\", \"secret123\")\n"
+        "CALL login($saved_user, $saved_pass)\n";
+
+    auto result = m_parser->parse(script);
+    QVERIFY(!result.hasErrors());
+    QVERIFY(result.functions.contains("login"));
+    QCOMPARE(result.root->children.size(), 3); // EXPECT + 2 CALLs
+    // Second call uses variables
+    auto call2 = result.root->children[2];
+    QCOMPARE(call2->argValues[0], "$saved_user");
+    QCOMPARE(call2->argValues[1], "$saved_pass");
+}
+
+void TestScriptParser::testBareCallSyntax() {
+    // Bare call without CALL keyword
+    auto result = m_parser->parse(
+        "DEF greet($name)\n"
+        "    LOG \"$name\"\n"
+        "ENDDEF\n"
+        "greet(\"World\")\n"
+    );
+    QVERIFY(!result.hasErrors());
+    QCOMPARE(result.root->children.size(), 1);
+    auto call = result.root->children[0];
+    QCOMPARE(call->type, NodeType::FunctionCall);
+    QCOMPARE(call->stringValue, "greet");
+    QCOMPARE(call->argValues.size(), 1);
+    QCOMPARE(call->argValues[0], "World");
+
+    // Bare call with variables
+    result = m_parser->parse(
+        "DEF login($user, $pass)\n"
+        "    LOG \"$user\"\n"
+        "ENDDEF\n"
+        "login(\"QSECOFR\", \"QSECOFR0\")\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto call2 = result.root->children[0];
+    QCOMPARE(call2->type, NodeType::FunctionCall);
+    QCOMPARE(call2->stringValue, "login");
+    QCOMPARE(call2->argValues.size(), 2);
+    QCOMPARE(call2->argValues[0], "QSECOFR");
+    QCOMPARE(call2->argValues[1], "QSECOFR0");
+
+    // Both CALL and bare syntax work
+    result = m_parser->parse(
+        "DEF foo()\n"
+        "    LOG \"foo\"\n"
+        "ENDDEF\n"
+        "CALL foo()\n"
+        "foo()\n"
+    );
+    QVERIFY(!result.hasErrors());
+    QCOMPARE(result.root->children.size(), 2);
+    QCOMPARE(result.root->children[0]->type, NodeType::FunctionCall);
+    QCOMPARE(result.root->children[1]->type, NodeType::FunctionCall);
+}
+
+void TestScriptParser::testExtractLine() {
+    auto result = m_parser->parse("EXTRACT $line LINE 5");
+    QVERIFY(!result.hasErrors());
+    auto node = result.root->children[0];
+    QCOMPARE(node->type, NodeType::Extract);
+    QCOMPARE(node->extractType, ExtractType::LineAt);
+    QCOMPARE(node->varName, "$line");
+    QCOMPARE(node->intValue, 5);
+}
+
+void TestScriptParser::testIfContains() {
+    // IF with CONTAINS
+    auto result = m_parser->parse(
+        "IF $line CONTAINS \"Poda\"\n"
+        "    LOG \"found it\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto ifNode = result.root->children[0];
+    QCOMPARE(ifNode->type, NodeType::If);
+    QCOMPARE(ifNode->condLeft, "$line");
+    QCOMPARE(ifNode->condOp, CompareOp::Contains);
+    QCOMPARE(ifNode->condRight, "Poda");
+    QCOMPARE(ifNode->children.size(), 1);
+
+    // WHILE with CONTAINS
+    result = m_parser->parse(
+        "WHILE $text CONTAINS \"error\"\n"
+        "    LOG \"still has error\"\n"
+        "ENDWHILE\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto whileNode = result.root->children[0];
+    QCOMPARE(whileNode->condOp, CompareOp::Contains);
 }
 
 QTEST_MAIN(TestScriptParser)

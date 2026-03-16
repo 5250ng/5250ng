@@ -99,8 +99,6 @@ void MainWindow::setupMenuBar() {
     scriptsMenu->addAction("&New Script...", this, &MainWindow::onNewScript);
     scriptsMenu->addAction("&Import Script...", this, &MainWindow::onImportScript);
     scriptsMenu->addAction("&Open Scripts Folder", this, &MainWindow::onOpenScriptsFolder);
-    scriptsMenu->addSeparator();
-    scriptsMenu->addAction("&Convert Macros to Scripts...", this, &MainWindow::onConvertMacrosToScripts);
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");

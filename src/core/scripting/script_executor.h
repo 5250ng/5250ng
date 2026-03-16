@@ -76,6 +76,16 @@ class ScriptExecutor : public QObject {
     int m_jitterMin = 0;         // Global random delay min in ms (GLOBAL JITTER)
     int m_jitterMax = 0;         // Global random delay max in ms (GLOBAL JITTER)
 
+    // Function call stack
+    struct CallFrame {
+        QHash<QString, QString> savedVariables;  // pre-call values of parameters
+        QVector<QString> paramNames;             // to know which to restore
+        int execStackDepth;                      // m_execStack.size() at call time
+    };
+    QMap<QString, std::shared_ptr<ASTNode>> m_functions;
+    QVector<CallFrame> m_callStack;
+    void returnFromFunction();
+
     // Execution stack for nested blocks
     struct ExecFrame {
         QVector<std::shared_ptr<ASTNode>> *nodes;

@@ -62,6 +62,9 @@ enum class NodeType {
     Repeat,         // REPEAT n ... ENDREPEAT
     Label,          // LABEL name
     Goto,           // GOTO name
+    FunctionDef,    // DEF name($p1, $p2) ... ENDDEF
+    FunctionCall,   // CALL name(arg1, arg2)
+    Return,         // RETURN
 
     // Error handling
     OnTimeout,      // ON TIMEOUT GOTO label
@@ -93,6 +96,7 @@ enum class ExtractType {
     FieldAt,        // EXTRACT $var FIELD AT row col
     CursorRow,      // EXTRACT $var CURSOR ROW
     CursorCol,      // EXTRACT $var CURSOR COL (implicit from ROW pattern)
+    LineAt,         // EXTRACT $var LINE row
 };
 
 // MOVE CURSOR AT sub-modes
@@ -109,7 +113,7 @@ enum class MoveCursorMode {
 
 // Comparison operator for IF/WHILE conditions
 enum class CompareOp {
-    Eq, Ne, Lt, Gt, Le, Ge
+    Eq, Ne, Lt, Gt, Le, Ge, Contains
 };
 
 struct ASTNode {
@@ -144,6 +148,10 @@ struct ASTNode {
     // AID key byte (for AIDKey nodes)
     uint8_t aidByte = 0;
 
+    // Function support
+    QVector<QString> paramNames;  // FunctionDef: parameter names
+    QVector<QString> argValues;   // FunctionCall: argument expressions
+
     // Child nodes (for block statements: IF body, ELSE body, WHILE body, REPEAT body, Script root)
     QVector<std::shared_ptr<ASTNode>> children;
 
@@ -160,6 +168,7 @@ struct ParseResult {
     std::shared_ptr<ASTNode> root;
     QVector<ParseError> errors;
     QMap<QString, int> labels;  // label name -> index in root->children
+    QMap<QString, std::shared_ptr<ASTNode>> functions;  // name -> FunctionDef node
 
     bool hasErrors() const { return !errors.isEmpty(); }
 };

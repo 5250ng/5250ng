@@ -32,13 +32,6 @@
 #include <QStandardPaths>
 #include <QUrl>
 
-static QString macrosDir() {
-    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-                  + "/macros";
-    QDir().mkpath(dir);
-    return dir;
-}
-
 static QString scriptsDir() {
     QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
                   + "/scripts";
@@ -493,36 +486,3 @@ void MainWindow::onOpenScriptsFolder() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(scriptsDir()));
 }
 
-// ---------------------------------------------------------------------------
-// Convert Macros to Scripts (batch)
-// ---------------------------------------------------------------------------
-
-void MainWindow::onConvertMacrosToScripts() {
-    QVector<core::Macro> macros = core::MacroRecorder::loadAllMacros(macrosDir());
-    if (macros.isEmpty()) {
-        ui::widgets::StyledMessageBox::information(this, "Convert Macros",
-            "No macros found to convert.");
-        return;
-    }
-
-    int converted = 0;
-    for (const auto &macro : macros) {
-        QString scriptText = core::scripting::ScriptCompiler::macroToScript(macro);
-        QString safeName = core::MacroRecorder::sanitizeFileName(macro.name);
-        QString path = scriptsDir() + "/" + safeName + ".5250script";
-        int suffix = 1;
-        while (QFile::exists(path))
-            path = scriptsDir() + "/" + safeName + "_" + QString::number(suffix++) + ".5250script";
-
-        QFile file(path);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            file.write(scriptText.toUtf8());
-            file.close();
-            ++converted;
-        }
-    }
-
-    ui::widgets::StyledMessageBox::information(this, "Convert Macros",
-        QString("Converted %1 of %2 macros to scripts.")
-            .arg(converted).arg(macros.size()));
-}

@@ -42,6 +42,8 @@ class ScriptParser {
     std::shared_ptr<ASTNode> parseOn(const TokenLine &tokens);
     std::shared_ptr<ASTNode> parseMoveCursor(const TokenLine &tokens);
     std::shared_ptr<ASTNode> parsePressKey(const TokenLine &tokens);
+    std::shared_ptr<ASTNode> parseDef(const TokenLine &tokens);
+    std::shared_ptr<ASTNode> parseCall(const TokenLine &tokens);
     bool isAIDKeyToken(TokenType type) const;
     bool isLocalKeyToken(TokenType type) const;
 

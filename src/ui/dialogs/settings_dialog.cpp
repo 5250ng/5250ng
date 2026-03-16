@@ -16,6 +16,7 @@
 
 #include "settings_dialog.h"
 #include "agent/config.h"
+#include "core/macro_config.h"
 #include "agent/providers/anthropic_provider.h"
 #include "agent/providers/openai_provider.h"
 #include <QApplication>
@@ -51,6 +52,8 @@ void SettingsDialog::setupUI() {
     m_categoryTree->addTopLevelItem(themeItem);
     QTreeWidgetItem *termThemeItem = new QTreeWidgetItem(QStringList() << "5250 Theme");
     m_categoryTree->addTopLevelItem(termThemeItem);
+    QTreeWidgetItem *macrosItem = new QTreeWidgetItem(QStringList() << "Macros");
+    m_categoryTree->addTopLevelItem(macrosItem);
     QTreeWidgetItem *agentItem = new QTreeWidgetItem(QStringList() << "Agents");
     m_categoryTree->addTopLevelItem(agentItem);
     m_categoryTree->setCurrentItem(themeItem);
@@ -66,9 +69,13 @@ void SettingsDialog::setupUI() {
     m_terminalThemePage->setWindowTitle(QString()); // not shown as dialog
     m_pages->addWidget(m_terminalThemePage); // index 1: 5250 theme
 
+    // Macros page
+    m_macrosPage = buildMacrosPage();
+    m_pages->addWidget(m_macrosPage); // index 2: macros
+
     // Agent page
     m_agentPage = buildAgentPage();
-    m_pages->addWidget(m_agentPage); // index 2: agent
+    m_pages->addWidget(m_agentPage); // index 3: agent
 
     // Forward the embedded editor's signals
     connect(m_terminalThemePage, &SessionSettingsDialog::applyRequested,
@@ -198,6 +205,56 @@ QWidget *SettingsDialog::buildAgentPage() {
     return page;
 }
 
+QWidget *SettingsDialog::buildMacrosPage() {
+    auto &cfg = core::MacroConfig::instance();
+    cfg.load();
+
+    QWidget *page = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setSpacing(12);
+
+    // Recording section
+    QGroupBox *recordingGroup = new QGroupBox("Recording", page);
+    QVBoxLayout *recordingLayout = new QVBoxLayout(recordingGroup);
+
+    m_recordTimingsCheck = new QCheckBox("Record timings between keystrokes", recordingGroup);
+    m_recordTimingsCheck->setChecked(cfg.recordTimings());
+    m_recordTimingsCheck->setToolTip(
+        "When enabled, recorded scripts will preserve the timing of each keystroke.\n"
+        "When disabled (default), consecutive keystrokes are combined into a single TYPE command.");
+    recordingLayout->addWidget(m_recordTimingsCheck);
+
+    QLabel *hint = new QLabel(recordingGroup);
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color: gray; font-size: 11px;");
+    hint->setText(
+        "Combined (default):  TYPE \"go main\"\n"
+        "With timings:  TYPE \"g\" / WAIT 155 / TYPE \"o\" / WAIT 163 / ...");
+    recordingLayout->addWidget(hint);
+
+    layout->addWidget(recordingGroup);
+
+    // Save button
+    QHBoxLayout *saveRow = new QHBoxLayout();
+    saveRow->addStretch();
+    m_macrosSaveBtn = new QPushButton("Save", page);
+    saveRow->addWidget(m_macrosSaveBtn);
+    layout->addLayout(saveRow);
+
+    layout->addStretch();
+
+    connect(m_macrosSaveBtn, &QPushButton::clicked, this, &SettingsDialog::onMacrosSaveClicked);
+
+    return page;
+}
+
+void SettingsDialog::onMacrosSaveClicked() {
+    auto &cfg = core::MacroConfig::instance();
+    cfg.setRecordTimings(m_recordTimingsCheck->isChecked());
+    cfg.save();
+    QMessageBox::information(this, "Macros Settings", "Settings saved.");
+}
+
 void SettingsDialog::onAgentProviderChanged(int index) {
     auto &cfg = agent::AgentConfig::instance();
     QString providerId = m_agentProviderCombo->itemData(index).toString();
@@ -303,6 +360,8 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
         m_pages->setCurrentWidget(m_themePage);
     } else if (current->text(0) == "5250 Theme") {
         m_pages->setCurrentWidget(m_terminalThemePage);
+    } else if (current->text(0) == "Macros") {
+        m_pages->setCurrentWidget(m_macrosPage);
     } else if (current->text(0) == "Agents") {
         m_pages->setCurrentWidget(m_agentPage);
     }

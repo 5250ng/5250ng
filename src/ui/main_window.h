@@ -96,7 +96,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onNewScript();
     void onImportScript();
     void onOpenScriptsFolder();
-    void onConvertMacrosToScripts();
     void onToggleSessionLogging();
     void onHistoryBack();
     void onHistoryForward();

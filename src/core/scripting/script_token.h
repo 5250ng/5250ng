@@ -56,6 +56,9 @@ enum class TokenType {
     IF, ELSE, ENDIF, WHILE, ENDWHILE, REPEAT, ENDREPEAT,
     LABEL, GOTO,
 
+    // Functions
+    DEF, ENDDEF, CALL, RETURN,
+
     // Error handling
     ON, ABORT,
 
@@ -65,7 +68,7 @@ enum class TokenType {
     // Sub-tokens (used within compound statements)
     TEXT, AT, ROW, CURSOR, KEYBOARD, UNLOCKED, ERRORLOCKED,
     FIELD, CONTAINS, MESSAGEWAITING, NOT, LENGTH, FROM,
-    ERROR, TIMEOUT, INPUTFIELD, NEXT, PREVIOUS, COL,
+    ERROR, TIMEOUT, INPUTFIELD, NEXT, PREVIOUS, COL, LINE,
     UP, DOWN, LEFT, RIGHT,
     DELAY, JITTER, EXPECT_TIMEOUT,
 

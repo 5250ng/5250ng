@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "script_compiler.h"
+#include "core/macro_config.h"
 
 namespace core::scripting {
 
@@ -25,6 +26,8 @@ QString ScriptCompiler::macroToScript(const Macro &macro) {
     if (!macro.description.isEmpty())
         lines << QString("# %1").arg(macro.description);
     lines << "";
+
+    bool recordTimings = core::MacroConfig::instance().recordTimings();
 
     // Coalesce consecutive KeyPress steps into TYPE lines
     QString pendingString;
@@ -65,6 +68,10 @@ QString ScriptCompiler::macroToScript(const Macro &macro) {
             case Qt::Key_Down:      flushString(); lines << "MOVE CURSOR DOWN 1"; break;
             case Qt::Key_Left:      flushString(); lines << "MOVE CURSOR LEFT 1"; break;
             case Qt::Key_Right:     flushString(); lines << "MOVE CURSOR RIGHT 1"; break;
+            // Return/Enter keypress is recorded separately as an AID key — skip it here
+            // to avoid emitting TYPE "\n" before PRESS ENTER
+            case Qt::Key_Return:
+            case Qt::Key_Enter:     flushString(); break;
             default:
                 handled = false;
                 break;
@@ -86,9 +93,11 @@ QString ScriptCompiler::macroToScript(const Macro &macro) {
             break;
 
         case MacroStep::Delay:
-            flushString();
-            if (step.delayMs > 0)
-                lines << QString("WAIT %1").arg(step.delayMs);
+            if (recordTimings) {
+                flushString();
+                if (step.delayMs > 0)
+                    lines << QString("WAIT %1").arg(step.delayMs);
+            }
             break;
         }
     }
