@@ -350,7 +350,7 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         if (evaluateCondition(left, node->condOp, right)) {
             if (!node->children.isEmpty()) {
                 // Decrement parent frame index so WHILE is re-executed after body completes
-                if (!m_execStack.isEmpty()) {
+                if (!m_execStack.isEmpty() && m_execStack.last().index > 0) {
                     m_execStack.last().index--;
                 }
                 m_execStack.append({&node->children, 0, 0, 0});
