@@ -20,6 +20,7 @@
 #include "ui/themes/manager.h"
 #include "ui/themes/terminal_theme.h"
 #include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -57,11 +58,13 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
   private:
     void setupUI();
     QWidget *buildThemePage();
+    QWidget *buildMacrosPage();
     QWidget *buildAgentPage();
     void ensureThemesLoaded();
     void onAgentProviderChanged(int index);
     void onAgentTestClicked();
     void onAgentSaveClicked();
+    void onMacrosSaveClicked();
 
     QSplitter *m_splitter;
     QTreeWidget *m_categoryTree;
@@ -74,6 +77,11 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
 
     // 5250 Theme page (embedded SessionSettingsDialog)
     SessionSettingsDialog *m_terminalThemePage;
+
+    // Macros page widgets
+    QWidget *m_macrosPage;
+    QCheckBox *m_recordTimingsCheck;
+    QPushButton *m_macrosSaveBtn;
 
     // Agent page widgets
     QWidget *m_agentPage;

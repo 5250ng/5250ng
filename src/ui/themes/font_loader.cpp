@@ -22,8 +22,6 @@ namespace ui::themes {
 
 void loadBundledFonts() {
     static const char *fontResources[] = {
-        ":/fonts/data/fonts/3270-Regular.ttf",
-        ":/fonts/data/fonts/3270SemiCondensed-Regular.ttf",
         ":/fonts/data/fonts/IBMPlexMono-Regular.ttf",
         ":/fonts/data/fonts/IBMPlexMono-Bold.ttf",
     };

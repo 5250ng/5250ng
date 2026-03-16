@@ -41,10 +41,22 @@ set(CORE_SOURCES
     src/core/screen_history.h
     src/core/macro_recorder.cpp
     src/core/macro_recorder.h
+    src/core/macro_config.cpp
+    src/core/macro_config.h
     src/core/session_logger.cpp
     src/core/session_logger.h
     src/core/match_replace_engine.cpp
     src/core/match_replace_engine.h
+    src/core/scripting/script_token.h
+    src/core/scripting/script_ast.h
+    src/core/scripting/script_lexer.cpp
+    src/core/scripting/script_lexer.h
+    src/core/scripting/script_parser.cpp
+    src/core/scripting/script_parser.h
+    src/core/scripting/script_executor.cpp
+    src/core/scripting/script_executor.h
+    src/core/scripting/script_compiler.cpp
+    src/core/scripting/script_compiler.h
 )
 
 set(SESSION_SOURCES
@@ -256,7 +268,7 @@ set(UI_SOURCES
     src/ui/actions/onToggleFullscreen.cpp
     src/ui/actions/onEditActions.cpp
     src/ui/actions/onHotspots.cpp
-    src/ui/actions/onMacros.cpp
+    src/ui/actions/onScripts.cpp
     src/ui/actions/onSessionLogging.cpp
     src/ui/actions/onScreenHistory.cpp
     src/ui/actions/onToggleAgentPanel.cpp
@@ -366,6 +378,10 @@ if(BUILD_TESTS)
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
     add_tn5250_test(test_password_encrypt tests/unit/test_password_encrypt.cpp)
+
+    # Scripting tests
+    add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
+    add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)

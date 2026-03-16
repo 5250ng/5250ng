@@ -86,15 +86,19 @@ void MainWindow::setupMenuBar() {
     viewMenu->addAction("History &Forward", this, &MainWindow::onHistoryForward);
     viewMenu->addAction("&Exit History", this, &MainWindow::onHistoryExit);
 
-    // Macros menu
-    QMenu *macrosMenu = bar->addMenu("&Macros");
-    m_macroRecordAction = macrosMenu->addAction("&Record/Stop", this, &MainWindow::onToggleMacroRecording);
-    m_macroRecordAction->setCheckable(true);
-    macrosMenu->addAction("&Play/Stop...", this, &MainWindow::onPlayMacro);
-    macrosMenu->addAction("&Manage Macros...", this, &MainWindow::onManageMacros);
-    macrosMenu->addSeparator();
-    macrosMenu->addAction("&Import Macro...", this, &MainWindow::onImportMacro);
-    macrosMenu->addAction("&Export Macro...", this, &MainWindow::onExportMacro);
+    // Scripts menu
+    QMenu *scriptsMenu = bar->addMenu("&Scripts");
+    m_scriptRecordAction = scriptsMenu->addAction("&Record", this, &MainWindow::onRecordScript);
+    m_scriptRecordAction->setCheckable(true);
+    m_scriptStopAction = scriptsMenu->addAction("&Stop", this, &MainWindow::onStopExecution);
+    m_scriptStopAction->setEnabled(false);
+    scriptsMenu->addSeparator();
+    m_scriptsSubmenu = scriptsMenu->addMenu("S&cripts");
+    connect(m_scriptsSubmenu, &QMenu::aboutToShow, this, &MainWindow::rebuildScriptsSubmenu);
+    scriptsMenu->addSeparator();
+    scriptsMenu->addAction("&New Script...", this, &MainWindow::onNewScript);
+    scriptsMenu->addAction("&Import Script...", this, &MainWindow::onImportScript);
+    scriptsMenu->addAction("&Open Scripts Folder", this, &MainWindow::onOpenScriptsFolder);
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");

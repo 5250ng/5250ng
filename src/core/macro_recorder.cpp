@@ -122,6 +122,23 @@ void MacroRecorder::discardRecording() {
 void MacroRecorder::recordKeyPress(int key, Qt::KeyboardModifiers mods, const QString &text) {
     if (!m_recording) return;
 
+    // Ignore bare modifier keys — they are not actionable steps
+    switch (key) {
+    case Qt::Key_Shift:
+    case Qt::Key_Control:
+    case Qt::Key_Alt:
+    case Qt::Key_AltGr:
+    case Qt::Key_Meta:
+    case Qt::Key_Super_L:
+    case Qt::Key_Super_R:
+    case Qt::Key_Hyper_L:
+    case Qt::Key_Hyper_R:
+    case Qt::Key_CapsLock:
+    case Qt::Key_NumLock:
+    case Qt::Key_ScrollLock:
+        return;
+    }
+
     // Insert delay between steps to preserve timing
     qint64 now = m_timer.elapsed();
     if (m_lastStepTime > 0) {

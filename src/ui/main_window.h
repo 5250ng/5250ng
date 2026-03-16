@@ -18,6 +18,7 @@
 
 #include "core/match_replace_engine.h"
 #include "core/macro_recorder.h"
+#include "core/scripting/script_executor.h"
 #include "core/session_logger.h"
 #include "logger/logger.h"
 #include "network/tn5250/client/client.h"
@@ -86,11 +87,15 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onEditPaste();
     void onEditSelectAll();
     void onToggleHotspots();
-    void onToggleMacroRecording();
-    void onPlayMacro();
-    void onManageMacros();
-    void onImportMacro();
-    void onExportMacro();
+    void onRecordScript();
+    void onStopExecution();
+    void rebuildScriptsSubmenu();
+    void onRunScript(const QString &path);
+    void onEditScript(const QString &path);
+    void onDeleteScript(const QString &path);
+    void onNewScript();
+    void onImportScript();
+    void onOpenScriptsFolder();
     void onToggleSessionLogging();
     void onHistoryBack();
     void onHistoryForward();
@@ -146,6 +151,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
             ui::themes::TerminalTheme::Stretch;
         double bgImageOpacity = 1.0;
         core::MacroRecorder *macroRecorder = nullptr;
+        core::scripting::ScriptExecutor *scriptExecutor = nullptr;
         core::SessionLogger *sessionLogger = nullptr;
         core::MatchReplaceEngine *matchReplace = nullptr;
     };
@@ -173,7 +179,9 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_duplicateAction;
     QAction *m_fullscreenAction;
     QAction *m_hotspotsAction;
-    QAction *m_macroRecordAction;
+    QAction *m_scriptRecordAction;
+    QAction *m_scriptStopAction;
+    QMenu *m_scriptsSubmenu;
     QAction *m_sessionLoggingAction;
     QAction *m_cursorRulesAction;
     QAction *m_showFieldProtectionAction;

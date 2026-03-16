@@ -18,8 +18,6 @@
     <file>data/terminal/monokai.json</file>
   </qresource>
   <qresource prefix="/fonts">
-    <file>data/fonts/3270-Regular.ttf</file>
-    <file>data/fonts/3270SemiCondensed-Regular.ttf</file>
     <file>data/fonts/IBMPlexMono-Regular.ttf</file>
     <file>data/fonts/IBMPlexMono-Bold.ttf</file>
   </qresource>
