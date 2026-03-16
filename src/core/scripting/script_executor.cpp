@@ -745,6 +745,7 @@ void ScriptExecutor::updateBuiltinVariables() {
 QString ScriptExecutor::readScreenText(int row, int col, int length) const {
     auto *buf = screenBuffer();
     if (!buf) return {};
+    if (row < 0 || row >= buf->rows() || col < 0) return {};
 
     QString result;
     for (int i = 0; i < length && col + i < buf->cols(); ++i) {
