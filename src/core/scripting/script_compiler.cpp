@@ -41,32 +41,44 @@ QString ScriptCompiler::macroToScript(const Macro &macro) {
 
     for (const auto &step : macro.steps) {
         switch (step.type) {
-        case MacroStep::KeyPress:
-            if (!step.text.isEmpty()) {
-                pendingString += step.text;
-            } else {
-                // Non-character key press — map Qt key to script keyword
+        case MacroStep::KeyPress: {
+            // Check for special keys first — these may have non-empty text
+            // (e.g. Tab produces "\t", Backspace produces "\b") but must be
+            // emitted as commands, not coalesced into TYPE strings.
+            bool handled = true;
+            switch (step.key) {
+            case Qt::Key_Tab:
                 flushString();
-                // Map special Qt keys to local key keywords
-                switch (step.key) {
-                case Qt::Key_Tab:       lines << "PRESS TAB"; break;
-                case Qt::Key_Backtab:   lines << "PRESS BACKTAB"; break;
-                case Qt::Key_Backspace: lines << "PRESS BACKSPACE"; break;
-                case Qt::Key_Delete:    lines << "PRESS DELETE"; break;
-                case Qt::Key_Insert:    lines << "PRESS INSERT"; break;
-                case Qt::Key_Home:      lines << "PRESS HOME"; break;
-                case Qt::Key_End:       lines << "PRESS END"; break;
-                case Qt::Key_Escape:    lines << "PRESS ESC"; break;
-                case Qt::Key_Up:        lines << "MOVE CURSOR UP 1"; break;
-                case Qt::Key_Down:      lines << "MOVE CURSOR DOWN 1"; break;
-                case Qt::Key_Left:      lines << "MOVE CURSOR LEFT 1"; break;
-                case Qt::Key_Right:     lines << "MOVE CURSOR RIGHT 1"; break;
-                default:
+                if (step.mods & Qt::ShiftModifier)
+                    lines << "MOVE CURSOR AT PREVIOUS INPUTFIELD";
+                else
+                    lines << "MOVE CURSOR AT NEXT INPUTFIELD";
+                break;
+            case Qt::Key_Backtab:   flushString(); lines << "MOVE CURSOR AT PREVIOUS INPUTFIELD"; break;
+            case Qt::Key_Backspace: flushString(); lines << "PRESS BACKSPACE"; break;
+            case Qt::Key_Delete:    flushString(); lines << "PRESS DELETE"; break;
+            case Qt::Key_Insert:    flushString(); lines << "PRESS INSERT"; break;
+            case Qt::Key_Home:      flushString(); lines << "PRESS HOME"; break;
+            case Qt::Key_End:       flushString(); lines << "PRESS END"; break;
+            case Qt::Key_Escape:    flushString(); lines << "PRESS ESC"; break;
+            case Qt::Key_Up:        flushString(); lines << "MOVE CURSOR UP 1"; break;
+            case Qt::Key_Down:      flushString(); lines << "MOVE CURSOR DOWN 1"; break;
+            case Qt::Key_Left:      flushString(); lines << "MOVE CURSOR LEFT 1"; break;
+            case Qt::Key_Right:     flushString(); lines << "MOVE CURSOR RIGHT 1"; break;
+            default:
+                handled = false;
+                break;
+            }
+            if (!handled) {
+                if (!step.text.isEmpty()) {
+                    pendingString += step.text;
+                } else {
+                    flushString();
                     lines << QString("# Unknown key: %1").arg(step.key);
-                    break;
                 }
             }
             break;
+        }
 
         case MacroStep::AIDKey:
             flushString();

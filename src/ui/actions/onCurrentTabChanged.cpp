@@ -27,10 +27,10 @@ void MainWindow::onCurrentTabChanged(int index) {
             bool enabled = s->matchReplace && s->matchReplace->isEnabled();
             m_matchReplaceEnableAction->setChecked(enabled);
         }
-        // Sync macro recording check state with active session
-        if (m_macroRecordAction) {
+        // Sync script recording check state with active session
+        if (m_scriptRecordAction) {
             bool recording = s->macroRecorder && s->macroRecorder->isRecording();
-            m_macroRecordAction->setChecked(recording);
+            m_scriptRecordAction->setChecked(recording);
         }
     }
 }

@@ -266,7 +266,7 @@ set(UI_SOURCES
     src/ui/actions/onToggleFullscreen.cpp
     src/ui/actions/onEditActions.cpp
     src/ui/actions/onHotspots.cpp
-    src/ui/actions/onMacros.cpp
+    src/ui/actions/onScripts.cpp
     src/ui/actions/onSessionLogging.cpp
     src/ui/actions/onScreenHistory.cpp
     src/ui/actions/onToggleAgentPanel.cpp
