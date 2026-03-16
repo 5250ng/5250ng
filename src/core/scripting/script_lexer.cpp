@@ -326,7 +326,12 @@ ScriptToken ScriptLexer::readStringLiteral(const QString &line, int &pos, int li
         value += line[pos];
         pos++;
     }
-    if (pos < line.length()) pos++; // skip closing quote
+    if (pos < line.length()) {
+        pos++; // skip closing quote
+    } else {
+        // Unterminated string literal — return UNKNOWN so the parser reports an error
+        return ScriptToken(TokenType::UNKNOWN, value, lineNumber, col);
+    }
     return ScriptToken(TokenType::STRING_LITERAL, value, lineNumber, col);
 }
 
