@@ -548,12 +548,16 @@ bool ScriptExecutor::checkExpectCondition(const std::shared_ptr<ASTNode> &node) 
         result = screenContainsTextAtRow(node->stringValue, node->intValue - 1);
         break;
     case ExpectType::CursorAtPos: {
-        QPoint pos = screenBuffer()->cursorPosition();
+        auto *buf = screenBuffer();
+        if (!buf) break;
+        QPoint pos = buf->cursorPosition();
         result = (pos.y() == node->intValue - 1 && pos.x() == node->intValue2 - 1);
         break;
     }
     case ExpectType::CursorAtRow: {
-        QPoint pos = screenBuffer()->cursorPosition();
+        auto *buf = screenBuffer();
+        if (!buf) break;
+        QPoint pos = buf->cursorPosition();
         result = (pos.y() == node->intValue - 1);
         break;
     }
