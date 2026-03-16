@@ -273,6 +273,7 @@ void MainWindow::onRunScript(const QString &path) {
     QPointer<ui::widgets::Q5250ScreenWidget> displayGuard = s->displayWidget;
     QPointer<core::scripting::ScriptExecutor> execGuard = s->scriptExecutor;
     QPointer<QLabel> macroLabelGuard = s->macroLabel;
+    QPointer<QAction> stopActionGuard = m_scriptStopAction;
 
     auto connKeyPress = std::make_shared<QMetaObject::Connection>();
     auto connAID = std::make_shared<QMetaObject::Connection>();
@@ -378,7 +379,7 @@ void MainWindow::onRunScript(const QString &path) {
             QObject::disconnect(*connLog);
             QObject::disconnect(*connPause);
             if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
-            if (m_scriptStopAction) m_scriptStopAction->setEnabled(false);
+            if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
         });
 
     // Error
