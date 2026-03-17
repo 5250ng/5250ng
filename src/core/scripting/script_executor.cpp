@@ -68,7 +68,7 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     setVariable("$REPEAT_INDEX", "0");
     updateBuiltinVariables();
 
-    // Apply initial variables (e.g. $USERNAME, $PASSWORD from session config)
+    // Apply initial variables (e.g. $SESSION_USERNAME, $SESSION_PASSWORD from session config)
     for (auto it = m_initialVariables.constBegin(); it != m_initialVariables.constEnd(); ++it) {
         setVariable(it.key(), it.value());
     }
