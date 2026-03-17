@@ -121,6 +121,7 @@ void ScriptLexer::initKeywords() {
     // Utility
     m_keywords["LOG"]      = TokenType::LOG;
     m_keywords["PAUSE"]    = TokenType::PAUSE;
+    m_keywords["INPUT"]    = TokenType::INPUT;
 
     // Sub-tokens
     m_keywords["TEXT"]            = TokenType::TEXT;
@@ -150,6 +151,7 @@ void ScriptLexer::initKeywords() {
     m_keywords["DELAY"]           = TokenType::DELAY;
     m_keywords["JITTER"]          = TokenType::JITTER;
     m_keywords["EXPECT_TIMEOUT"]  = TokenType::EXPECT_TIMEOUT;
+    m_keywords["ISSET"]           = TokenType::ISSET;
 }
 
 QVector<TokenLine> ScriptLexer::tokenize(const QString &source) {

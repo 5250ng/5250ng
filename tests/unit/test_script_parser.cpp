@@ -82,6 +82,8 @@ class TestScriptParser : public QObject {
     void testIfContains();
     void testInput();
     void testInputMultiple();
+    void testIfIsset();
+    void testWhileIsset();
 
   private:
     ScriptParser *m_parser;
@@ -848,6 +850,39 @@ void TestScriptParser::testInputMultiple() {
     QCOMPARE(result.root->children[1]->varName, "$PASS");
     QCOMPARE(result.root->children[2]->stringValue, "Library:");
     QCOMPARE(result.root->children[2]->varName, "$LIB");
+}
+
+void TestScriptParser::testIfIsset() {
+    // IF ISSET $VAR
+    auto result = m_parser->parse(
+        "IF ISSET $SESSION_USERNAME\n"
+        "    LOG \"has username\"\n"
+        "ELSE\n"
+        "    LOG \"no username\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto ifNode = result.root->children[0];
+    QCOMPARE(ifNode->type, NodeType::If);
+    QCOMPARE(ifNode->condLeft, "$SESSION_USERNAME");
+    QCOMPARE(ifNode->condOp, CompareOp::IsSet);
+    QCOMPARE(ifNode->children.size(), 1);
+    QCOMPARE(ifNode->elseChildren.size(), 1);
+}
+
+void TestScriptParser::testWhileIsset() {
+    // WHILE ISSET $VAR
+    auto result = m_parser->parse(
+        "WHILE ISSET $FLAG\n"
+        "    LOG \"flag is set\"\n"
+        "ENDWHILE\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto whileNode = result.root->children[0];
+    QCOMPARE(whileNode->type, NodeType::While);
+    QCOMPARE(whileNode->condLeft, "$FLAG");
+    QCOMPARE(whileNode->condOp, CompareOp::IsSet);
+    QCOMPARE(whileNode->children.size(), 1);
 }
 
 QTEST_MAIN(TestScriptParser)

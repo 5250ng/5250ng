@@ -68,7 +68,7 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     setVariable("$REPEAT_INDEX", "0");
     updateBuiltinVariables();
 
-    // Apply initial variables (e.g. $USERNAME, $PASSWORD from session config)
+    // Apply initial variables (e.g. $SESSION_USERNAME, $SESSION_PASSWORD from session config)
     for (auto it = m_initialVariables.constBegin(); it != m_initialVariables.constEnd(); ++it) {
         setVariable(it.key(), it.value());
     }
@@ -92,6 +92,14 @@ void ScriptExecutor::stop() {
 
 void ScriptExecutor::resumeAfterPause() {
     if (!m_running) return;
+    scheduleNextStep();
+}
+
+void ScriptExecutor::resumeAfterInput(const QStringList &varNames, const QStringList &values) {
+    if (!m_running) return;
+    for (int i = 0; i < varNames.size() && i < values.size(); ++i) {
+        setVariable(varNames[i], values[i]);
+    }
     scheduleNextStep();
 }
 
@@ -338,9 +346,15 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::If: {
-        QString left = interpolateVariables(node->condLeft);
-        QString right = interpolateVariables(node->condRight);
-        if (evaluateCondition(left, node->condOp, right)) {
+        bool condResult;
+        if (node->condOp == CompareOp::IsSet) {
+            condResult = m_variables.contains(node->condLeft);
+        } else {
+            QString left = interpolateVariables(node->condLeft);
+            QString right = interpolateVariables(node->condRight);
+            condResult = evaluateCondition(left, node->condOp, right);
+        }
+        if (condResult) {
             if (!node->children.isEmpty()) {
                 m_execStack.append({&node->children, 0, 0, 0});
             }
@@ -354,9 +368,15 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::While: {
-        QString left = interpolateVariables(node->condLeft);
-        QString right = interpolateVariables(node->condRight);
-        if (evaluateCondition(left, node->condOp, right)) {
+        bool condResult;
+        if (node->condOp == CompareOp::IsSet) {
+            condResult = m_variables.contains(node->condLeft);
+        } else {
+            QString left = interpolateVariables(node->condLeft);
+            QString right = interpolateVariables(node->condRight);
+            condResult = evaluateCondition(left, node->condOp, right);
+        }
+        if (condResult) {
             if (!node->children.isEmpty()) {
                 // Decrement parent frame index so WHILE is re-executed after body completes
                 if (!m_execStack.isEmpty() && m_execStack.last().index > 0) {
@@ -474,6 +494,30 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         emit pauseRequested();
         // Don't schedule next step — resumeAfterPause() will do it
         break;
+
+    case NodeType::Input: {
+        // Batch consecutive INPUT nodes into a single dialog
+        QStringList labels;
+        QStringList varNames;
+        labels.append(node->stringValue);
+        varNames.append(node->varName);
+
+        // Look ahead for more consecutive INPUT nodes in the current frame
+        if (!m_execStack.isEmpty()) {
+            auto &frame = m_execStack.last();
+            while (frame.index < frame.nodes->size()) {
+                auto &nextNode = (*frame.nodes)[frame.index];
+                if (nextNode->type != NodeType::Input) break;
+                labels.append(nextNode->stringValue);
+                varNames.append(nextNode->varName);
+                frame.index++;
+            }
+        }
+
+        emit inputRequested(labels, varNames);
+        // Don't schedule next step — resumeAfterInput() will do it
+        break;
+    }
 
     case NodeType::Expect:
         startExpect(node);
@@ -616,6 +660,10 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
     if (op == CompareOp::Contains)
         return left.contains(right);
 
+    // IsSet is handled directly in executeNode, should never reach here
+    if (op == CompareOp::IsSet)
+        return false;
+
     // Try numeric comparison first
     bool leftIsNum = false, rightIsNum = false;
     int leftNum = left.toInt(&leftIsNum);
@@ -630,6 +678,7 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
         case CompareOp::Le: return leftNum <= rightNum;
         case CompareOp::Ge: return leftNum >= rightNum;
         case CompareOp::Contains: break; // handled above
+        case CompareOp::IsSet: break;    // handled in executeNode
         }
     }
 
@@ -643,6 +692,7 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
     case CompareOp::Le: return cmp <= 0;
     case CompareOp::Ge: return cmp >= 0;
     case CompareOp::Contains: break; // handled above
+    case CompareOp::IsSet: break;    // handled in executeNode
     }
     return false;
 }

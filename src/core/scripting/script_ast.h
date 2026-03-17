@@ -74,7 +74,8 @@ enum class NodeType {
 
     // Utility
     Log,            // LOG "message"
-    Pause           // PAUSE
+    Pause,          // PAUSE
+    Input           // INPUT "prompt" $var
 };
 
 // EXPECT sub-types
@@ -114,7 +115,7 @@ enum class MoveCursorMode {
 
 // Comparison operator for IF/WHILE conditions
 enum class CompareOp {
-    Eq, Ne, Lt, Gt, Le, Ge, Contains
+    Eq, Ne, Lt, Gt, Le, Ge, Contains, IsSet
 };
 
 struct ASTNode {

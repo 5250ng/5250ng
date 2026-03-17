@@ -37,7 +37,7 @@ PRESS ENTER # inline comment  # Text after # on any line is ignored
 
 ```
 TYPE "Hello World"           # Types each character as a keystroke
-TYPE "$USERNAME"             # Variables are expanded in the string
+TYPE "$SESSION_USERNAME"     # Variables are expanded in the string
 TYPE "$$100"                 # Use $$ for a literal dollar sign
 ```
 
@@ -324,6 +324,20 @@ The `ELSE` block is optional. Blocks can be nested.
 
 Numeric values are compared numerically; strings are compared lexicographically.
 
+#### ISSET
+
+`ISSET` checks whether a variable has been defined:
+
+```
+IF ISSET $SESSION_USERNAME
+    TYPE "$SESSION_USERNAME"
+ELSE
+    TYPE "QSECOFR"
+ENDIF
+```
+
+This is useful for checking whether session variables (like `$SESSION_USERNAME` and `$SESSION_PASSWORD`) were provided before using them.
+
 #### WHILE / ENDWHILE
 
 ```
@@ -375,6 +389,33 @@ Global handlers remain active until overwritten or the script ends.
 ABORT                      # Stop script execution immediately
 ABORT "Login failed"       # Stop with an error message (shown in dialog)
 ```
+
+### User Input
+
+`INPUT` pauses execution and shows a popup dialog asking the user to fill in a value. The result is stored in the given variable.
+
+```
+INPUT "Username:" $USER
+INPUT "Password:" $PASS
+```
+
+When multiple `INPUT` commands appear on consecutive lines, they are batched into a **single dialog** with all fields:
+
+```
+INPUT "Username:" $USER
+INPUT "Password:" $PASS
+INPUT "Library:" $LIB
+```
+
+This shows one popup with three rows:
+
+| Label     | Field |
+|-----------|-------|
+| Username: | _____ |
+| Password: | _____ |
+| Library:  | _____ |
+
+Clicking **OK** sets all variables and continues. Clicking **Cancel** stops the script.
 
 ### Utility
 

@@ -63,14 +63,14 @@ enum class TokenType {
     ON, ABORT,
 
     // Utility
-    LOG, PAUSE,
+    LOG, PAUSE, INPUT,
 
     // Sub-tokens (used within compound statements)
     TEXT, AT, ROW, CURSOR, KEYBOARD, UNLOCKED, ERRORLOCKED,
     FIELD, CONTAINS, MESSAGEWAITING, NOT, LENGTH, FROM,
     ERROR, TIMEOUT, INPUTFIELD, NEXT, PREVIOUS, COL, LINE,
     UP, DOWN, LEFT, RIGHT,
-    DELAY, JITTER, EXPECT_TIMEOUT,
+    DELAY, JITTER, EXPECT_TIMEOUT, ISSET,
 
     // Comparison operators
     OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE,
