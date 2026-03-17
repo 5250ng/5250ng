@@ -114,7 +114,7 @@ enum class MoveCursorMode {
 
 // Comparison operator for IF/WHILE conditions
 enum class CompareOp {
-    Eq, Ne, Lt, Gt, Le, Ge, Contains
+    Eq, Ne, Lt, Gt, Le, Ge, Contains, IsSet
 };
 
 struct ASTNode {

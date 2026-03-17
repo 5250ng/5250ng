@@ -549,9 +549,16 @@ std::shared_ptr<ASTNode> ScriptParser::parseIf(const TokenLine &tokens) {
     node->type = NodeType::If;
     node->line = tokens[0].line;
 
+    // IF ISSET $var
+    if (tokens.size() >= 3 && tokens[1].type == TokenType::ISSET) {
+        node->condLeft = tokens[2].value;
+        node->condOp = CompareOp::IsSet;
+        return node;
+    }
+
     // IF $var op value
     if (tokens.size() < 4) {
-        error(node->line, "IF requires condition (e.g., IF $VAR == \"value\")");
+        error(node->line, "IF requires condition (e.g., IF $VAR == \"value\" or IF ISSET $VAR)");
         return node;
     }
 
@@ -563,6 +570,13 @@ std::shared_ptr<ASTNode> ScriptParser::parseWhile(const TokenLine &tokens) {
     auto node = std::make_shared<ASTNode>();
     node->type = NodeType::While;
     node->line = tokens[0].line;
+
+    // WHILE ISSET $var
+    if (tokens.size() >= 3 && tokens[1].type == TokenType::ISSET) {
+        node->condLeft = tokens[2].value;
+        node->condOp = CompareOp::IsSet;
+        return node;
+    }
 
     if (tokens.size() < 4) {
         error(node->line, "WHILE requires condition");
