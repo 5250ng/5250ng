@@ -121,6 +121,7 @@ void ScriptLexer::initKeywords() {
     // Utility
     m_keywords["LOG"]      = TokenType::LOG;
     m_keywords["PAUSE"]    = TokenType::PAUSE;
+    m_keywords["INPUT"]    = TokenType::INPUT;
 
     // Sub-tokens
     m_keywords["TEXT"]            = TokenType::TEXT;

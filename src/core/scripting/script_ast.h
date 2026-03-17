@@ -74,7 +74,8 @@ enum class NodeType {
 
     // Utility
     Log,            // LOG "message"
-    Pause           // PAUSE
+    Pause,          // PAUSE
+    Input           // INPUT "prompt" $var
 };
 
 // EXPECT sub-types

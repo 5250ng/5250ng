@@ -63,7 +63,7 @@ enum class TokenType {
     ON, ABORT,
 
     // Utility
-    LOG, PAUSE,
+    LOG, PAUSE, INPUT,
 
     // Sub-tokens (used within compound statements)
     TEXT, AT, ROW, CURSOR, KEYBOARD, UNLOCKED, ERRORLOCKED,

@@ -376,6 +376,33 @@ ABORT                      # Stop script execution immediately
 ABORT "Login failed"       # Stop with an error message (shown in dialog)
 ```
 
+### User Input
+
+`INPUT` pauses execution and shows a popup dialog asking the user to fill in a value. The result is stored in the given variable.
+
+```
+INPUT "Username:" $USER
+INPUT "Password:" $PASS
+```
+
+When multiple `INPUT` commands appear on consecutive lines, they are batched into a **single dialog** with all fields:
+
+```
+INPUT "Username:" $USER
+INPUT "Password:" $PASS
+INPUT "Library:" $LIB
+```
+
+This shows one popup with three rows:
+
+| Label     | Field |
+|-----------|-------|
+| Username: | _____ |
+| Password: | _____ |
+| Library:  | _____ |
+
+Clicking **OK** sets all variables and continues. Clicking **Cancel** stops the script.
+
 ### Utility
 
 ```

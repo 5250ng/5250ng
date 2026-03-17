@@ -95,6 +95,14 @@ void ScriptExecutor::resumeAfterPause() {
     scheduleNextStep();
 }
 
+void ScriptExecutor::resumeAfterInput(const QStringList &varNames, const QStringList &values) {
+    if (!m_running) return;
+    for (int i = 0; i < varNames.size() && i < values.size(); ++i) {
+        setVariable(varNames[i], values[i]);
+    }
+    scheduleNextStep();
+}
+
 void ScriptExecutor::notifyScreenChanged() {
     if (!m_running) return;
     updateBuiltinVariables();
@@ -474,6 +482,30 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         emit pauseRequested();
         // Don't schedule next step — resumeAfterPause() will do it
         break;
+
+    case NodeType::Input: {
+        // Batch consecutive INPUT nodes into a single dialog
+        QStringList labels;
+        QStringList varNames;
+        labels.append(node->stringValue);
+        varNames.append(node->varName);
+
+        // Look ahead for more consecutive INPUT nodes in the current frame
+        if (!m_execStack.isEmpty()) {
+            auto &frame = m_execStack.last();
+            while (frame.index < frame.nodes->size()) {
+                auto &nextNode = (*frame.nodes)[frame.index];
+                if (nextNode->type != NodeType::Input) break;
+                labels.append(nextNode->stringValue);
+                varNames.append(nextNode->varName);
+                frame.index++;
+            }
+        }
+
+        emit inputRequested(labels, varNames);
+        // Don't schedule next step — resumeAfterInput() will do it
+        break;
+    }
 
     case NodeType::Expect:
         startExpect(node);
