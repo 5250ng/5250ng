@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   linux:
@@ -62,8 +62,6 @@ jobs:
   windows:
     name: Windows Build & Test
     runs-on: windows-latest
-    env:
-      OPENSSL_ROOT_DIR: "C:/Program Files/OpenSSL-Win64"
     steps:
       - uses: actions/checkout@v4
 
@@ -73,15 +71,15 @@ jobs:
           version: '6.5.0'
           cache: true
 
-      - name: Install OpenSSL
-        run: choco install openssl -y
+      - name: Install OpenSSL via vcpkg
+        run: vcpkg install openssl:x64-windows
 
       - name: Configure CMake
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON
-          -DOPENSSL_ROOT_DIR="${{ env.OPENSSL_ROOT_DIR }}"
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config Release
