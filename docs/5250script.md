@@ -324,6 +324,20 @@ The `ELSE` block is optional. Blocks can be nested.
 
 Numeric values are compared numerically; strings are compared lexicographically.
 
+#### ISSET
+
+`ISSET` checks whether a variable has been defined:
+
+```
+IF ISSET $SESSION_USERNAME
+    TYPE "$SESSION_USERNAME"
+ELSE
+    TYPE "QSECOFR"
+ENDIF
+```
+
+This is useful for checking whether session variables (like `$SESSION_USERNAME` and `$SESSION_PASSWORD`) were provided before using them.
+
 #### WHILE / ENDWHILE
 
 ```

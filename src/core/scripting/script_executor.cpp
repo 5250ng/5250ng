@@ -338,9 +338,15 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::If: {
-        QString left = interpolateVariables(node->condLeft);
-        QString right = interpolateVariables(node->condRight);
-        if (evaluateCondition(left, node->condOp, right)) {
+        bool condResult;
+        if (node->condOp == CompareOp::IsSet) {
+            condResult = m_variables.contains(node->condLeft);
+        } else {
+            QString left = interpolateVariables(node->condLeft);
+            QString right = interpolateVariables(node->condRight);
+            condResult = evaluateCondition(left, node->condOp, right);
+        }
+        if (condResult) {
             if (!node->children.isEmpty()) {
                 m_execStack.append({&node->children, 0, 0, 0});
             }
@@ -354,9 +360,15 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::While: {
-        QString left = interpolateVariables(node->condLeft);
-        QString right = interpolateVariables(node->condRight);
-        if (evaluateCondition(left, node->condOp, right)) {
+        bool condResult;
+        if (node->condOp == CompareOp::IsSet) {
+            condResult = m_variables.contains(node->condLeft);
+        } else {
+            QString left = interpolateVariables(node->condLeft);
+            QString right = interpolateVariables(node->condRight);
+            condResult = evaluateCondition(left, node->condOp, right);
+        }
+        if (condResult) {
             if (!node->children.isEmpty()) {
                 // Decrement parent frame index so WHILE is re-executed after body completes
                 if (!m_execStack.isEmpty() && m_execStack.last().index > 0) {
@@ -616,6 +628,10 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
     if (op == CompareOp::Contains)
         return left.contains(right);
 
+    // IsSet is handled directly in executeNode, should never reach here
+    if (op == CompareOp::IsSet)
+        return false;
+
     // Try numeric comparison first
     bool leftIsNum = false, rightIsNum = false;
     int leftNum = left.toInt(&leftIsNum);
@@ -630,6 +646,7 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
         case CompareOp::Le: return leftNum <= rightNum;
         case CompareOp::Ge: return leftNum >= rightNum;
         case CompareOp::Contains: break; // handled above
+        case CompareOp::IsSet: break;    // handled in executeNode
         }
     }
 
@@ -643,6 +660,7 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
     case CompareOp::Le: return cmp <= 0;
     case CompareOp::Ge: return cmp >= 0;
     case CompareOp::Contains: break; // handled above
+    case CompareOp::IsSet: break;    // handled in executeNode
     }
     return false;
 }
