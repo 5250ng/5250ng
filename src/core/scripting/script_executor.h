@@ -59,9 +59,11 @@ class ScriptExecutor : public QObject {
     void executionError(int line, const QString &message);
     void logMessage(const QString &message);
     void pauseRequested();
+    void inputRequested(const QStringList &labels, const QStringList &varNames);
 
   public slots:
     void resumeAfterPause();
+    void resumeAfterInput(const QStringList &varNames, const QStringList &values);
     void notifyScreenChanged();
     void notifyTerminalStateChanged();
 

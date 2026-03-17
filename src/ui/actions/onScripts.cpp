@@ -286,6 +286,7 @@ void MainWindow::onRunScript(const QString &path) {
     auto connError = std::make_shared<QMetaObject::Connection>();
     auto connLog = std::make_shared<QMetaObject::Connection>();
     auto connPause = std::make_shared<QMetaObject::Connection>();
+    auto connInput = std::make_shared<QMetaObject::Connection>();
 
     // Key injection
     *connKeyPress = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::injectKeyPress, this,
@@ -378,6 +379,7 @@ void MainWindow::onRunScript(const QString &path) {
             QObject::disconnect(*connError);
             QObject::disconnect(*connLog);
             QObject::disconnect(*connPause);
+            QObject::disconnect(*connInput);
             if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
             if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
         });
@@ -405,6 +407,57 @@ void MainWindow::onRunScript(const QString &path) {
             ui::widgets::StyledMessageBox::information(this, "Script Paused",
                 "Script execution paused.\nClick OK to continue.");
             if (!execGuard.isNull()) execGuard->resumeAfterPause();
+        });
+
+    // Input
+    *connInput = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::inputRequested, this,
+        [this, execGuard](const QStringList &labels, const QStringList &varNames) {
+            if (execGuard.isNull()) return;
+
+            auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+            dlg->setWindowTitle("Script Input");
+            dlg->setFixedWidth(400);
+            dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
+            dlg->contentLayout()->setSpacing(8);
+
+            QVector<QLineEdit *> fields;
+            for (const QString &label : labels) {
+                auto *row = new QHBoxLayout();
+                auto *lbl = new QLabel(label, dlg);
+                lbl->setMinimumWidth(120);
+                auto *edit = new QLineEdit(dlg);
+                row->addWidget(lbl);
+                row->addWidget(edit);
+                dlg->contentLayout()->addLayout(row);
+                fields.append(edit);
+            }
+
+            auto *btnLayout = new QHBoxLayout();
+            auto *okBtn = new QPushButton("OK", dlg);
+            auto *cancelBtn = new QPushButton("Cancel", dlg);
+            btnLayout->addStretch();
+            btnLayout->addWidget(okBtn);
+            btnLayout->addWidget(cancelBtn);
+            dlg->contentLayout()->addLayout(btnLayout);
+
+            connect(okBtn, &QPushButton::clicked, dlg, &QDialog::accept);
+            connect(cancelBtn, &QPushButton::clicked, dlg, &QDialog::reject);
+            if (!fields.isEmpty()) {
+                connect(fields.last(), &QLineEdit::returnPressed, dlg, &QDialog::accept);
+                fields.first()->setFocus();
+            }
+
+            int result = dlg->exec();
+            if (result == QDialog::Accepted) {
+                QStringList values;
+                for (auto *edit : fields)
+                    values.append(edit->text());
+                delete dlg;
+                execGuard->resumeAfterInput(varNames, values);
+            } else {
+                delete dlg;
+                execGuard->stop();
+            }
         });
 
     // Show indicator
@@ -588,6 +641,7 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
     auto connError = std::make_shared<QMetaObject::Connection>();
     auto connLog = std::make_shared<QMetaObject::Connection>();
     auto connPause = std::make_shared<QMetaObject::Connection>();
+    auto connInput = std::make_shared<QMetaObject::Connection>();
 
     *connKeyPress = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::injectKeyPress, this,
         [displayGuard](int key, Qt::KeyboardModifiers mods, const QString &text) {
@@ -672,6 +726,7 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
             QObject::disconnect(*connError);
             QObject::disconnect(*connLog);
             QObject::disconnect(*connPause);
+            QObject::disconnect(*connInput);
             if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
             if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
         });
@@ -696,6 +751,56 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
             ui::widgets::StyledMessageBox::information(this, "Script Paused",
                 "Script execution paused.\nClick OK to continue.");
             if (!execGuard.isNull()) execGuard->resumeAfterPause();
+        });
+
+    *connInput = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::inputRequested, this,
+        [this, execGuard](const QStringList &labels, const QStringList &varNames) {
+            if (execGuard.isNull()) return;
+
+            auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+            dlg->setWindowTitle("Script Input");
+            dlg->setFixedWidth(400);
+            dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
+            dlg->contentLayout()->setSpacing(8);
+
+            QVector<QLineEdit *> fields;
+            for (const QString &label : labels) {
+                auto *row = new QHBoxLayout();
+                auto *lbl = new QLabel(label, dlg);
+                lbl->setMinimumWidth(120);
+                auto *edit = new QLineEdit(dlg);
+                row->addWidget(lbl);
+                row->addWidget(edit);
+                dlg->contentLayout()->addLayout(row);
+                fields.append(edit);
+            }
+
+            auto *btnLayout = new QHBoxLayout();
+            auto *okBtn = new QPushButton("OK", dlg);
+            auto *cancelBtn = new QPushButton("Cancel", dlg);
+            btnLayout->addStretch();
+            btnLayout->addWidget(okBtn);
+            btnLayout->addWidget(cancelBtn);
+            dlg->contentLayout()->addLayout(btnLayout);
+
+            connect(okBtn, &QPushButton::clicked, dlg, &QDialog::accept);
+            connect(cancelBtn, &QPushButton::clicked, dlg, &QDialog::reject);
+            if (!fields.isEmpty()) {
+                connect(fields.last(), &QLineEdit::returnPressed, dlg, &QDialog::accept);
+                fields.first()->setFocus();
+            }
+
+            int result = dlg->exec();
+            if (result == QDialog::Accepted) {
+                QStringList values;
+                for (auto *edit : fields)
+                    values.append(edit->text());
+                delete dlg;
+                execGuard->resumeAfterInput(varNames, values);
+            } else {
+                delete dlg;
+                execGuard->stop();
+            }
         });
 
     if (s->macroLabel) {
