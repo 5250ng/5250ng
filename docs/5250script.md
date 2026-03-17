@@ -37,7 +37,7 @@ PRESS ENTER # inline comment  # Text after # on any line is ignored
 
 ```
 TYPE "Hello World"           # Types each character as a keystroke
-TYPE "$USERNAME"             # Variables are expanded in the string
+TYPE "$SESSION_USERNAME"     # Variables are expanded in the string
 TYPE "$$100"                 # Use $$ for a literal dollar sign
 ```
 

@@ -535,7 +535,7 @@ void MainWindow::onOpenScriptsFolder() {
 }
 
 // ---------------------------------------------------------------------------
-// Run startup script for a session (with $USERNAME and $PASSWORD pre-seeded)
+// Run startup script for a session (with $SESSION_USERNAME and $SESSION_PASSWORD pre-seeded)
 // ---------------------------------------------------------------------------
 
 void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
@@ -549,9 +549,9 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
     // Set initial variables from session credentials
     QHash<QString, QString> initialVars;
     if (!s->config.username().isEmpty())
-        initialVars["$USERNAME"] = s->config.username();
+        initialVars["$SESSION_USERNAME"] = s->config.username();
     if (!s->config.password().isEmpty())
-        initialVars["$PASSWORD"] = s->config.password();
+        initialVars["$SESSION_PASSWORD"] = s->config.password();
 
     // Load script text
     QFile file(scriptPath);
