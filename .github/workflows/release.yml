@@ -1,0 +1,123 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: x64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: macos
+            arch: x64
+            runner: macos-13
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+          - os: windows
+            arch: x64
+            runner: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ── Linux ──
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            libgl1-mesa-dev \
+            libssl-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-0 \
+            cmake \
+            g++ \
+            build-essential
+
+      - name: Configure CMake (Linux)
+        if: matrix.os == 'linux'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      # ── macOS ──
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos'
+        run: brew install qt@6 openssl cmake
+
+      - name: Configure CMake (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6);$(brew --prefix openssl)"
+
+      # ── Windows ──
+      - name: Install Qt (Windows)
+        if: matrix.os == 'windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.5.0'
+          cache: true
+
+      - name: Install OpenSSL via vcpkg (Windows)
+        if: matrix.os == 'windows'
+        run: vcpkg install openssl:x64-windows
+
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows'
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      # ── Build (all platforms) ──
+      - name: Build
+        run: cmake --build build --config Release
+
+      # ── Package ──
+      - name: Package (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          mkdir -p release
+          cp build/bin/5250ng release/
+          cd release && tar czf ../5250ng-linux-${{ matrix.arch }}.tar.gz *
+
+      - name: Package (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          macdeployqt build/bin/5250ng.app
+          mkdir -p release
+          cp -R build/bin/5250ng.app release/
+          cd release && zip -r ../5250ng-macos-${{ matrix.arch }}.zip 5250ng.app
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          mkdir release
+          copy build\bin\Release\5250ng.exe release\
+          windeployqt release\5250ng.exe
+          Compress-Archive -Path release\* -DestinationPath 5250ng-windows-${{ matrix.arch }}.zip
+
+      # ── Upload ──
+      - name: Upload Release Asset
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          file: 5250ng-*
+          file_glob: true
