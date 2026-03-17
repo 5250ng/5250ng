@@ -80,6 +80,8 @@ class TestScriptParser : public QObject {
     void testBareCallSyntax();
     void testExtractLine();
     void testIfContains();
+    void testInput();
+    void testInputMultiple();
 
   private:
     ScriptParser *m_parser;
@@ -819,6 +821,33 @@ void TestScriptParser::testIfContains() {
     QVERIFY(!result.hasErrors());
     auto whileNode = result.root->children[0];
     QCOMPARE(whileNode->condOp, CompareOp::Contains);
+}
+
+void TestScriptParser::testInput() {
+    auto result = m_parser->parse("INPUT \"Username:\" $USER");
+    QVERIFY(!result.hasErrors());
+    auto node = result.root->children[0];
+    QCOMPARE(node->type, NodeType::Input);
+    QCOMPARE(node->stringValue, "Username:");
+    QCOMPARE(node->varName, "$USER");
+}
+
+void TestScriptParser::testInputMultiple() {
+    auto result = m_parser->parse(
+        "INPUT \"Username:\" $USER\n"
+        "INPUT \"Password:\" $PASS\n"
+        "INPUT \"Library:\" $LIB\n"
+    );
+    QVERIFY(!result.hasErrors());
+    QCOMPARE(result.root->children.size(), 3);
+    for (int i = 0; i < 3; ++i)
+        QCOMPARE(result.root->children[i]->type, NodeType::Input);
+    QCOMPARE(result.root->children[0]->stringValue, "Username:");
+    QCOMPARE(result.root->children[0]->varName, "$USER");
+    QCOMPARE(result.root->children[1]->stringValue, "Password:");
+    QCOMPARE(result.root->children[1]->varName, "$PASS");
+    QCOMPARE(result.root->children[2]->stringValue, "Library:");
+    QCOMPARE(result.root->children[2]->varName, "$LIB");
 }
 
 QTEST_MAIN(TestScriptParser)
