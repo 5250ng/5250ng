@@ -281,7 +281,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                 });
     }
 
-    session->parser = new tn5250::client::Decoder(session->terminalContainer);
+    session->parser = new tn5250::client::DecoderAdapter(session->terminalContainer);
     session->thread = new QThread(this);
     session->worker = new tn5250::session::Worker();
     session->worker->setConfig(m_currentSession);
@@ -546,7 +546,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
         });
     session->commandHandler->connectDecoder(session->parser);
     // Wire save screen - per-session
-    connect(session->parser, &tn5250::client::Decoder::saveScreenRequested, this,
+    connect(session->parser, &tn5250::client::DecoderAdapter::saveScreenRequested, this,
         [session]() {
             if (session->displayWidget && session->displayWidget->screenBuffer()) {
                 session->savedScreen = session->displayWidget->screenBuffer()->saveState();

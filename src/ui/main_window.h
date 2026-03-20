@@ -22,7 +22,7 @@
 #include "core/session_logger.h"
 #include "logger/logger.h"
 #include "network/tn5250/client/client.h"
-#include "network/tn5250/client/decoder.h"
+#include "network/tn5250/client/decoder_adapter.h"
 #include "session/config.h"
 #include "session/worker.h"
 #include "ui/dialogs/connect_dialog.h"
@@ -129,7 +129,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         ui::widgets::QAgentPanelWidget *agentPanel = nullptr;
         ui::widgets::Q5250TerminalView *terminalView;
         ui::widgets::Q5250ScreenWidget *displayWidget;
-        tn5250::client::Decoder *parser;
+        tn5250::client::DecoderAdapter *parser;
         QThread *thread;
         tn5250::session::Worker *worker;
         ui::widgets::QConnectionStatusWidget *connectionStatus;
@@ -169,7 +169,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
 
     // Convenience pointers to the active session
     ui::widgets::Q5250ScreenWidget *m_displayWidget;
-    tn5250::client::Decoder *m_parser;
+    tn5250::client::DecoderAdapter *m_parser;
     session::SessionConfig m_currentSession;
 
     // UI elements

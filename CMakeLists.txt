@@ -26,6 +26,9 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 find_package(OpenSSL REQUIRED)
 
+# Protocol library (standalone, Qt-free)
+set(TN5250_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(src/network/tn5250/protocol-tn5250)
 
 # Source files organized by layer
 set(CORE_SOURCES
@@ -73,6 +76,9 @@ set(LOGGER_SOURCES
     src/logger/logger.h
 )
 
+# TN5250 Qt sources: old client files (still use Qt types) + new decoder adapter
+# The old telnet, devices, ibmrseed files are kept because client_*.cpp use
+# the Qt-typed versions. The protocol library provides the standalone equivalents.
 set(TELNET_SOURCES
     src/network/tn5250/telnet/commands.cpp
     src/network/tn5250/telnet/commands.h
@@ -84,7 +90,8 @@ set(TELNET_SOURCES
     src/network/tn5250/devices/devices.h
 )
 
-set(TN5250_CLIENT_SOURCES
+set(TN5250_ADAPTER_SOURCES
+    src/network/tn5250/client/client.h
     src/network/tn5250/client/client_connection.cpp
     src/network/tn5250/client/client_io.cpp
     src/network/tn5250/client/client_telnet.cpp
@@ -92,47 +99,8 @@ set(TN5250_CLIENT_SOURCES
     src/network/tn5250/client/client_tls.cpp
     src/network/tn5250/client/ibmrseed.cpp
     src/network/tn5250/client/ibmrseed.h
-    src/network/tn5250/client/client.h
-    src/network/tn5250/client/decoder.h
-    src/network/tn5250/client/decoder.cpp
-    # message
-    src/network/tn5250/message/message.cpp
-    src/network/tn5250/message/message.h
-    src/network/tn5250/message/header/header.cpp
-    src/network/tn5250/message/header/header.h
-    src/network/tn5250/message/header/record_type.cpp
-    src/network/tn5250/message/header/record_type.h
-    src/network/tn5250/message/operation_code.cpp
-    src/network/tn5250/message/operation_code.h
-    # command
-    src/network/tn5250/message/command/command.cpp
-    src/network/tn5250/message/command/command.h
-    src/network/tn5250/message/command/command_base.h
-    src/network/tn5250/message/command/commands/command_cs_clear_screen.cpp
-    src/network/tn5250/message/command/commands/command_cs_clear_screen.h
-    src/network/tn5250/message/command/commands/command_rmf_read_mdt_fields.cpp
-    src/network/tn5250/message/command/commands/command_rmf_read_mdt_fields.h
-    src/network/tn5250/message/command/commands/command_wtd_write_to_display.cpp
-    src/network/tn5250/message/command/commands/command_wtd_write_to_display.h
-    src/network/tn5250/message/command/command_code.cpp
-    src/network/tn5250/message/command/command_code.h
-    # order base
-    src/network/tn5250/message/command/order/order.h
-    src/network/tn5250/message/command/order/order.cpp
-    src/network/tn5250/message/command/order/order_base.h
-    src/network/tn5250/message/command/order/order_code.cpp
-    src/network/tn5250/message/command/order/order_code.h
-    # orders
-    src/network/tn5250/message/command/order/orders/order_ic_insert_cursor.cpp
-    src/network/tn5250/message/command/order/orders/order_ic_insert_cursor.h
-    src/network/tn5250/message/command/order/orders/order_ra_repeat_to_address.cpp
-    src/network/tn5250/message/command/order/orders/order_ra_repeat_to_address.h
-    src/network/tn5250/message/command/order/orders/order_sba_set_buffer_address.cpp
-    src/network/tn5250/message/command/order/orders/order_sba_set_buffer_address.h
-    src/network/tn5250/message/command/order/orders/order_sf_start_field.cpp
-    src/network/tn5250/message/command/order/orders/order_sf_start_field.h
-    src/network/tn5250/message/command/order/orders/order_soh_start_of_header.cpp
-    src/network/tn5250/message/command/order/orders/order_soh_start_of_header.h
+    src/network/tn5250/client/decoder_adapter.h
+    src/network/tn5250/client/decoder_adapter.cpp
 )
 
 set(HOSTSERVER_SOURCES
@@ -285,7 +253,7 @@ add_executable(5250ng
     src/main.cpp
     ${UI_SOURCES}
     ${TELNET_SOURCES}
-    ${TN5250_CLIENT_SOURCES}
+    ${TN5250_ADAPTER_SOURCES}
     ${HOSTSERVER_SOURCES}
     ${SESSION_SOURCES}
     ${DISPLAY_SOURCES}
@@ -301,6 +269,7 @@ target_link_libraries(5250ng
         Qt6::Widgets
         Qt6::Network
         OpenSSL::Crypto
+        tn5250::tn5250
 )
 
 if(HAVE_QT6_SSL)
@@ -334,7 +303,7 @@ if(BUILD_TESTS)
         ${CORE_SOURCES}
         ${SESSION_SOURCES}
         ${TELNET_SOURCES}
-        ${TN5250_CLIENT_SOURCES}
+        ${TN5250_ADAPTER_SOURCES}
         ${HOSTSERVER_SOURCES}
         ${LOGGER_SOURCES}
         ${UTILS_SOURCES}
@@ -347,6 +316,7 @@ if(BUILD_TESTS)
             Qt6::Network
             Qt6::Widgets
             OpenSSL::Crypto
+            tn5250::tn5250
     )
     if(HAVE_QT6_SSL)
         target_link_libraries(tn5250_core PUBLIC Qt6::Ssl)
