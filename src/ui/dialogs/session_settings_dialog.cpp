@@ -374,6 +374,11 @@ QWidget *SessionSettingsDialog::buildColumnSeparatorSection() {
     QGroupBox *group = new QGroupBox("Column Separator");
     QHBoxLayout *h = new QHBoxLayout(group);
 
+    m_colSepEnabled = new QCheckBox("Enabled");
+    h->addWidget(m_colSepEnabled);
+    connect(m_colSepEnabled, &QCheckBox::toggled, this, &SessionSettingsDialog::onThemePropertyChanged);
+
+    h->addSpacing(20);
     h->addWidget(new QLabel("Color:"));
     m_colSepColorSwatch = createColorSwatch("colSep", QColor(128, 128, 128));
     h->addWidget(m_colSepColorSwatch);
@@ -688,6 +693,7 @@ void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme
     setSwatchColor(m_fieldIndicatorSwatch, theme.fieldIndicatorColor);
 
     // Column separator
+    m_colSepEnabled->setChecked(theme.columnSeparatorEnabled);
     setSwatchColor(m_colSepColorSwatch, theme.columnSeparatorColor);
     int csIdx = m_colSepStyleCombo->findData(
         ui::themes::TerminalTheme::colSepStyleToString(theme.columnSeparatorStyle));
@@ -775,6 +781,7 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
     t.fieldIndicatorColor = swatchColor(m_fieldIndicatorSwatch);
 
     // Column separator
+    t.columnSeparatorEnabled = m_colSepEnabled->isChecked();
     t.columnSeparatorColor = swatchColor(m_colSepColorSwatch);
     t.columnSeparatorStyle = ui::themes::TerminalTheme::colSepStyleFromString(
         m_colSepStyleCombo->currentData().toString());
