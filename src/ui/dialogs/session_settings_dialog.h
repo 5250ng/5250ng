@@ -156,6 +156,7 @@ class SessionSettingsDialog : public QDialog {
     QPushButton *m_cursorPosColorSwatch;
 
     // Column separator
+    QCheckBox *m_colSepEnabled;
     QPushButton *m_colSepColorSwatch;
     QComboBox *m_colSepStyleCombo;
 
