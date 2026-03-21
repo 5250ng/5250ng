@@ -147,7 +147,7 @@ void ThemePreviewWidget::paintEvent(QPaintEvent *event) {
         }
 
         // Draw column separators (every 10 columns, like real 5250 column indicators)
-        {
+        if (m_theme.columnSeparatorEnabled) {
             QColor sepColor = m_theme.adjustColor(m_theme.columnSeparatorColor.isValid()
                                   ? m_theme.columnSeparatorColor : QColor(128, 128, 128));
             QPen sepPen(sepColor, 1);
