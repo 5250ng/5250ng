@@ -59,6 +59,7 @@ void SessionSettingsDialog::setupUI() {
     contentLayout->addWidget(buildSelectionSection());
     contentLayout->addWidget(buildColumnSeparatorSection());
     contentLayout->addWidget(buildHRuleSection());
+    contentLayout->addWidget(buildFooterColorsSection());
     contentLayout->addWidget(buildCursorPositionSection());
     contentLayout->addWidget(buildCursorSection());
     contentLayout->addWidget(buildCRTSection());
@@ -172,6 +173,13 @@ QWidget *SessionSettingsDialog::buildGridModeSection() {
     m_gridModeCombo->addItem("Packed", "packed");
     m_gridModeCombo->addItem("Wide", "wide");
     h->addWidget(m_gridModeCombo);
+
+    h->addSpacing(20);
+    h->addWidget(new QLabel("Grid Color:"));
+    m_cellGridColorSwatch = createColorSwatch("cellGrid", QColor(255, 255, 255, 40));
+    h->addWidget(m_cellGridColorSwatch);
+    connect(m_cellGridColorSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
     h->addStretch();
 
     connect(m_gridModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -408,6 +416,35 @@ QWidget *SessionSettingsDialog::buildHRuleSection() {
     h->addWidget(m_hruleColorSwatch);
     connect(m_hruleColorSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
     h->addStretch();
+
+    return group;
+}
+
+QWidget *SessionSettingsDialog::buildFooterColorsSection() {
+    QGroupBox *group = new QGroupBox("Footer Colors");
+    QGridLayout *grid = new QGridLayout(group);
+
+    grid->addWidget(new QLabel("Keyboard State:"), 0, 0);
+    m_footerKbdStateSwatch = createColorSwatch("footerKbd", QColor());
+    grid->addWidget(m_footerKbdStateSwatch, 0, 1);
+    connect(m_footerKbdStateSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
+    grid->addWidget(new QLabel("System Name:"), 0, 3);
+    m_footerSystemNameSwatch = createColorSwatch("footerSys", QColor());
+    grid->addWidget(m_footerSystemNameSwatch, 0, 4);
+    connect(m_footerSystemNameSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
+    grid->addWidget(new QLabel("History:"), 1, 0);
+    m_footerHistorySwatch = createColorSwatch("footerHist", QColor());
+    grid->addWidget(m_footerHistorySwatch, 1, 1);
+    connect(m_footerHistorySwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
+    grid->addWidget(new QLabel("Macro:"), 1, 3);
+    m_footerMacroSwatch = createColorSwatch("footerMacro", QColor());
+    grid->addWidget(m_footerMacroSwatch, 1, 4);
+    connect(m_footerMacroSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
+    grid->setColumnMinimumWidth(2, 20);
 
     return group;
 }
@@ -650,10 +687,11 @@ void SessionSettingsDialog::setTheme(const ui::themes::TerminalTheme &theme) {
 }
 
 void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme) {
-    // Grid mode
+    // Grid mode & cell grid color
     int gmIdx = m_gridModeCombo->findData(
         ui::themes::TerminalTheme::gridModeToString(theme.gridMode));
     if (gmIdx >= 0) m_gridModeCombo->setCurrentIndex(gmIdx);
+    setSwatchColor(m_cellGridColorSwatch, theme.cellGridColor);
 
     // Background
     m_bgColorRadio->setChecked(theme.backgroundMode == ui::themes::TerminalTheme::Color);
@@ -702,6 +740,16 @@ void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme
     // HRule
     setSwatchColor(m_hruleColorSwatch, theme.hruleColor.isValid() ? theme.hruleColor : theme.colorGreen);
 
+    // Footer colors
+    setSwatchColor(m_footerKbdStateSwatch,
+                   theme.footerKbdStateColor.isValid() ? theme.footerKbdStateColor : theme.colorWhite);
+    setSwatchColor(m_footerSystemNameSwatch,
+                   theme.footerSystemNameColor.isValid() ? theme.footerSystemNameColor : theme.colorWhite);
+    setSwatchColor(m_footerHistorySwatch,
+                   theme.footerHistoryColor.isValid() ? theme.footerHistoryColor : theme.colorWhite);
+    setSwatchColor(m_footerMacroSwatch,
+                   theme.footerMacroColor.isValid() ? theme.footerMacroColor : theme.colorWhite);
+
     // Cursor position
     bool hasCustomCoord = theme.footerCoordinatesColor.isValid();
     m_cursorPosCustom->setChecked(hasCustomCoord);
@@ -741,9 +789,10 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
         t.displayName.chop(11);
     }
 
-    // Grid mode
+    // Grid mode & cell grid color
     t.gridMode = ui::themes::TerminalTheme::gridModeFromString(
         m_gridModeCombo->currentData().toString());
+    t.cellGridColor = swatchColor(m_cellGridColorSwatch);
 
     // Background
     t.backgroundMode = m_bgColorRadio->isChecked()
@@ -788,6 +837,12 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
 
     // HRule
     t.hruleColor = swatchColor(m_hruleColorSwatch);
+
+    // Footer colors
+    t.footerKbdStateColor = swatchColor(m_footerKbdStateSwatch);
+    t.footerSystemNameColor = swatchColor(m_footerSystemNameSwatch);
+    t.footerHistoryColor = swatchColor(m_footerHistorySwatch);
+    t.footerMacroColor = swatchColor(m_footerMacroSwatch);
 
     // Cursor position
     if (m_cursorPosCustom->isChecked()) {
