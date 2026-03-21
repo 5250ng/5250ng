@@ -28,7 +28,7 @@ find_package(OpenSSL REQUIRED)
 
 # Protocol library (standalone, Qt-free)
 set(TN5250_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(src/network/tn5250/protocol-tn5250)
+add_subdirectory(src/network/tn5250)
 
 # Source files organized by layer
 set(CORE_SOURCES
