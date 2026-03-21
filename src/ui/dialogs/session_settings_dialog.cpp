@@ -172,6 +172,9 @@ QWidget *SessionSettingsDialog::buildGridModeSection() {
     m_gridModeCombo = new QComboBox();
     m_gridModeCombo->addItem("Packed", "packed");
     m_gridModeCombo->addItem("Wide", "wide");
+    m_gridModeCombo->setToolTip(
+        "Packed: characters are tightly spaced.\n"
+        "Wide: characters have extra horizontal spacing between columns.");
     h->addWidget(m_gridModeCombo);
 
     h->addSpacing(20);
