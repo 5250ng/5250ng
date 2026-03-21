@@ -517,21 +517,34 @@ QWidget *SessionSettingsDialog::buildCRTSection() {
     m_crtEnabled = new QCheckBox("Enable CRT effect");
     v->addWidget(m_crtEnabled);
 
-    auto addSliderRow = [&](const QString &label, QSlider *&slider) {
+    auto addSliderRow = [&](const QString &label, QSlider *&slider, QLabel *&valLabel,
+                            const QString &tooltip) {
         QHBoxLayout *row = new QHBoxLayout();
-        row->addWidget(new QLabel(label));
+        QLabel *nameLabel = new QLabel(label);
+        if (!tooltip.isEmpty()) nameLabel->setToolTip(tooltip);
+        row->addWidget(nameLabel);
         slider = new QSlider(Qt::Horizontal);
         slider->setRange(0, 100);
         slider->setValue(30);
+        if (!tooltip.isEmpty()) slider->setToolTip(tooltip);
+        valLabel = new QLabel(QString::number(slider->value()) + "%");
         row->addWidget(slider, 1);
+        row->addWidget(valLabel);
         v->addLayout(row);
-        connect(slider, &QSlider::valueChanged, this, &SessionSettingsDialog::onThemePropertyChanged);
+        connect(slider, &QSlider::valueChanged, this, [this, valLabel](int val) {
+            valLabel->setText(QString::number(val) + "%");
+            onThemePropertyChanged();
+        });
     };
 
-    addSliderRow("Scanlines:", m_crtScanline);
-    addSliderRow("Phosphor Bloom:", m_crtPhosphorBloom);
-    addSliderRow("Glow:", m_crtGlow);
-    addSliderRow("Curvature:", m_crtCurvature);
+    addSliderRow("Scanlines:", m_crtScanline, m_crtScanlineLabel,
+                 "Intensity of horizontal scanline overlay");
+    addSliderRow("Phosphor Bloom:", m_crtPhosphorBloom, m_crtPhosphorBloomLabel,
+                 "Local glow around bright characters");
+    addSliderRow("Glow:", m_crtGlow, m_crtGlowLabel,
+                 "Radial phosphor glow emanating from the screen center");
+    addSliderRow("Curvature:", m_crtCurvature, m_crtCurvatureLabel,
+                 "Vignette darkening at screen edges simulating CRT curvature");
 
     connect(m_crtEnabled, &QCheckBox::toggled, this, &SessionSettingsDialog::onThemePropertyChanged);
 
