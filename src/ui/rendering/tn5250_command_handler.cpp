@@ -16,7 +16,7 @@
 
 #include "tn5250_command_handler.h"
 #include "logger/logger.h"
-#include "network/tn5250/protocol_constants.h"
+#include "tn5250/protocol_constants.h"
 #include "utils/hex/hex.h"
 #include <QApplication>
 #include <vector>
@@ -40,41 +40,41 @@ void TN5250CommandHandler::setSendGDSCallback(SendGDSFn fn) {
     m_sendGDS = std::move(fn);
 }
 
-void TN5250CommandHandler::connectDecoder(tn5250::client::Decoder *parser) {
+void TN5250CommandHandler::connectDecoder(tn5250::client::DecoderAdapter *parser) {
     if (!parser) return;
-    connect(parser, &tn5250::client::Decoder::commandReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::commandReceived,
             this, &TN5250CommandHandler::handleTN5250Command);
-    connect(parser, &tn5250::client::Decoder::structuredFieldReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::structuredFieldReceived,
             this, &TN5250CommandHandler::handleStructuredField);
-    connect(parser, &tn5250::client::Decoder::rawScreenDataReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::rawScreenDataReceived,
             this, &TN5250CommandHandler::handleRawScreenData);
-    connect(parser, &tn5250::client::Decoder::clearScreenRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::clearScreenRequested,
             this, &TN5250CommandHandler::onClearScreenRequested);
-    connect(parser, &tn5250::client::Decoder::keyboardUnlockRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::keyboardUnlockRequested,
             this, &TN5250CommandHandler::onKeyboardUnlockRequested);
-    connect(parser, &tn5250::client::Decoder::controlCharactersReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::controlCharactersReceived,
             this, &TN5250CommandHandler::onControlCharactersReceived);
-    connect(parser, &tn5250::client::Decoder::sohReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::sohReceived,
             this, &TN5250CommandHandler::onSohReceived);
-    connect(parser, &tn5250::client::Decoder::rollRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::rollRequested,
             this, &TN5250CommandHandler::onRollRequested);
-    connect(parser, &tn5250::client::Decoder::writeErrorCodeRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::writeErrorCodeRequested,
             this, &TN5250CommandHandler::onWriteErrorCode);
-    connect(parser, &tn5250::client::Decoder::clearScreenAlternateRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::clearScreenAlternateRequested,
             this, &TN5250CommandHandler::onClearScreenAlternateRequested);
-    connect(parser, &tn5250::client::Decoder::clearFormatTableRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::clearFormatTableRequested,
             this, &TN5250CommandHandler::onClearFormatTableRequested);
-    connect(parser, &tn5250::client::Decoder::inviteReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::inviteReceived,
             this, &TN5250CommandHandler::onInviteReceived);
-    connect(parser, &tn5250::client::Decoder::cancelInviteReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::cancelInviteReceived,
             this, &TN5250CommandHandler::onCancelInviteReceived);
-    connect(parser, &tn5250::client::Decoder::messageLightOn,
+    connect(parser, &tn5250::client::DecoderAdapter::messageLightOn,
             this, &TN5250CommandHandler::onMessageLightOn);
-    connect(parser, &tn5250::client::Decoder::messageLightOff,
+    connect(parser, &tn5250::client::DecoderAdapter::messageLightOff,
             this, &TN5250CommandHandler::onMessageLightOff);
-    connect(parser, &tn5250::client::Decoder::readScreenRequested,
+    connect(parser, &tn5250::client::DecoderAdapter::readScreenRequested,
             this, &TN5250CommandHandler::onReadScreenRequested);
-    connect(parser, &tn5250::client::Decoder::writeStructuredFieldReceived,
+    connect(parser, &tn5250::client::DecoderAdapter::writeStructuredFieldReceived,
             this, &TN5250CommandHandler::onWriteStructuredFieldReceived);
 }
 

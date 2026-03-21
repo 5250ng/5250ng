@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "network/tn5250/client/decoder.h"
+#include "network/tn5250_qt/client/decoder_adapter.h"
 #include "tn5250_stream_renderer.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
@@ -48,7 +48,7 @@ class TN5250CommandHandler : public QObject {
     void setSendGDSCallback(SendGDSFn fn);
 
     // Connect all decoder signals to this handler
-    void connectDecoder(tn5250::client::Decoder *parser);
+    void connectDecoder(tn5250::client::DecoderAdapter *parser);
 
     // Access the pending CC2 byte (for deferred processing)
     uint8_t pendingCC2() const { return m_pendingCC2; }

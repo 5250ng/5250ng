@@ -1,3 +1,3 @@
-[submodule "scripts"]
-	path = scripts
-	url = git@github.com:5250ng/5250scripts.git
+[submodule "protocol-tn5250"]
+	path = src/network/tn5250
+	url = git@github.com:5250ng/protocol-tn5250.git

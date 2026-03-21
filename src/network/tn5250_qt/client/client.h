@@ -17,8 +17,8 @@
 #pragma once
 
 #include "core/codepage.h"
-#include "network/tn5250/telnet/commands.h"
-#include "network/tn5250/telnet/options.h"
+#include "network/tn5250_qt/telnet/commands.h"
+#include "network/tn5250_qt/telnet/options.h"
 #include <QByteArray>
 #include <QObject>
 #include <QString>

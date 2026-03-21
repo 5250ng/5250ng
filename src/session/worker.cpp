@@ -16,7 +16,7 @@
 
 #include "worker.h"
 #include "logger/logger.h"
-#include "network/tn5250/message/message.h"
+#include "tn5250/message/message.h"
 #include <QThread>
 #include <sstream>
 #include <vector>

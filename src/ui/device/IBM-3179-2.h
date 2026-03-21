@@ -20,7 +20,7 @@
 #include <QPointer>
 #include <QString>
 
-#include "network/tn5250/message/message.h"
+#include "tn5250/message/message.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 
 namespace ui::device {

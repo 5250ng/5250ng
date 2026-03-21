@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "network/tn5250/devices/devices.h"
+#include "network/tn5250_qt/devices/devices.h"
 #include "session/config.h"
 #include "ui/widgets/Frameless/BaseFramelessDialog.h"
 #include <QCheckBox>

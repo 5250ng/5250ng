@@ -18,7 +18,7 @@
 #include "../telnet/options.h"
 #include "client.h"
 #include "logger/logger.h"
-#include "network/tn5250/protocol_constants.h"
+#include "tn5250/protocol_constants.h"
 #include <QChar>
 
 namespace tn5250::client {
