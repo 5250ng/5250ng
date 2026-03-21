@@ -864,21 +864,11 @@ void SessionSettingsDialog::onNewTheme() {
 
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     ui::themes::TerminalTheme t = collectThemeFromUI();
+    // Generate a new unique id via duplicateTheme, then apply all UI properties
+    ui::themes::TerminalTheme dup = mgr.duplicateTheme(m_currentThemeId, name.trimmed());
+    t.id = dup.id;
     t.displayName = name.trimmed();
     t.builtin = false;
-    t = mgr.duplicateTheme(m_currentThemeId, t.displayName);
-    // Apply current UI colors to the new theme
-    ui::themes::TerminalTheme uiTheme = collectThemeFromUI();
-    t.backgroundColor = uiTheme.backgroundColor;
-    t.colorGreen = uiTheme.colorGreen;
-    t.colorWhite = uiTheme.colorWhite;
-    t.colorBlue = uiTheme.colorBlue;
-    t.colorYellow = uiTheme.colorYellow;
-    t.colorRed = uiTheme.colorRed;
-    t.colorCyan = uiTheme.colorCyan;
-    t.colorPink = uiTheme.colorPink;
-    t.colorBlack = uiTheme.colorBlack;
-    t.cursorColor = uiTheme.cursorColor;
 
     mgr.saveUserTheme(t);
     m_currentThemeId = t.id;
