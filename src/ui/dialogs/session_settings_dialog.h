@@ -74,6 +74,7 @@ class SessionSettingsDialog : public QDialog {
     QWidget *buildColorsSection();
     QWidget *buildSelectionSection();
     QWidget *buildHRuleSection();
+    QWidget *buildFooterColorsSection();
     QWidget *buildCursorPositionSection();
     QWidget *buildColumnSeparatorSection();
     QWidget *buildCursorSection();
@@ -150,6 +151,15 @@ class SessionSettingsDialog : public QDialog {
 
     // HRule
     QPushButton *m_hruleColorSwatch;
+
+    // Cell grid
+    QPushButton *m_cellGridColorSwatch;
+
+    // Footer colors
+    QPushButton *m_footerKbdStateSwatch;
+    QPushButton *m_footerSystemNameSwatch;
+    QPushButton *m_footerHistorySwatch;
+    QPushButton *m_footerMacroSwatch;
 
     // Cursor position
     QCheckBox *m_cursorPosCustom;
