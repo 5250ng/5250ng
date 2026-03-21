@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "network/tn5250/client/ibmrseed.h"
+#include "network/tn5250_qt/client/ibmrseed.h"
 #include <QByteArray>
 #include <QTest>
 

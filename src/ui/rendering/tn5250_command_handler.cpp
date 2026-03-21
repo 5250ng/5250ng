@@ -16,7 +16,7 @@
 
 #include "tn5250_command_handler.h"
 #include "logger/logger.h"
-#include "network/tn5250/protocol_constants.h"
+#include "tn5250/protocol_constants.h"
 #include "utils/hex/hex.h"
 #include <QApplication>
 #include <vector>

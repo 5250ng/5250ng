@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "network/tn5250/client/decoder_adapter.h"
+#include "network/tn5250_qt/client/decoder_adapter.h"
 #include "tn5250_stream_renderer.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"

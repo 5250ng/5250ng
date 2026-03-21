@@ -80,27 +80,27 @@ set(LOGGER_SOURCES
 # The old telnet, devices, ibmrseed files are kept because client_*.cpp use
 # the Qt-typed versions. The protocol library provides the standalone equivalents.
 set(TELNET_SOURCES
-    src/network/tn5250/telnet/commands.cpp
-    src/network/tn5250/telnet/commands.h
-    src/network/tn5250/telnet/options.cpp
-    src/network/tn5250/telnet/options.h
-    src/network/tn5250/telnet/client.cpp
-    src/network/tn5250/telnet/client.h
-    src/network/tn5250/devices/devices.cpp
-    src/network/tn5250/devices/devices.h
+    src/network/tn5250_qt/telnet/commands.cpp
+    src/network/tn5250_qt/telnet/commands.h
+    src/network/tn5250_qt/telnet/options.cpp
+    src/network/tn5250_qt/telnet/options.h
+    src/network/tn5250_qt/telnet/client.cpp
+    src/network/tn5250_qt/telnet/client.h
+    src/network/tn5250_qt/devices/devices.cpp
+    src/network/tn5250_qt/devices/devices.h
 )
 
 set(TN5250_ADAPTER_SOURCES
-    src/network/tn5250/client/client.h
-    src/network/tn5250/client/client_connection.cpp
-    src/network/tn5250/client/client_io.cpp
-    src/network/tn5250/client/client_telnet.cpp
-    src/network/tn5250/client/client_handshake.cpp
-    src/network/tn5250/client/client_tls.cpp
-    src/network/tn5250/client/ibmrseed.cpp
-    src/network/tn5250/client/ibmrseed.h
-    src/network/tn5250/client/decoder_adapter.h
-    src/network/tn5250/client/decoder_adapter.cpp
+    src/network/tn5250_qt/client/client.h
+    src/network/tn5250_qt/client/client_connection.cpp
+    src/network/tn5250_qt/client/client_io.cpp
+    src/network/tn5250_qt/client/client_telnet.cpp
+    src/network/tn5250_qt/client/client_handshake.cpp
+    src/network/tn5250_qt/client/client_tls.cpp
+    src/network/tn5250_qt/client/ibmrseed.cpp
+    src/network/tn5250_qt/client/ibmrseed.h
+    src/network/tn5250_qt/client/decoder_adapter.h
+    src/network/tn5250_qt/client/decoder_adapter.cpp
 )
 
 set(HOSTSERVER_SOURCES

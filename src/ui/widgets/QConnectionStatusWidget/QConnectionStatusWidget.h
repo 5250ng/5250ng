@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "network/tn5250/client/client.h"
+#include "network/tn5250_qt/client/client.h"
 #include <QColor>
 #include <QHBoxLayout>
 #include <QLabel>

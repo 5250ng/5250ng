@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "network/tn5250/client/decoder_adapter.h"
+#include "network/tn5250_qt/client/decoder_adapter.h"
 #include <QtTest/QtTest>
 
 using namespace tn5250::client;

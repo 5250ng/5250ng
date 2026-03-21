@@ -16,65 +16,64 @@
 
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
-#include <QPointer>
 #include <QString>
+#include <cstdint>
+#include <functional>
 
-#include "tn5250/message/message.h"
-#include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
+#include "commands.h"
+#include "options.h"
 
-namespace ui::device {
+namespace telnet {
 
-/**
- * Base interface for emulated 5250 devices.
- * Provides a minimal API for attaching a screen and exchanging messages.
- */
-class EmulatedDevice : public QObject {
+// Telnet stream parser and negotiator. Unpacks Telnet IAC sequences and
+// surfaces application data (non-Telnet bytes) via a user-provided callback.
+class Client : public QObject {
     Q_OBJECT
+
   public:
-    explicit EmulatedDevice(QObject *parent = nullptr) : QObject(parent) {}
-    virtual ~EmulatedDevice() = default;
+    explicit Client(QObject *parent = nullptr);
 
-    virtual QString modelName() const = 0;
-    virtual int rows() const = 0;
-    virtual int cols() const = 0;
+    // Set the callback to receive application data (Telnet-unescaped payload)
+    void setAppDataCallback(std::function<void(const QByteArray &)> cb);
 
-    // Attach/detach screen widget
-    virtual void attachScreen(ui::widgets::Q5250ScreenWidget *screen) = 0;
+    // Feed incoming bytes from the network into the Telnet parser
+    void feed(const QByteArray &data);
+
+    // Reset Telnet parsing state
+    void reset();
 
   signals:
-    // Outbound TN5250 message ready to send to transport
-    void sendMessage(const tn5250::message::Message &msg);
-
-  public slots:
-    // Inbound TN5250 message from transport
-    virtual void receiveMessage(const tn5250::message::Message &msg) = 0;
-};
-
-/**
- * IBM 3179 Model 2 (24x80) emulated device.
- * Acts as a middleware to interpret TN5250 messages and update the screen.
- */
-class IBM3179_2 : public EmulatedDevice {
-    Q_OBJECT
-  public:
-    explicit IBM3179_2(QObject *parent = nullptr);
-
-    QString modelName() const override { return QStringLiteral("IBM 3179 Model 2"); }
-    int rows() const override { return 24; }
-    int cols() const override { return 80; }
-
-    void attachScreen(ui::widgets::Q5250ScreenWidget *screen) override;
-
-  public slots:
-    void receiveMessage(const tn5250::message::Message &msg) override;
+    // Negotiation events for higher-level handling (optional)
+    void negotiationCommand(telnet::TelnetCommand cmd, telnet::TelnetOption opt);
+    void subnegotiationReceived(telnet::TelnetOption opt, const QByteArray &data);
+    void standaloneCommand(telnet::TelnetCommand cmd);
 
   private:
-    void handleClearScreen();
-    void handleWriteToDisplay(const tn5250::message::command::CommandWtdWriteToDisplay &cmd);
+    enum class State {
+        Data,                 // Passing through application data
+        IAC,                  // Saw IAC, expect command
+        NegotiationOption,    // After DO/DONT/WILL/WONT, expect option byte
+        SubnegotiationOption, // After SB, expect option byte
+        SubnegotiationData,   // Reading subnegotiation bytes
+        SubnegotiationIAC     // Saw IAC inside SB, expect SE or escaped IAC
+    };
 
-  private:
-    QPointer<ui::widgets::Q5250ScreenWidget> m_screen;
+    void flushAppData();
+
+    State m_state;
+    QByteArray m_appBuffer;
+
+    // For negotiations
+    telnet::TelnetCommand m_pendingCmd;
+    telnet::TelnetOption m_pendingOpt;
+
+    // For subnegotiation
+    telnet::TelnetOption m_sbOpt;
+    QByteArray m_sbBuffer;
+
+    std::function<void(const QByteArray &)> m_onAppData;
 };
 
-} // namespace ui::device
+} // namespace telnet

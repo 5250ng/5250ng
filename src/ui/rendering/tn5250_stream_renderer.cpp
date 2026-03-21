@@ -17,7 +17,7 @@
 #include "tn5250_stream_renderer.h"
 #include "display_attributes.h"
 #include "logger/logger.h"
-#include "network/tn5250/protocol_constants.h"
+#include "tn5250/protocol_constants.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
 
 namespace ui::rendering {
