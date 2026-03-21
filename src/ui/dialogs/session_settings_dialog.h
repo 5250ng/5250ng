@@ -172,6 +172,10 @@ class SessionSettingsDialog : public QDialog {
     QSlider *m_crtPhosphorBloom;
     QSlider *m_crtGlow;
     QSlider *m_crtCurvature;
+    QLabel *m_crtScanlineLabel;
+    QLabel *m_crtPhosphorBloomLabel;
+    QLabel *m_crtGlowLabel;
+    QLabel *m_crtCurvatureLabel;
 
     // Brightness/saturation
     QSlider *m_brightnessSlider;
