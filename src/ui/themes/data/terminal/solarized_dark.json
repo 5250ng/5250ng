@@ -26,7 +26,7 @@
     "selection": {
         "background": "#073642",
         "foreground": "#eee8d5",
-        "fieldIndicator": "#07364260"
+        "fieldIndicator": "#60073642"
     },
     "columnSeparator": {
         "enabled": false,
