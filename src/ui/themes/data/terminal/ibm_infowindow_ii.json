@@ -52,7 +52,7 @@
     "id": "classic_green",
     "selection": {
         "background": "#ff0040",
-        "fieldIndicator": "#0080ff40",
+        "fieldIndicator": "#400080ff",
         "foreground": "#ffffff"
     }
 }

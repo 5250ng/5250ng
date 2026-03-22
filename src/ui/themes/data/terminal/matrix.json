@@ -25,9 +25,9 @@
         "cursor": "#00ff41"
     },
     "selection": {
-        "background": "#00ff4140",
+        "background": "#4000ff41",
         "foreground": "#000000",
-        "fieldIndicator": "#00ff4125"
+        "fieldIndicator": "#2500ff41"
     },
     "columnSeparator": {
         "enabled": false,
