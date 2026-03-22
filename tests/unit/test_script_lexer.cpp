@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "core/scripting/script_lexer.h"
+#include <5250script/script_lexer.h>
 #include <QtTest/QtTest>
 
 using namespace core::scripting;
