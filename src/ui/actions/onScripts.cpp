@@ -15,11 +15,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
-#include "core/scripting/script_compiler.h"
-#include "core/scripting/script_executor.h"
-#include "core/scripting/script_parser.h"
+#include "core/macro_to_script.h"
+#include <5250script/script_compiler.h>
+#include <5250script/script_executor.h>
+#include <5250script/script_parser.h>
 #include "ui/widgets/Frameless/BaseFramelessDialog.h"
 #include "ui/widgets/Frameless/StyledMessageBox.h"
+#include "ui/widgets/Q5250ScreenWidget/screen_buffer_adapter.h"
 #include <QApplication>
 #include <QDesktopServices>
 #include <QDir>
@@ -100,7 +102,7 @@ void MainWindow::onRecordScript() {
         if (result == QDialog::Accepted && !name.isEmpty()) {
             core::Macro macro = s->macroRecorder->finishRecording(name);
             // Convert to .5250script and save directly
-            QString scriptText = core::scripting::ScriptCompiler::macroToScript(macro);
+            QString scriptText = core::macroToScript(macro);
             QString safeName = core::MacroRecorder::sanitizeFileName(name);
             QString path = scriptsDir() + "/" + safeName + ".5250script";
             int suffix = 1;
@@ -267,7 +269,8 @@ void MainWindow::onRunScript(const QString &path) {
     if (!s->scriptExecutor) {
         s->scriptExecutor = new core::scripting::ScriptExecutor(s->container);
     }
-    s->scriptExecutor->setScreenWidget(s->displayWidget);
+    auto *screenAdapter = new core::scripting::ScreenBufferAdapter(s->displayWidget);
+    s->scriptExecutor->setScreen(screenAdapter);
 
     // Wire signals
     QPointer<ui::widgets::Q5250ScreenWidget> displayGuard = s->displayWidget;
@@ -367,7 +370,7 @@ void MainWindow::onRunScript(const QString &path) {
 
     // Finish
     *connFinish = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionFinished, this,
-        [=]() {
+        [=, screenAdapter = screenAdapter]() {
             QObject::disconnect(*connKeyPress);
             QObject::disconnect(*connAID);
             QObject::disconnect(*connMoveCursor);
@@ -380,6 +383,7 @@ void MainWindow::onRunScript(const QString &path) {
             QObject::disconnect(*connLog);
             QObject::disconnect(*connPause);
             QObject::disconnect(*connInput);
+            delete screenAdapter;
             if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
             if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
         });
@@ -621,7 +625,8 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
     if (!s->scriptExecutor) {
         s->scriptExecutor = new core::scripting::ScriptExecutor(s->container);
     }
-    s->scriptExecutor->setScreenWidget(s->displayWidget);
+    auto *startupScreenAdapter = new core::scripting::ScreenBufferAdapter(s->displayWidget);
+    s->scriptExecutor->setScreen(startupScreenAdapter);
     s->scriptExecutor->setInitialVariables(initialVars);
 
     // Wire signals (same as onRunScript)
@@ -714,7 +719,7 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
         s->scriptExecutor, &core::scripting::ScriptExecutor::notifyTerminalStateChanged);
 
     *connFinish = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionFinished, this,
-        [=]() {
+        [=, startupScreenAdapter = startupScreenAdapter]() {
             QObject::disconnect(*connKeyPress);
             QObject::disconnect(*connAID);
             QObject::disconnect(*connMoveCursor);
@@ -727,6 +732,7 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
             QObject::disconnect(*connLog);
             QObject::disconnect(*connPause);
             QObject::disconnect(*connInput);
+            delete startupScreenAdapter;
             if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
             if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
         });

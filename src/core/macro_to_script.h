@@ -16,27 +16,14 @@
 
 #pragma once
 
-#include "core/macro_recorder.h"
-#include <QMap>
-#include <QRegularExpression>
+#include "macro_recorder.h"
 #include <QString>
 
-namespace core::scripting {
+namespace core {
 
-struct ScriptMetadata {
-    QMap<QString, QString> values;
-    QString name() const        { return values.value("script.name"); }
-    QString author() const      { return values.value("script.author"); }
-    QString description() const { return values.value("script.description"); }
-    QString version() const     { return values.value("script.version"); }
-    QString menuPath() const    { return values.value("menu.path"); }
-};
+// Convert a recorded Macro into 5250script text.
+// This is a bridge between the 5250ng macro recording system and the
+// scripting language — it lives in the host application, not the library.
+QString macroToScript(const Macro &macro);
 
-class ScriptCompiler {
-  public:
-    static QString macroToScript(const Macro &macro);
-    static QString aidByteToKeyword(uint8_t aidByte);
-    static ScriptMetadata extractMetadata(const QString &scriptText);
-};
-
-} // namespace core::scripting
+} // namespace core

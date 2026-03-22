@@ -30,6 +30,10 @@ find_package(OpenSSL REQUIRED)
 set(TN5250_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(src/network/tn5250)
 
+# 5250script interpreter library (submodule)
+set(BUILD_5250SCRIPT_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(libs/5250script)
+
 # Source files organized by layer
 set(CORE_SOURCES
     src/core/ebcdic.cpp
@@ -50,16 +54,8 @@ set(CORE_SOURCES
     src/core/session_logger.h
     src/core/match_replace_engine.cpp
     src/core/match_replace_engine.h
-    src/core/scripting/script_token.h
-    src/core/scripting/script_ast.h
-    src/core/scripting/script_lexer.cpp
-    src/core/scripting/script_lexer.h
-    src/core/scripting/script_parser.cpp
-    src/core/scripting/script_parser.h
-    src/core/scripting/script_executor.cpp
-    src/core/scripting/script_executor.h
-    src/core/scripting/script_compiler.cpp
-    src/core/scripting/script_compiler.h
+    src/core/macro_to_script.cpp
+    src/core/macro_to_script.h
 )
 
 set(SESSION_SOURCES
@@ -143,6 +139,8 @@ set(UTILS_SOURCES
 set(DISPLAY_SOURCES
     src/ui/widgets/Q5250ScreenWidget/screen_buffer.cpp
     src/ui/widgets/Q5250ScreenWidget/screen_buffer.h
+    src/ui/widgets/Q5250ScreenWidget/screen_buffer_adapter.cpp
+    src/ui/widgets/Q5250ScreenWidget/screen_buffer_adapter.h
     src/ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.cpp
     src/ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h
     src/ui/widgets/Q5250ScreenWidget/Q5250Cursor.cpp
@@ -270,6 +268,7 @@ target_link_libraries(5250ng
         Qt6::Network
         OpenSSL::Crypto
         tn5250::tn5250
+        5250script
 )
 
 if(HAVE_QT6_SSL)
@@ -317,6 +316,7 @@ if(BUILD_TESTS)
             Qt6::Widgets
             OpenSSL::Crypto
             tn5250::tn5250
+            5250script
     )
     if(HAVE_QT6_SSL)
         target_link_libraries(tn5250_core PUBLIC Qt6::Ssl)

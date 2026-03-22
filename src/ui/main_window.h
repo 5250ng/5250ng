@@ -18,7 +18,7 @@
 
 #include "core/match_replace_engine.h"
 #include "core/macro_recorder.h"
-#include "core/scripting/script_executor.h"
+#include <5250script/script_executor.h>
 #include "core/session_logger.h"
 #include "logger/logger.h"
 #include "network/tn5250_qt/client/client.h"
