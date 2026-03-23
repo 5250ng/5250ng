@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "anthropic_provider.h"
+#include "agent/auth/auth_method.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -32,6 +33,8 @@ QStringList AnthropicProvider::availableModels() const {
 }
 
 bool AnthropicProvider::isConfigured() const {
+    if (m_authMethod && m_authMethod->isAuthenticated() && !m_model.isEmpty())
+        return true;
     return !m_apiKey.isEmpty() && !m_model.isEmpty();
 }
 
@@ -62,7 +65,11 @@ void AnthropicProvider::sendMessage(const QString &userMessage, const QString &s
     QNetworkRequest request(QUrl("https://api.anthropic.com/v1/messages"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("anthropic-version", "2023-06-01");
-    request.setRawHeader("x-api-key", m_apiKey.toUtf8());
+    if (m_authMethod) {
+        m_authMethod->applyAuth(request);
+    } else {
+        request.setRawHeader("x-api-key", m_apiKey.toUtf8());
+    }
 
     m_activeReply = m_nam.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
 

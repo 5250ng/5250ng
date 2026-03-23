@@ -16,6 +16,8 @@
 
 #include "main_window.h"
 #include "agent/config.h"
+#include "agent/auth/api_key_auth.h"
+#include "agent/auth/oauth_auth.h"
 #include "agent/providers/anthropic_provider.h"
 #include "agent/providers/openai_provider.h"
 #include "core/ebcdic.h"
@@ -245,13 +247,25 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
         agent::Provider *provider = nullptr;
         if (cfg.activeProviderId() == "anthropic") {
             auto *p = new agent::AnthropicProvider(session->agentPanel);
-            p->setApiKey(cfg.anthropicApiKey());
             p->setModel(cfg.anthropicModel());
+            if (cfg.anthropicAuthType() == agent::AuthType::OAuth) {
+                auto *auth = new agent::OAuthAuth(cfg.anthropicOAuthConfig(), "anthropic", p);
+                auth->loadFromStorage();
+                p->setAuthMethod(auth);
+            } else {
+                p->setApiKey(cfg.anthropicApiKey());
+            }
             provider = p;
         } else {
             auto *p = new agent::OpenAiProvider(session->agentPanel);
-            p->setApiKey(cfg.openaiApiKey());
             p->setModel(cfg.openaiModel());
+            if (cfg.openaiAuthType() == agent::AuthType::OAuth) {
+                auto *auth = new agent::OAuthAuth(cfg.openaiOAuthConfig(), "openai", p);
+                auth->loadFromStorage();
+                p->setAuthMethod(auth);
+            } else {
+                p->setApiKey(cfg.openaiApiKey());
+            }
             provider = p;
         }
         session->agentPanel->setProvider(provider);
@@ -552,6 +566,39 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     session->thread->start();
     // Status indicator will be updated via worker stateChanged signal
     updateEmptyState();
+}
+
+void MainWindow::refreshAgentProviders() {
+    auto &cfg = agent::AgentConfig::instance();
+    cfg.load();
+    for (Session *session : m_sessions) {
+        if (!session->agentPanel) continue;
+        agent::Provider *provider = nullptr;
+        if (cfg.activeProviderId() == "anthropic") {
+            auto *p = new agent::AnthropicProvider(session->agentPanel);
+            p->setModel(cfg.anthropicModel());
+            if (cfg.anthropicAuthType() == agent::AuthType::OAuth) {
+                auto *auth = new agent::OAuthAuth(cfg.anthropicOAuthConfig(), "anthropic", p);
+                auth->loadFromStorage();
+                p->setAuthMethod(auth);
+            } else {
+                p->setApiKey(cfg.anthropicApiKey());
+            }
+            provider = p;
+        } else {
+            auto *p = new agent::OpenAiProvider(session->agentPanel);
+            p->setModel(cfg.openaiModel());
+            if (cfg.openaiAuthType() == agent::AuthType::OAuth) {
+                auto *auth = new agent::OAuthAuth(cfg.openaiOAuthConfig(), "openai", p);
+                auth->loadFromStorage();
+                p->setAuthMethod(auth);
+            } else {
+                p->setApiKey(cfg.openaiApiKey());
+            }
+            provider = p;
+        }
+        session->agentPanel->setProvider(provider);
+    }
 }
 
 void MainWindow::onToggleCursorRules() {

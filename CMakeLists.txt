@@ -117,8 +117,19 @@ set(HOSTSERVER_SOURCES
 
 set(AGENT_SOURCES
     src/agent/provider.h
+    src/agent/provider.cpp
     src/agent/config.h
     src/agent/config.cpp
+    src/agent/auth/auth_method.h
+    src/agent/auth/api_key_auth.h
+    src/agent/auth/api_key_auth.cpp
+    src/agent/auth/oauth_config.h
+    src/agent/auth/oauth_auth.h
+    src/agent/auth/oauth_auth.cpp
+    src/agent/auth/oauth_flow.h
+    src/agent/auth/oauth_flow.cpp
+    src/agent/auth/token_storage.h
+    src/agent/auth/token_storage.cpp
     src/agent/providers/openai_provider.h
     src/agent/providers/openai_provider.cpp
     src/agent/providers/anthropic_provider.h
