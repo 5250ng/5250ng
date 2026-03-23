@@ -407,9 +407,9 @@ void TestScriptParser::testIfElseEndif() {
     QCOMPARE(result.root->children.size(), 1);
     auto ifNode = result.root->children[0];
     QCOMPARE(ifNode->type, NodeType::If);
-    QCOMPARE(ifNode->condLeft, "$X");
-    QCOMPARE(ifNode->condOp, CompareOp::Eq);
-    QCOMPARE(ifNode->condRight, "OK");
+    QCOMPARE(ifNode->condition->left, "$X");
+    QCOMPARE(ifNode->condition->op, CompareOp::Eq);
+    QCOMPARE(ifNode->condition->right, "OK");
     QCOMPARE(ifNode->children.size(), 1);
     QCOMPARE(ifNode->elseChildren.size(), 1);
 }
@@ -809,9 +809,9 @@ void TestScriptParser::testIfContains() {
     QVERIFY(!result.hasErrors());
     auto ifNode = result.root->children[0];
     QCOMPARE(ifNode->type, NodeType::If);
-    QCOMPARE(ifNode->condLeft, "$line");
-    QCOMPARE(ifNode->condOp, CompareOp::Contains);
-    QCOMPARE(ifNode->condRight, "Poda");
+    QCOMPARE(ifNode->condition->left, "$line");
+    QCOMPARE(ifNode->condition->op, CompareOp::Contains);
+    QCOMPARE(ifNode->condition->right, "Poda");
     QCOMPARE(ifNode->children.size(), 1);
 
     // WHILE with CONTAINS
@@ -822,7 +822,7 @@ void TestScriptParser::testIfContains() {
     );
     QVERIFY(!result.hasErrors());
     auto whileNode = result.root->children[0];
-    QCOMPARE(whileNode->condOp, CompareOp::Contains);
+    QCOMPARE(whileNode->condition->op, CompareOp::Contains);
 }
 
 void TestScriptParser::testInput() {
@@ -864,8 +864,8 @@ void TestScriptParser::testIfIsset() {
     QVERIFY(!result.hasErrors());
     auto ifNode = result.root->children[0];
     QCOMPARE(ifNode->type, NodeType::If);
-    QCOMPARE(ifNode->condLeft, "$SESSION_USERNAME");
-    QCOMPARE(ifNode->condOp, CompareOp::IsSet);
+    QCOMPARE(ifNode->condition->left, "$SESSION_USERNAME");
+    QCOMPARE(ifNode->condition->op, CompareOp::IsSet);
     QCOMPARE(ifNode->children.size(), 1);
     QCOMPARE(ifNode->elseChildren.size(), 1);
 }
@@ -880,8 +880,8 @@ void TestScriptParser::testWhileIsset() {
     QVERIFY(!result.hasErrors());
     auto whileNode = result.root->children[0];
     QCOMPARE(whileNode->type, NodeType::While);
-    QCOMPARE(whileNode->condLeft, "$FLAG");
-    QCOMPARE(whileNode->condOp, CompareOp::IsSet);
+    QCOMPARE(whileNode->condition->left, "$FLAG");
+    QCOMPARE(whileNode->condition->op, CompareOp::IsSet);
     QCOMPARE(whileNode->children.size(), 1);
 }
 
