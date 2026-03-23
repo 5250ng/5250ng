@@ -58,11 +58,11 @@ int main(int argc, char *argv[]) {
     parser.addOption(tlsOption);
 
     // Session option (load saved session by name)
-    QCommandLineOption sessionOption(QStringList() << "s" << "session", "Load a saved session by name", "name");
+    QCommandLineOption sessionOption(QStringList() << "s" << "load-session-from-name", "Load a saved session by name", "name");
     parser.addOption(sessionOption);
 
     // Session file option (load session from JSON file path)
-    QCommandLineOption sessionFileOption(QStringList() << "f" << "session-file", "Load a session from a JSON file", "path");
+    QCommandLineOption sessionFileOption(QStringList() << "f" << "load-session-from-file", "Load a session from a JSON file", "path");
     parser.addOption(sessionFileOption);
 
     parser.process(app);
