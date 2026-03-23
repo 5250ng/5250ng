@@ -124,6 +124,9 @@ set(AGENT_SOURCES
     src/agent/tool_definitions.h
     src/agent/agent_script_runner.h
     src/agent/agent_script_runner.cpp
+    src/agent/script_generator.h
+    src/agent/script_generator.cpp
+    src/agent/prompts/prompts.qrc
     src/agent/auth/auth_method.h
     src/agent/auth/api_key_auth.h
     src/agent/auth/api_key_auth.cpp

@@ -30,6 +30,7 @@
 
 namespace agent {
 class AgentScriptRunner;
+class ScriptGeneratorSubagent;
 }
 
 namespace ui::widgets {
@@ -66,6 +67,9 @@ class QAgentPanelWidget : public QWidget {
     void onRunScriptClicked();
     void onCancelScriptClicked();
     void onScriptFinished(bool success, const QString &log);
+    void onGenerateScriptToolCall(const agent::ToolCall &call);
+    void onScriptGenerated(const QString &toolCallId, const QString &script);
+    void onScriptGenerationError(const QString &toolCallId, const QString &error);
     void appendScriptBlock(const QString &script);
 
     QLabel *m_headerLabel;
@@ -81,6 +85,7 @@ class QAgentPanelWidget : public QWidget {
     agent::Provider *m_provider = nullptr;
     Q5250ScreenWidget *m_displayWidget = nullptr;
     agent::AgentScriptRunner *m_scriptRunner = nullptr;
+    agent::ScriptGeneratorSubagent *m_scriptGenerator = nullptr;
     QString m_screenContext;
 
     // Pending tool call state

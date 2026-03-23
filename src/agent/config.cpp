@@ -25,11 +25,12 @@ static const QString kDefaultSystemPrompt =
     "When the user sends a message, you will also receive the current screen content "
     "so you can see what they are looking at. Provide concise, helpful answers about "
     "5250 commands, CL commands, RPG, COBOL, DDS, and general IBM i administration.\n\n"
-    "You have the ability to execute 5250scripts on the terminal session using the run_5250script tool. "
-    "Use this when the user asks you to perform actions on the terminal (navigate menus, run commands, fill fields, etc.). "
-    "Always begin scripts with EXPECT KEYBOARD UNLOCKED to wait for the terminal to be ready. "
-    "After pressing ENTER or function keys, use EXPECT to wait for the screen to update before continuing. "
-    "Keep scripts focused and short. If a task requires many steps, break it into smaller scripts.";
+    "You have two tools for terminal automation:\n"
+    "- generate_5250script: Generate a script from a task description using a specialized subagent. "
+    "Always use this tool to create scripts — the subagent has the complete 5250script language reference.\n"
+    "- run_5250script: Execute a 5250script on the terminal. Use this to run scripts returned by generate_5250script.\n\n"
+    "Typical flow: call generate_5250script with the task description, then call run_5250script with the generated script. "
+    "If a task requires many steps, break it into smaller scripts.";
 
 AgentConfig::AgentConfig()
     : m_activeProviderId("openai"),
