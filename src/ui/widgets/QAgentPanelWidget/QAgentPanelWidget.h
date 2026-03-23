@@ -19,9 +19,10 @@
 #include "agent/provider.h"
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
-#include <QTextEdit>
+#include <QTextBrowser>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -42,16 +43,27 @@ class QAgentPanelWidget : public QWidget {
   signals:
     void messageSubmitted(const QString &text);
 
+  protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
   private:
     void setInputEnabled(bool enabled);
+    void submitMessage();
+    void showThinkingIndicator();
+    void removeThinkingIndicator();
 
     QLabel *m_headerLabel;
-    QTextEdit *m_chatHistory;
-    QLineEdit *m_inputField;
+    QPushButton *m_clearButton;
+    QTextBrowser *m_chatHistory;
+    QPlainTextEdit *m_inputField;
     QPushButton *m_sendButton;
 
     agent::Provider *m_provider = nullptr;
     QString m_screenContext;
+
+    QTimer *m_thinkingTimer;
+    int m_thinkingDots = 0;
+    int m_thinkingBlockPosition = -1;
 };
 
 } // namespace ui::widgets

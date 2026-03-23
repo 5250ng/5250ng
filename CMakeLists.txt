@@ -132,6 +132,8 @@ set(AGENT_SOURCES
     src/agent/auth/token_storage.cpp
     src/agent/providers/openai_provider.h
     src/agent/providers/openai_provider.cpp
+    src/agent/markdown_converter.h
+    src/agent/markdown_converter.cpp
     src/agent/providers/anthropic_provider.h
     src/agent/providers/anthropic_provider.cpp
 )
