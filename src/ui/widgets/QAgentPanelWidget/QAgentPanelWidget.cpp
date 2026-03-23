@@ -80,6 +80,7 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
 void QAgentPanelWidget::setProvider(agent::Provider *provider) {
     if (m_provider) {
         disconnect(m_provider, nullptr, this, nullptr);
+        m_provider->deleteLater();
     }
     m_provider = provider;
     if (m_provider) {

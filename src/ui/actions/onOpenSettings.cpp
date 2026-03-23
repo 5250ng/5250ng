@@ -60,5 +60,9 @@ void MainWindow::onOpenSettings() {
         m_currentSession.setTerminalThemeId(t.id);
     });
 
+    // Refresh agent providers on all sessions when config changes
+    connect(&dlg, &SettingsDialog::agentConfigChanged,
+            this, &MainWindow::refreshAgentProviders);
+
     dlg.exec();
 }

@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "openai_provider.h"
+#include "agent/auth/auth_method.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -34,6 +35,8 @@ QStringList OpenAiProvider::availableModels() const {
 }
 
 bool OpenAiProvider::isConfigured() const {
+    if (m_authMethod && m_authMethod->isAuthenticated() && !m_model.isEmpty())
+        return true;
     return !m_apiKey.isEmpty() && !m_model.isEmpty();
 }
 
@@ -64,7 +67,11 @@ void OpenAiProvider::sendMessage(const QString &userMessage, const QString &syst
 
     QNetworkRequest request(QUrl("https://api.openai.com/v1/chat/completions"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    request.setRawHeader("Authorization", ("Bearer " + m_apiKey).toUtf8());
+    if (m_authMethod) {
+        m_authMethod->applyAuth(request);
+    } else {
+        request.setRawHeader("Authorization", ("Bearer " + m_apiKey).toUtf8());
+    }
 
     m_activeReply = m_nam.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
 

@@ -30,11 +30,45 @@ AgentConfig::AgentConfig()
     : m_activeProviderId("openai"),
       m_openaiModel("gpt-4o"),
       m_anthropicModel("claude-sonnet-4-20250514"),
-      m_systemPrompt(kDefaultSystemPrompt) {}
+      m_systemPrompt(kDefaultSystemPrompt) {
+    // Default Anthropic OAuth endpoints
+    m_anthropicOAuth.authorizationEndpoint = "https://console.anthropic.com/oauth/authorize";
+    m_anthropicOAuth.tokenEndpoint = "https://console.anthropic.com/v1/oauth/token";
+    m_anthropicOAuth.scope = "user:inference";
+    m_anthropicOAuth.providerName = "Claude (Anthropic)";
+}
 
 AgentConfig &AgentConfig::instance() {
     static AgentConfig s;
     return s;
+}
+
+static AuthType stringToAuthType(const QString &s) {
+    if (s == "oauth") return AuthType::OAuth;
+    return AuthType::ApiKey;
+}
+
+static QString authTypeToString(AuthType t) {
+    switch (t) {
+    case AuthType::OAuth: return "oauth";
+    default: return "apikey";
+    }
+}
+
+static void loadOAuthConfig(QSettings &settings, const QString &prefix, OAuthConfig &cfg) {
+    cfg.authorizationEndpoint = settings.value(prefix + "AuthEndpoint", cfg.authorizationEndpoint).toString();
+    cfg.tokenEndpoint = settings.value(prefix + "TokenEndpoint", cfg.tokenEndpoint).toString();
+    cfg.clientId = settings.value(prefix + "ClientId", cfg.clientId).toString();
+    cfg.scope = settings.value(prefix + "Scope", cfg.scope).toString();
+    cfg.providerName = settings.value(prefix + "ProviderName", cfg.providerName).toString();
+}
+
+static void saveOAuthConfig(QSettings &settings, const QString &prefix, const OAuthConfig &cfg) {
+    settings.setValue(prefix + "AuthEndpoint", cfg.authorizationEndpoint);
+    settings.setValue(prefix + "TokenEndpoint", cfg.tokenEndpoint);
+    settings.setValue(prefix + "ClientId", cfg.clientId);
+    settings.setValue(prefix + "Scope", cfg.scope);
+    settings.setValue(prefix + "ProviderName", cfg.providerName);
 }
 
 void AgentConfig::load() {
@@ -46,6 +80,13 @@ void AgentConfig::load() {
     m_anthropicApiKey = settings.value("anthropicApiKey").toString();
     m_anthropicModel = settings.value("anthropicModel", m_anthropicModel).toString();
     m_systemPrompt = settings.value("systemPrompt", m_systemPrompt).toString();
+
+    m_anthropicAuthType = stringToAuthType(settings.value("anthropicAuthType", "apikey").toString());
+    m_openaiAuthType = stringToAuthType(settings.value("openaiAuthType", "apikey").toString());
+
+    loadOAuthConfig(settings, "anthropicOAuth", m_anthropicOAuth);
+    loadOAuthConfig(settings, "openaiOAuth", m_openaiOAuth);
+
     settings.endGroup();
 }
 
@@ -58,6 +99,13 @@ void AgentConfig::save() {
     settings.setValue("anthropicApiKey", m_anthropicApiKey);
     settings.setValue("anthropicModel", m_anthropicModel);
     settings.setValue("systemPrompt", m_systemPrompt);
+
+    settings.setValue("anthropicAuthType", authTypeToString(m_anthropicAuthType));
+    settings.setValue("openaiAuthType", authTypeToString(m_openaiAuthType));
+
+    saveOAuthConfig(settings, "anthropicOAuth", m_anthropicOAuth);
+    saveOAuthConfig(settings, "openaiOAuth", m_openaiOAuth);
+
     settings.endGroup();
 }
 

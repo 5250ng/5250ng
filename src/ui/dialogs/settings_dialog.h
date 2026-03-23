@@ -32,6 +32,8 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+namespace agent { class OAuthAuth; }
+
 class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     Q_OBJECT
 
@@ -48,6 +50,7 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
   signals:
     void terminalThemeApplyRequested(const ui::themes::TerminalTheme &theme);
     void terminalThemeApplyToAllRequested(const ui::themes::TerminalTheme &theme);
+    void agentConfigChanged();
 
   private slots:
     void onCategoryChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
@@ -62,8 +65,12 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QWidget *buildAgentPage();
     void ensureThemesLoaded();
     void onAgentProviderChanged(int index);
+    void onAgentAuthTypeChanged(int index);
     void onAgentTestClicked();
     void onAgentSaveClicked();
+    void onOAuthSignInClicked();
+    void onOAuthSignOutClicked();
+    void updateOAuthStatus();
     void onMacrosSaveClicked();
 
     QSplitter *m_splitter;
@@ -86,9 +93,25 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     // Agent page widgets
     QWidget *m_agentPage;
     QComboBox *m_agentProviderCombo;
+    QComboBox *m_agentAuthTypeCombo;
+    QStackedWidget *m_authStack;
+
+    // API Key auth widgets (stack index 0)
     QLineEdit *m_agentApiKeyEdit;
     QPushButton *m_agentTestBtn;
+
+    // OAuth auth widgets (stack index 1)
+    QLineEdit *m_oauthClientIdEdit;
+    QLineEdit *m_oauthAuthEndpointEdit;
+    QLineEdit *m_oauthTokenEndpointEdit;
+    QLineEdit *m_oauthScopeEdit;
+    QPushButton *m_oauthSignInBtn;
+    QPushButton *m_oauthSignOutBtn;
+    QLabel *m_oauthStatusLabel;
+
     QComboBox *m_agentModelCombo;
     QTextEdit *m_agentSystemPromptEdit;
     QPushButton *m_agentSaveBtn;
+
+    agent::OAuthAuth *m_activeOAuth = nullptr;
 };

@@ -119,6 +119,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void setupMenuBar();
     void setupStatusBar();
     void connectToServer(const session::SessionConfig &config);
+    void refreshAgentProviders();
     void setActiveSession(int index);
     void openContextMenuForTab(const QPoint &pos);
 

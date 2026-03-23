@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "auth/auth_method.h"
+#include "auth/oauth_config.h"
 #include <QString>
 
 namespace agent {
@@ -42,9 +44,22 @@ class AgentConfig {
     QString anthropicModel() const { return m_anthropicModel; }
     void setAnthropicModel(const QString &model) { m_anthropicModel = model; }
 
-
     QString systemPrompt() const { return m_systemPrompt; }
     void setSystemPrompt(const QString &prompt) { m_systemPrompt = prompt; }
+
+    // Auth type per provider (defaults to ApiKey)
+    AuthType anthropicAuthType() const { return m_anthropicAuthType; }
+    void setAnthropicAuthType(AuthType type) { m_anthropicAuthType = type; }
+
+    AuthType openaiAuthType() const { return m_openaiAuthType; }
+    void setOpenaiAuthType(AuthType type) { m_openaiAuthType = type; }
+
+    // OAuth configuration per provider
+    OAuthConfig anthropicOAuthConfig() const { return m_anthropicOAuth; }
+    void setAnthropicOAuthConfig(const OAuthConfig &cfg) { m_anthropicOAuth = cfg; }
+
+    OAuthConfig openaiOAuthConfig() const { return m_openaiOAuth; }
+    void setOpenaiOAuthConfig(const OAuthConfig &cfg) { m_openaiOAuth = cfg; }
 
   private:
     AgentConfig();
@@ -55,6 +70,11 @@ class AgentConfig {
     QString m_anthropicApiKey;
     QString m_anthropicModel;
     QString m_systemPrompt;
+
+    AuthType m_anthropicAuthType = AuthType::ApiKey;
+    AuthType m_openaiAuthType = AuthType::ApiKey;
+    OAuthConfig m_anthropicOAuth;
+    OAuthConfig m_openaiOAuth;
 };
 
 } // namespace agent

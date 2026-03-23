@@ -22,6 +22,8 @@
 
 namespace agent {
 
+class AuthMethod;
+
 class Provider : public QObject {
     Q_OBJECT
 
@@ -41,10 +43,18 @@ class Provider : public QObject {
     virtual QString apiKey() const = 0;
     virtual QString model() const = 0;
 
+    /// Set an authentication method. Takes ownership.
+    /// When set, providers should delegate auth header logic to this object.
+    void setAuthMethod(AuthMethod *auth);
+    AuthMethod *authMethod() const { return m_authMethod; }
+
   signals:
     void responseReceived(const QString &text);
     void responseError(const QString &error);
     void streamingChunk(const QString &chunk);
+
+  protected:
+    AuthMethod *m_authMethod = nullptr;
 };
 
 } // namespace agent

@@ -17,6 +17,9 @@
 #include "settings_dialog.h"
 #include "agent/config.h"
 #include "core/macro_config.h"
+#include "agent/auth/api_key_auth.h"
+#include "agent/auth/oauth_auth.h"
+#include "agent/auth/token_storage.h"
 #include "agent/providers/anthropic_provider.h"
 #include "agent/providers/openai_provider.h"
 #include <QApplication>
@@ -145,22 +148,93 @@ QWidget *SettingsDialog::buildAgentPage() {
     providerRow->addWidget(m_agentProviderCombo, 1);
     layout->addLayout(providerRow);
 
+    // Auth type selection
+    QHBoxLayout *authTypeRow = new QHBoxLayout();
+    authTypeRow->addWidget(new QLabel("Authentication:", page));
+    m_agentAuthTypeCombo = new QComboBox(page);
+    m_agentAuthTypeCombo->addItem("API Key", static_cast<int>(agent::AuthType::ApiKey));
+    m_agentAuthTypeCombo->addItem("OAuth (Browser Sign-in)", static_cast<int>(agent::AuthType::OAuth));
+    authTypeRow->addWidget(m_agentAuthTypeCombo, 1);
+    layout->addLayout(authTypeRow);
+
     // Separator
     QFrame *sep1 = new QFrame(page);
     sep1->setFrameShape(QFrame::HLine);
     sep1->setFrameShadow(QFrame::Sunken);
     layout->addWidget(sep1);
 
-    // API Key
+    // Auth stacked widget
+    m_authStack = new QStackedWidget(page);
+
+    // --- Stack index 0: API Key ---
+    QWidget *apiKeyPage = new QWidget(m_authStack);
+    QVBoxLayout *apiKeyLayout = new QVBoxLayout(apiKeyPage);
+    apiKeyLayout->setContentsMargins(0, 0, 0, 0);
     QHBoxLayout *keyRow = new QHBoxLayout();
-    keyRow->addWidget(new QLabel("API Key:", page));
-    m_agentApiKeyEdit = new QLineEdit(page);
+    keyRow->addWidget(new QLabel("API Key:", apiKeyPage));
+    m_agentApiKeyEdit = new QLineEdit(apiKeyPage);
     m_agentApiKeyEdit->setEchoMode(QLineEdit::Password);
     m_agentApiKeyEdit->setPlaceholderText("Enter your API key...");
     keyRow->addWidget(m_agentApiKeyEdit, 1);
-    m_agentTestBtn = new QPushButton("Test", page);
+    m_agentTestBtn = new QPushButton("Test", apiKeyPage);
     keyRow->addWidget(m_agentTestBtn);
-    layout->addLayout(keyRow);
+    apiKeyLayout->addLayout(keyRow);
+    m_authStack->addWidget(apiKeyPage);
+
+    // --- Stack index 1: OAuth ---
+    QWidget *oauthPage = new QWidget(m_authStack);
+    QVBoxLayout *oauthLayout = new QVBoxLayout(oauthPage);
+    oauthLayout->setContentsMargins(0, 0, 0, 0);
+
+    QHBoxLayout *clientIdRow = new QHBoxLayout();
+    clientIdRow->addWidget(new QLabel("Client ID:", oauthPage));
+    m_oauthClientIdEdit = new QLineEdit(oauthPage);
+    m_oauthClientIdEdit->setPlaceholderText("Your OAuth client ID");
+    clientIdRow->addWidget(m_oauthClientIdEdit, 1);
+    oauthLayout->addLayout(clientIdRow);
+
+    QHBoxLayout *authEndpointRow = new QHBoxLayout();
+    authEndpointRow->addWidget(new QLabel("Auth Endpoint:", oauthPage));
+    m_oauthAuthEndpointEdit = new QLineEdit(oauthPage);
+    m_oauthAuthEndpointEdit->setPlaceholderText("https://console.anthropic.com/oauth/authorize");
+    authEndpointRow->addWidget(m_oauthAuthEndpointEdit, 1);
+    oauthLayout->addLayout(authEndpointRow);
+
+    QHBoxLayout *tokenEndpointRow = new QHBoxLayout();
+    tokenEndpointRow->addWidget(new QLabel("Token Endpoint:", oauthPage));
+    m_oauthTokenEndpointEdit = new QLineEdit(oauthPage);
+    m_oauthTokenEndpointEdit->setPlaceholderText("https://console.anthropic.com/v1/oauth/token");
+    tokenEndpointRow->addWidget(m_oauthTokenEndpointEdit, 1);
+    oauthLayout->addLayout(tokenEndpointRow);
+
+    QHBoxLayout *scopeRow = new QHBoxLayout();
+    scopeRow->addWidget(new QLabel("Scope:", oauthPage));
+    m_oauthScopeEdit = new QLineEdit(oauthPage);
+    m_oauthScopeEdit->setPlaceholderText("user:inference");
+    scopeRow->addWidget(m_oauthScopeEdit, 1);
+    oauthLayout->addLayout(scopeRow);
+
+    QLabel *oauthNote = new QLabel(oauthPage);
+    oauthNote->setWordWrap(true);
+    oauthNote->setStyleSheet("color: gray; font-size: 11px;");
+    oauthNote->setText(
+        "Note: Anthropic OAuth endpoints are pre-filled. "
+        "A registered Client ID is required. "
+        "Anthropic currently restricts OAuth to first-party applications.");
+    oauthLayout->addWidget(oauthNote);
+
+    QHBoxLayout *oauthBtnRow = new QHBoxLayout();
+    m_oauthSignInBtn = new QPushButton("Sign In with Browser", oauthPage);
+    m_oauthSignOutBtn = new QPushButton("Sign Out", oauthPage);
+    m_oauthStatusLabel = new QLabel("Not signed in", oauthPage);
+    m_oauthStatusLabel->setStyleSheet("color: gray; font-style: italic;");
+    oauthBtnRow->addWidget(m_oauthSignInBtn);
+    oauthBtnRow->addWidget(m_oauthSignOutBtn);
+    oauthBtnRow->addWidget(m_oauthStatusLabel, 1);
+    oauthLayout->addLayout(oauthBtnRow);
+
+    m_authStack->addWidget(oauthPage);
+    layout->addWidget(m_authStack);
 
     // Model
     QHBoxLayout *modelRow = new QHBoxLayout();
@@ -199,8 +273,12 @@ QWidget *SettingsDialog::buildAgentPage() {
     // Connections
     connect(m_agentProviderCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SettingsDialog::onAgentProviderChanged);
+    connect(m_agentAuthTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SettingsDialog::onAgentAuthTypeChanged);
     connect(m_agentTestBtn, &QPushButton::clicked, this, &SettingsDialog::onAgentTestClicked);
     connect(m_agentSaveBtn, &QPushButton::clicked, this, &SettingsDialog::onAgentSaveClicked);
+    connect(m_oauthSignInBtn, &QPushButton::clicked, this, &SettingsDialog::onOAuthSignInClicked);
+    connect(m_oauthSignOutBtn, &QPushButton::clicked, this, &SettingsDialog::onOAuthSignOutClicked);
 
     return page;
 }
@@ -266,13 +344,41 @@ void SettingsDialog::onAgentProviderChanged(int index) {
         m_agentApiKeyEdit->setText(cfg.openaiApiKey());
         int modelIdx = m_agentModelCombo->findText(cfg.openaiModel());
         if (modelIdx >= 0) m_agentModelCombo->setCurrentIndex(modelIdx);
+
+        // Set auth type
+        int authIdx = (cfg.openaiAuthType() == agent::AuthType::OAuth) ? 1 : 0;
+        m_agentAuthTypeCombo->setCurrentIndex(authIdx);
+
+        // Load OAuth config
+        auto oauthCfg = cfg.openaiOAuthConfig();
+        m_oauthClientIdEdit->setText(oauthCfg.clientId);
+        m_oauthAuthEndpointEdit->setText(oauthCfg.authorizationEndpoint);
+        m_oauthTokenEndpointEdit->setText(oauthCfg.tokenEndpoint);
+        m_oauthScopeEdit->setText(oauthCfg.scope);
     } else {
         agent::AnthropicProvider tmp;
         m_agentModelCombo->addItems(tmp.availableModels());
         m_agentApiKeyEdit->setText(cfg.anthropicApiKey());
         int modelIdx = m_agentModelCombo->findText(cfg.anthropicModel());
         if (modelIdx >= 0) m_agentModelCombo->setCurrentIndex(modelIdx);
+
+        // Set auth type
+        int authIdx = (cfg.anthropicAuthType() == agent::AuthType::OAuth) ? 1 : 0;
+        m_agentAuthTypeCombo->setCurrentIndex(authIdx);
+
+        // Load OAuth config
+        auto oauthCfg = cfg.anthropicOAuthConfig();
+        m_oauthClientIdEdit->setText(oauthCfg.clientId);
+        m_oauthAuthEndpointEdit->setText(oauthCfg.authorizationEndpoint);
+        m_oauthTokenEndpointEdit->setText(oauthCfg.tokenEndpoint);
+        m_oauthScopeEdit->setText(oauthCfg.scope);
     }
+
+    updateOAuthStatus();
+}
+
+void SettingsDialog::onAgentAuthTypeChanged(int index) {
+    m_authStack->setCurrentIndex(index);
 }
 
 void SettingsDialog::onAgentTestClicked() {
@@ -318,17 +424,112 @@ void SettingsDialog::onAgentSaveClicked() {
     QString providerId = m_agentProviderCombo->currentData().toString();
     cfg.setActiveProviderId(providerId);
 
+    auto authType = static_cast<agent::AuthType>(m_agentAuthTypeCombo->currentData().toInt());
+
     if (providerId == "openai") {
         cfg.setOpenaiApiKey(m_agentApiKeyEdit->text().trimmed());
         cfg.setOpenaiModel(m_agentModelCombo->currentText());
+        cfg.setOpenaiAuthType(authType);
+        agent::OAuthConfig oauthCfg;
+        oauthCfg.clientId = m_oauthClientIdEdit->text().trimmed();
+        oauthCfg.authorizationEndpoint = m_oauthAuthEndpointEdit->text().trimmed();
+        oauthCfg.tokenEndpoint = m_oauthTokenEndpointEdit->text().trimmed();
+        oauthCfg.scope = m_oauthScopeEdit->text().trimmed();
+        oauthCfg.providerName = "OpenAI";
+        cfg.setOpenaiOAuthConfig(oauthCfg);
     } else {
         cfg.setAnthropicApiKey(m_agentApiKeyEdit->text().trimmed());
         cfg.setAnthropicModel(m_agentModelCombo->currentText());
+        cfg.setAnthropicAuthType(authType);
+        agent::OAuthConfig oauthCfg;
+        oauthCfg.clientId = m_oauthClientIdEdit->text().trimmed();
+        oauthCfg.authorizationEndpoint = m_oauthAuthEndpointEdit->text().trimmed();
+        oauthCfg.tokenEndpoint = m_oauthTokenEndpointEdit->text().trimmed();
+        oauthCfg.scope = m_oauthScopeEdit->text().trimmed();
+        oauthCfg.providerName = "Claude (Anthropic)";
+        cfg.setAnthropicOAuthConfig(oauthCfg);
     }
     cfg.setSystemPrompt(m_agentSystemPromptEdit->toPlainText());
     cfg.save();
+    emit agentConfigChanged();
 
     QMessageBox::information(this, "Agent Settings", "Settings saved.");
+}
+
+void SettingsDialog::onOAuthSignInClicked() {
+    QString clientId = m_oauthClientIdEdit->text().trimmed();
+    QString authEndpoint = m_oauthAuthEndpointEdit->text().trimmed();
+    QString tokenEndpoint = m_oauthTokenEndpointEdit->text().trimmed();
+
+    if (clientId.isEmpty() || authEndpoint.isEmpty() || tokenEndpoint.isEmpty()) {
+        QMessageBox::warning(this, "OAuth Sign In",
+                             "Please fill in the Client ID, Auth Endpoint, and Token Endpoint.");
+        return;
+    }
+
+    agent::OAuthConfig oauthCfg;
+    oauthCfg.clientId = clientId;
+    oauthCfg.authorizationEndpoint = authEndpoint;
+    oauthCfg.tokenEndpoint = tokenEndpoint;
+    oauthCfg.scope = m_oauthScopeEdit->text().trimmed();
+
+    QString providerId = m_agentProviderCombo->currentData().toString();
+
+    if (m_activeOAuth) {
+        m_activeOAuth->deleteLater();
+    }
+    m_activeOAuth = new agent::OAuthAuth(oauthCfg, providerId, this);
+
+    m_oauthSignInBtn->setEnabled(false);
+    m_oauthSignInBtn->setText("Waiting for browser...");
+    m_oauthStatusLabel->setText("Opening browser...");
+
+    connect(m_activeOAuth, &agent::AuthMethod::authenticationSucceeded, this, [this]() {
+        m_oauthSignInBtn->setEnabled(true);
+        m_oauthSignInBtn->setText("Sign In with Browser");
+        updateOAuthStatus();
+        QMessageBox::information(this, "OAuth", "Successfully signed in!");
+    });
+    connect(m_activeOAuth, &agent::AuthMethod::authenticationFailed, this, [this](const QString &error) {
+        m_oauthSignInBtn->setEnabled(true);
+        m_oauthSignInBtn->setText("Sign In with Browser");
+        m_oauthStatusLabel->setText("Not signed in");
+        m_oauthStatusLabel->setStyleSheet("color: red; font-style: italic;");
+        QMessageBox::critical(this, "OAuth", "Sign in failed:\n" + error);
+    });
+
+    m_activeOAuth->authenticate();
+}
+
+void SettingsDialog::onOAuthSignOutClicked() {
+    QString providerId = m_agentProviderCombo->currentData().toString();
+    agent::TokenStorage::instance().clearTokens(providerId);
+    if (m_activeOAuth) {
+        m_activeOAuth->logout();
+        m_activeOAuth->deleteLater();
+        m_activeOAuth = nullptr;
+    }
+    updateOAuthStatus();
+    QMessageBox::information(this, "OAuth", "Signed out.");
+}
+
+void SettingsDialog::updateOAuthStatus() {
+    QString providerId = m_agentProviderCombo->currentData().toString();
+    QString accessToken, refreshToken;
+    QDateTime expiresAt;
+    if (agent::TokenStorage::instance().loadTokens(providerId, accessToken, refreshToken, expiresAt)) {
+        if (QDateTime::currentDateTimeUtc() < expiresAt) {
+            m_oauthStatusLabel->setText("Signed in (expires " +
+                                        expiresAt.toLocalTime().toString("yyyy-MM-dd hh:mm") + ")");
+            m_oauthStatusLabel->setStyleSheet("color: green; font-style: italic;");
+        } else {
+            m_oauthStatusLabel->setText("Token expired - please sign in again");
+            m_oauthStatusLabel->setStyleSheet("color: orange; font-style: italic;");
+        }
+    } else {
+        m_oauthStatusLabel->setText("Not signed in");
+        m_oauthStatusLabel->setStyleSheet("color: gray; font-style: italic;");
+    }
 }
 
 void SettingsDialog::ensureThemesLoaded() {
