@@ -9,6 +9,13 @@
         "status.disconnected": "#d32f2f",
         "status.connecting": "#f57c00",
         "status.negotiating": "#f57c00",
-        "status.connected": "#2e7d32"
+        "status.connected": "#2e7d32",
+        "agent.user.background": "#dde1ed",
+        "agent.user.text": "#1e1e1e",
+        "agent.user.label": "#0056d6",
+        "agent.assistant.label": "#2e7d32",
+        "agent.error.text": "#c62828",
+        "agent.code.background": "#eaeaea",
+        "agent.code.text": "#1e1e1e"
     }
 }

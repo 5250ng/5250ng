@@ -120,6 +120,10 @@ set(AGENT_SOURCES
     src/agent/provider.cpp
     src/agent/config.h
     src/agent/config.cpp
+    src/agent/tool_call.h
+    src/agent/tool_definitions.h
+    src/agent/agent_script_runner.h
+    src/agent/agent_script_runner.cpp
     src/agent/auth/auth_method.h
     src/agent/auth/api_key_auth.h
     src/agent/auth/api_key_auth.cpp
@@ -132,6 +136,8 @@ set(AGENT_SOURCES
     src/agent/auth/token_storage.cpp
     src/agent/providers/openai_provider.h
     src/agent/providers/openai_provider.cpp
+    src/agent/markdown_converter.h
+    src/agent/markdown_converter.cpp
     src/agent/providers/anthropic_provider.h
     src/agent/providers/anthropic_provider.cpp
 )

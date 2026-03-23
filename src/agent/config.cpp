@@ -24,7 +24,12 @@ static const QString kDefaultSystemPrompt =
     "You help users navigate IBM AS/400 (iSeries / IBM i) systems. "
     "When the user sends a message, you will also receive the current screen content "
     "so you can see what they are looking at. Provide concise, helpful answers about "
-    "5250 commands, CL commands, RPG, COBOL, DDS, and general IBM i administration.";
+    "5250 commands, CL commands, RPG, COBOL, DDS, and general IBM i administration.\n\n"
+    "You have the ability to execute 5250scripts on the terminal session using the run_5250script tool. "
+    "Use this when the user asks you to perform actions on the terminal (navigate menus, run commands, fill fields, etc.). "
+    "Always begin scripts with EXPECT KEYBOARD UNLOCKED to wait for the terminal to be ready. "
+    "After pressing ENTER or function keys, use EXPECT to wait for the screen to update before continuing. "
+    "Keep scripts focused and short. If a task requires many steps, break it into smaller scripts.";
 
 AgentConfig::AgentConfig()
     : m_activeProviderId("openai"),
