@@ -62,9 +62,9 @@ QString markdownToHtml(const QString &markdown,
         "style=\"background-color:%1; color:%2; padding:1px 4px; "
         "font-family:'Courier New',monospace;\"")
         .arg(codeBgColor, codeTextColor);
+    html.replace(QStringLiteral("<code "), QStringLiteral("<code ") + codeStyle + ' ');
     html.replace(QStringLiteral("<code>"),
                  QStringLiteral("<code %1>").arg(codeStyle));
-    html.replace(QStringLiteral("<code "), QStringLiteral("<code ") + codeStyle + ' ');
 
     return html;
 }

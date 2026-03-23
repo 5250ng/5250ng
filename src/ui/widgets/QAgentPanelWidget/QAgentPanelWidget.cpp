@@ -45,6 +45,7 @@ static void appendHtml(QTextBrowser *browser, const QString &html) {
         cursor.setBlockFormat(spacer);
     }
     cursor.insertHtml(html);
+    browser->setTextCursor(cursor);
     browser->verticalScrollBar()->setValue(
         browser->verticalScrollBar()->maximum());
 }
@@ -74,6 +75,8 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     m_clearButton->setStyleSheet("font-size: 11px; padding: 2px 8px;");
     connect(m_clearButton, &QPushButton::clicked, this, [this]() {
         m_chatHistory->clear();
+        m_thinkingTimer->stop();
+        m_thinkingBlockPosition = -1;
         if (m_scriptRunner && m_scriptRunner->isRunning())
             m_scriptRunner->stop();
         if (m_scriptGenerator)
@@ -159,6 +162,7 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
             QTextCursor cursor(m_chatHistory->document());
             cursor.setPosition(m_thinkingBlockPosition);
             cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            cursor.removeSelectedText();
             auto &tm = ui::themes::ThemeManager::instance();
             QString labelColor = tm.color("agent.assistant.label", "#50c878");
             cursor.insertHtml(
@@ -540,9 +544,7 @@ void QAgentPanelWidget::removeThinkingIndicator() {
     cursor.movePosition(QTextCursor::StartOfBlock);
     cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     cursor.removeSelectedText();
-    if (cursor.atStart() && cursor.block().text().isEmpty()) {
-        // nothing extra to do
-    } else {
+    if (!cursor.atStart() && cursor.block().text().isEmpty()) {
         cursor.deletePreviousChar();
     }
 
