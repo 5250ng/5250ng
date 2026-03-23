@@ -24,6 +24,9 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
@@ -54,6 +57,14 @@ int main(int argc, char *argv[]) {
     QCommandLineOption tlsOption(QStringList() << "tls", "Use TLS/SSL encryption");
     parser.addOption(tlsOption);
 
+    // Session option (load saved session by name)
+    QCommandLineOption sessionOption(QStringList() << "s" << "session", "Load a saved session by name", "name");
+    parser.addOption(sessionOption);
+
+    // Session file option (load session from JSON file path)
+    QCommandLineOption sessionFileOption(QStringList() << "f" << "session-file", "Load a session from a JSON file", "path");
+    parser.addOption(sessionFileOption);
+
     parser.process(app);
 
     // Set debug level if requested
@@ -62,11 +73,61 @@ int main(int argc, char *argv[]) {
         logger::Logger::instance()->debug("Debug mode enabled");
     }
 
-    // Create session config from command line if host is provided
+    // Create session config from command line options
     session::SessionConfig autoConnectConfig;
     bool autoConnect = false;
 
-    if (parser.isSet(hostOption)) {
+    int connectOptionCount = (parser.isSet(hostOption) ? 1 : 0)
+                           + (parser.isSet(sessionOption) ? 1 : 0)
+                           + (parser.isSet(sessionFileOption) ? 1 : 0);
+    if (connectOptionCount > 1) {
+        logger::Logger::instance()->error(
+            "Options --host, --session, and --session-file are mutually exclusive"
+        );
+        return 1;
+    }
+
+    if (parser.isSet(sessionOption)) {
+        QString sessionName = parser.value(sessionOption);
+        session::SessionManager mgr;
+        if (!mgr.loadSession(sessionName, autoConnectConfig)) {
+            logger::Logger::instance()->error(
+                QString("Session not found: %1").arg(sessionName)
+            );
+            return 1;
+        }
+        autoConnect = true;
+        logger::Logger::instance()->debug(
+            QString("Loading saved session: %1").arg(sessionName)
+        );
+    } else if (parser.isSet(sessionFileOption)) {
+        QString filePath = parser.value(sessionFileOption);
+        QFile file(filePath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            logger::Logger::instance()->error(
+                QString("Cannot open session file: %1").arg(filePath)
+            );
+            return 1;
+        }
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        file.close();
+        if (doc.isNull() || !doc.isObject()) {
+            logger::Logger::instance()->error(
+                QString("Invalid JSON in session file: %1").arg(filePath)
+            );
+            return 1;
+        }
+        if (!autoConnectConfig.fromJson(doc.object())) {
+            logger::Logger::instance()->error(
+                QString("Invalid session configuration in: %1").arg(filePath)
+            );
+            return 1;
+        }
+        autoConnect = true;
+        logger::Logger::instance()->debug(
+            QString("Loading session from file: %1").arg(filePath)
+        );
+    } else if (parser.isSet(hostOption)) {
         QString hostname = parser.value(hostOption);
         bool portOk = false;
         int portInt = parser.value(portOption).toInt(&portOk);
