@@ -69,7 +69,7 @@ class SessionConfig : public QObject {
     QString startupScript() const { return m_startupScript; }
     void setStartupScript(const QString &script) { m_startupScript = script; }
 
-    // Credentials (transient — not serialized to JSON)
+    // Credentials
     QString username() const { return m_username; }
     void setUsername(const QString &username) { m_username = username; }
 

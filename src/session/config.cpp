@@ -56,6 +56,10 @@ QJsonObject SessionConfig::toJson() const {
     json["terminalTheme"] = m_terminalThemeId;
     if (!m_startupScript.isEmpty())
         json["startupScript"] = m_startupScript;
+    if (!m_username.isEmpty())
+        json["username"] = m_username;
+    if (!m_password.isEmpty())
+        json["password"] = m_password;
     return json;
 }
 
@@ -89,6 +93,12 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     }
     if (json.contains("startupScript") && json["startupScript"].isString()) {
         m_startupScript = json["startupScript"].toString();
+    }
+    if (json.contains("username") && json["username"].isString()) {
+        m_username = json["username"].toString();
+    }
+    if (json.contains("password") && json["password"].isString()) {
+        m_password = json["password"].toString();
     }
     emit changed();
     return isValid();
