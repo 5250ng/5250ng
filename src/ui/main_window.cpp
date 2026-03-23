@@ -269,6 +269,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
             provider = p;
         }
         session->agentPanel->setProvider(provider);
+        session->agentPanel->setDisplayWidget(session->displayWidget);
 
         // Feed screen content to agent panel on screen changes
         auto *agentPanel = session->agentPanel;
@@ -598,6 +599,7 @@ void MainWindow::refreshAgentProviders() {
             provider = p;
         }
         session->agentPanel->setProvider(provider);
+        session->agentPanel->setDisplayWidget(session->displayWidget);
     }
 }
 

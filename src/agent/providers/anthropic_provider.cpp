@@ -16,6 +16,7 @@
 
 #include "anthropic_provider.h"
 #include "agent/auth/auth_method.h"
+#include "agent/tool_definitions.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -40,26 +41,61 @@ bool AnthropicProvider::isConfigured() const {
 
 void AnthropicProvider::sendMessage(const QString &userMessage, const QString &systemContext) {
     if (!isConfigured()) {
-        emit responseError("Anthropic provider is not configured. Please set an API key and model in Settings → Agent.");
+        emit responseError("Anthropic provider is not configured. Please set an API key and model in Settings \u2192 Agent.");
         return;
     }
 
-    // Cancel any in-flight request before starting a new one
     cancel();
+    m_systemContext = systemContext;
 
-    QJsonArray messages;
+    // Append user message to conversation history
     QJsonObject userMsg;
     userMsg["role"] = "user";
     userMsg["content"] = userMessage;
-    messages.append(userMsg);
+    m_conversationHistory.append(userMsg);
+
+    sendRequest();
+}
+
+void AnthropicProvider::sendToolResult(const ToolResult &result) {
+    // Append the assistant message that contained the tool_use
+    if (!m_pendingAssistantMessage.isEmpty()) {
+        m_conversationHistory.append(m_pendingAssistantMessage);
+        m_pendingAssistantMessage = QJsonObject();
+    }
+
+    // Append tool result as a user message
+    QJsonObject toolResultBlock;
+    toolResultBlock["type"] = "tool_result";
+    toolResultBlock["tool_use_id"] = result.toolCallId;
+    toolResultBlock["content"] = result.success
+        ? result.output
+        : QStringLiteral("Error: %1").arg(result.output);
+
+    QJsonObject userMsg;
+    userMsg["role"] = "user";
+    userMsg["content"] = QJsonArray{toolResultBlock};
+    m_conversationHistory.append(userMsg);
+
+    sendRequest();
+}
+
+void AnthropicProvider::clearHistory() {
+    m_conversationHistory = QJsonArray();
+    m_pendingAssistantMessage = QJsonObject();
+}
+
+void AnthropicProvider::sendRequest() {
+    cancel();
 
     QJsonObject body;
     body["model"] = m_model;
     body["max_tokens"] = 4096;
-    body["messages"] = messages;
+    body["messages"] = m_conversationHistory;
+    body["tools"] = anthropicToolsArray();
 
-    if (!systemContext.isEmpty()) {
-        body["system"] = systemContext;
+    if (!m_systemContext.isEmpty()) {
+        body["system"] = m_systemContext;
     }
 
     QNetworkRequest request(QUrl("https://api.anthropic.com/v1/messages"));
@@ -72,44 +108,85 @@ void AnthropicProvider::sendMessage(const QString &userMessage, const QString &s
     }
 
     m_activeReply = m_nam.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-
     connect(m_activeReply, &QNetworkReply::finished, this, [this]() {
-        QNetworkReply *reply = m_activeReply;
-        m_activeReply = nullptr;
+        handleResponse(m_activeReply);
+    });
+}
 
-        if (!reply) return;
-        reply->deleteLater();
+void AnthropicProvider::handleResponse(QNetworkReply *reply) {
+    m_activeReply = nullptr;
+    if (!reply) return;
+    reply->deleteLater();
 
-        if (reply->error() != QNetworkReply::NoError) {
-            QByteArray responseData = reply->readAll();
-            QJsonDocument doc = QJsonDocument::fromJson(responseData);
-            QString detail;
-            if (doc.isObject() && doc.object().contains("error")) {
-                detail = doc.object()["error"].toObject()["message"].toString();
-            }
-            if (detail.isEmpty()) {
-                detail = reply->errorString();
-            }
-            emit responseError("Anthropic error: " + detail);
-            return;
-        }
-
+    if (reply->error() != QNetworkReply::NoError) {
         QByteArray responseData = reply->readAll();
         QJsonDocument doc = QJsonDocument::fromJson(responseData);
-        if (!doc.isObject()) {
-            emit responseError("Invalid response from Anthropic.");
-            return;
+        QString detail;
+        if (doc.isObject() && doc.object().contains("error")) {
+            detail = doc.object()["error"].toObject()["message"].toString();
         }
+        if (detail.isEmpty()) {
+            detail = reply->errorString();
+        }
+        emit responseError("Anthropic error: " + detail);
+        return;
+    }
 
-        QJsonArray content = doc.object()["content"].toArray();
-        if (content.isEmpty()) {
+    QByteArray responseData = reply->readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(responseData);
+    if (!doc.isObject()) {
+        emit responseError("Invalid response from Anthropic.");
+        return;
+    }
+
+    QJsonObject root = doc.object();
+    QJsonArray content = root["content"].toArray();
+    QString stopReason = root["stop_reason"].toString();
+
+    // Collect text blocks and find tool_use blocks
+    QString combinedText;
+    ToolCall toolCall;
+    bool hasToolUse = false;
+
+    for (const QJsonValue &block : content) {
+        QJsonObject obj = block.toObject();
+        QString type = obj["type"].toString();
+
+        if (type == "text") {
+            if (!combinedText.isEmpty())
+                combinedText += "\n";
+            combinedText += obj["text"].toString();
+        } else if (type == "tool_use") {
+            hasToolUse = true;
+            toolCall.id = obj["id"].toString();
+            toolCall.name = obj["name"].toString();
+            toolCall.arguments = QString::fromUtf8(
+                QJsonDocument(obj["input"].toObject()).toJson(QJsonDocument::Compact));
+            toolCall.textBefore = combinedText;
+        }
+    }
+
+    if (hasToolUse && stopReason == "tool_use") {
+        // Save the full assistant message for the continuation
+        QJsonObject assistantMsg;
+        assistantMsg["role"] = "assistant";
+        assistantMsg["content"] = content;
+        m_pendingAssistantMessage = assistantMsg;
+
+        emit toolCallReceived(toolCall);
+    } else {
+        // Regular text response — append to history
+        QJsonObject assistantMsg;
+        assistantMsg["role"] = "assistant";
+        assistantMsg["content"] = content;
+        m_conversationHistory.append(assistantMsg);
+
+        if (combinedText.isEmpty()) {
             emit responseError("No response from Anthropic.");
-            return;
+        } else {
+            emit responseReceived(combinedText);
         }
-
-        QString text = content[0].toObject()["text"].toString();
-        emit responseReceived(text);
-    });
+    }
 }
 
 void AnthropicProvider::cancel() {

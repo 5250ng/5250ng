@@ -15,12 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "QAgentPanelWidget.h"
+#include "agent/agent_script_runner.h"
 #include "agent/config.h"
 #include "agent/markdown_converter.h"
 #include "ui/themes/manager.h"
 #include <QEvent>
 #include <QKeyEvent>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QTextBlock>
 #include <QTextCursor>
 
@@ -70,6 +72,13 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     m_clearButton->setStyleSheet("font-size: 11px; padding: 2px 8px;");
     connect(m_clearButton, &QPushButton::clicked, this, [this]() {
         m_chatHistory->clear();
+        if (m_scriptRunner && m_scriptRunner->isRunning())
+            m_scriptRunner->stop();
+        m_pendingToolCall.reset();
+        m_toolCallBar->setVisible(false);
+        if (m_provider)
+            m_provider->clearHistory();
+        setInputEnabled(true);
     });
     headerLayout->addWidget(m_clearButton);
 
@@ -83,28 +92,57 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     m_chatHistory = new QTextBrowser(this);
     m_chatHistory->setReadOnly(true);
     m_chatHistory->setOpenExternalLinks(true);
+    m_chatHistory->setFocusPolicy(Qt::NoFocus);
+    m_chatHistory->setTextInteractionFlags(
+        Qt::TextBrowserInteraction | Qt::LinksAccessibleByMouse);
     m_chatHistory->setStyleSheet("QTextBrowser { border: none; padding: 4px; }");
     layout->addWidget(m_chatHistory, 1);
 
-    // --- Input area ---
-    auto *inputLayout = new QHBoxLayout();
-    inputLayout->setContentsMargins(4, 4, 4, 4);
-    inputLayout->setSpacing(4);
+    // --- Tool call action bar (hidden by default) ---
+    m_toolCallBar = new QWidget(this);
+    auto *toolBarLayout = new QHBoxLayout(m_toolCallBar);
+    toolBarLayout->setContentsMargins(4, 4, 4, 4);
+    toolBarLayout->setSpacing(8);
 
-    m_inputField = new QPlainTextEdit(this);
-    m_inputField->setPlaceholderText("Type a message...");
+    m_runScriptButton = new QPushButton("Run Script", m_toolCallBar);
+    m_runScriptButton->setStyleSheet(
+        "QPushButton { background-color: #2e7d32; color: white; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:disabled { background-color: #555; color: #999; }");
+    connect(m_runScriptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked);
+    toolBarLayout->addWidget(m_runScriptButton);
+
+    m_cancelScriptButton = new QPushButton("Cancel", m_toolCallBar);
+    m_cancelScriptButton->setStyleSheet(
+        "QPushButton { padding: 6px 16px; }");
+    connect(m_cancelScriptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked);
+    toolBarLayout->addWidget(m_cancelScriptButton);
+
+    toolBarLayout->addStretch();
+    m_toolCallBar->setVisible(false);
+    layout->addWidget(m_toolCallBar);
+
+    // --- Input area ---
+    auto *inputWrapper = new QWidget(this);
+    auto *inputWrapperLayout = new QVBoxLayout(inputWrapper);
+    inputWrapperLayout->setContentsMargins(4, 4, 4, 4);
+    inputWrapperLayout->setSpacing(0);
+
+    m_inputField = new QPlainTextEdit(inputWrapper);
+    m_inputField->setPlaceholderText("Type a message... (Enter to send, Shift+Enter for newline)");
     m_inputField->setMaximumHeight(72);
     m_inputField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_inputField->installEventFilter(this);
-    inputLayout->addWidget(m_inputField);
+    inputWrapperLayout->addWidget(m_inputField);
 
-    m_sendButton = new QPushButton("Send", this);
-    m_sendButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    inputLayout->addWidget(m_sendButton);
+    layout->addWidget(inputWrapper);
 
-    layout->addLayout(inputLayout);
-
-    connect(m_sendButton, &QPushButton::clicked, this, &QAgentPanelWidget::submitMessage);
+    // --- Font zoom shortcuts ---
+    auto *zoomIn = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Plus), this);
+    connect(zoomIn, &QShortcut::activated, this, [this]() { adjustFontSize(1); });
+    auto *zoomInAlt = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Equal), this);
+    connect(zoomInAlt, &QShortcut::activated, this, [this]() { adjustFontSize(1); });
+    auto *zoomOut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus), this);
+    connect(zoomOut, &QShortcut::activated, this, [this]() { adjustFontSize(-1); });
 
     // --- Thinking indicator timer ---
     m_thinkingTimer = new QTimer(this);
@@ -124,6 +162,15 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
                     .arg(labelColor, dots));
         }
     });
+}
+
+// ---------------------------------------------------------------------------
+// Show event — auto-focus input field
+// ---------------------------------------------------------------------------
+
+void QAgentPanelWidget::showEvent(QShowEvent *event) {
+    QWidget::showEvent(event);
+    m_inputField->setFocus();
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +194,7 @@ bool QAgentPanelWidget::eventFilter(QObject *obj, QEvent *event) {
 // ---------------------------------------------------------------------------
 
 void QAgentPanelWidget::submitMessage() {
-    if (!m_sendButton->isEnabled()) return;
+    if (!m_inputField->isEnabled()) return;
 
     QString text = m_inputField->toPlainText().trimmed();
     if (text.isEmpty()) return;
@@ -190,7 +237,13 @@ void QAgentPanelWidget::setProvider(agent::Provider *provider) {
             appendError(error);
             setInputEnabled(true);
         });
+        connect(m_provider, &agent::Provider::toolCallReceived, this,
+                &QAgentPanelWidget::onToolCallReceived);
     }
+}
+
+void QAgentPanelWidget::setDisplayWidget(Q5250ScreenWidget *display) {
+    m_displayWidget = display;
 }
 
 void QAgentPanelWidget::setScreenContext(const QString &screenText) {
@@ -203,32 +256,34 @@ void QAgentPanelWidget::setScreenContext(const QString &screenText) {
 
 void QAgentPanelWidget::appendUserMessage(const QString &text) {
     auto &tm = ui::themes::ThemeManager::instance();
-    QString bgColor    = tm.color("agent.user.background", "#2a2d3a");
-    QString textColor  = tm.color("agent.user.text", "#e0e0e0");
-    QString labelColor = tm.color("agent.user.label", "#4a9eff");
+    QString bgColor   = tm.color("agent.user.background", "#2a2d3a");
+    QString textColor = tm.color("agent.user.text", "#e0e0e0");
 
     QString escaped = text.toHtmlEscaped().replace('\n', QStringLiteral("<br/>"));
 
+    // Right-aligned outer table, inner message cell is 80% width
     QString html = QStringLiteral(
+        "<table width='100%' cellpadding='0' cellspacing='0'>"
+        "<tr><td width='17%'></td>"
+        "<td width='83%'>"
         "<table width='100%' cellpadding='8' cellspacing='0'>"
-        "<tr><td style='background-color:%1; color:%2;'>"
-        "<b style='color:%3;'>You</b><br/>%4"
+        "<tr><td style='background-color:%1; color:%2; text-align:justify;'>%3"
+        "</td></tr></table>"
         "</td></tr></table>")
-        .arg(bgColor, textColor, labelColor, escaped);
+        .arg(bgColor, textColor, escaped);
 
     appendHtml(m_chatHistory, html);
 }
 
 void QAgentPanelWidget::appendAssistantMessage(const QString &text) {
     auto &tm = ui::themes::ThemeManager::instance();
-    QString labelColor = tm.color("agent.assistant.label", "#50c878");
-    QString codeBg     = tm.color("agent.code.background", "#1a1a2e");
-    QString codeText   = tm.color("agent.code.text", "#d4d4d4");
+    QString codeBg   = tm.color("agent.code.background", "#1a1a2e");
+    QString codeText = tm.color("agent.code.text", "#d4d4d4");
 
     QString renderedBody = agent::markdownToHtml(text, codeBg, codeText);
 
-    QString html = QStringLiteral("<b style='color:%1;'>Assistant</b><br/>%2")
-                       .arg(labelColor, renderedBody);
+    QString html = QStringLiteral("<div style='text-align:justify;'>%1</div>")
+                       .arg(renderedBody);
 
     appendHtml(m_chatHistory, html);
 }
@@ -241,6 +296,129 @@ void QAgentPanelWidget::appendError(const QString &text) {
                        .arg(errorColor, text.toHtmlEscaped());
 
     appendHtml(m_chatHistory, html);
+}
+
+void QAgentPanelWidget::appendScriptBlock(const QString &script) {
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString codeBg   = tm.color("agent.code.background", "#1a1a2e");
+    QString codeText = tm.color("agent.code.text", "#d4d4d4");
+
+    QString escaped = script.toHtmlEscaped().replace('\n', QStringLiteral("<br/>"));
+
+    QString html = QStringLiteral(
+        "<table width='100%' cellpadding='8' cellspacing='0'>"
+        "<tr><td style='background-color:%1; color:%2; font-family:monospace;'>"
+        "<b>5250script:</b><br/>%3"
+        "</td></tr></table>")
+        .arg(codeBg, codeText, escaped);
+
+    appendHtml(m_chatHistory, html);
+}
+
+// ---------------------------------------------------------------------------
+// Tool call handling
+// ---------------------------------------------------------------------------
+
+void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
+    removeThinkingIndicator();
+
+    // Display any text the LLM emitted alongside the tool call
+    if (!call.textBefore.isEmpty()) {
+        appendAssistantMessage(call.textBefore);
+    }
+
+    // Display the script as a code block
+    QString script = call.scriptText();
+    if (script.isEmpty()) {
+        // Unexpected: tool call has no script
+        appendError("Agent requested a tool call but no script was provided.");
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No script text provided in tool call arguments.";
+            m_provider->sendToolResult(result);
+        }
+        showThinkingIndicator();
+        return;
+    }
+
+    appendScriptBlock(script);
+
+    // Store pending state and show action buttons
+    m_pendingToolCall = PendingToolCall{call};
+    m_runScriptButton->setEnabled(true);
+    m_runScriptButton->setText("Run Script");
+    m_cancelScriptButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
+void QAgentPanelWidget::onRunScriptClicked() {
+    if (!m_pendingToolCall || !m_displayWidget) return;
+
+    m_runScriptButton->setEnabled(false);
+    m_runScriptButton->setText("Running...");
+    m_cancelScriptButton->setEnabled(false);
+
+    // Create script runner if needed
+    if (!m_scriptRunner) {
+        m_scriptRunner = new agent::AgentScriptRunner(m_displayWidget, this);
+        connect(m_scriptRunner, &agent::AgentScriptRunner::finished,
+                this, &QAgentPanelWidget::onScriptFinished);
+    }
+
+    QString script = m_pendingToolCall->call.scriptText();
+    m_scriptRunner->runScript(script);
+}
+
+void QAgentPanelWidget::onCancelScriptClicked() {
+    if (!m_pendingToolCall) return;
+
+    QString toolCallId = m_pendingToolCall->call.id;
+    m_pendingToolCall.reset();
+    m_toolCallBar->setVisible(false);
+
+    appendError("Script execution cancelled by user.");
+
+    if (m_provider) {
+        agent::ToolResult result;
+        result.toolCallId = toolCallId;
+        result.success = false;
+        result.output = "User cancelled script execution.";
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onScriptFinished(bool success, const QString &log) {
+    if (!m_pendingToolCall) return;
+
+    QString toolCallId = m_pendingToolCall->call.id;
+    m_pendingToolCall.reset();
+    m_toolCallBar->setVisible(false);
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    if (success) {
+        QString labelColor = tm.color("agent.assistant.label", "#50c878");
+        appendHtml(m_chatHistory,
+            QStringLiteral("<span style='color:%1;'><b>Script completed.</b></span>")
+                .arg(labelColor));
+    } else {
+        appendError("Script failed: " + log);
+    }
+
+    if (m_provider) {
+        agent::ToolResult result;
+        result.toolCallId = toolCallId;
+        result.success = success;
+        result.output = log;
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -273,20 +451,13 @@ void QAgentPanelWidget::removeThinkingIndicator() {
 
     QTextCursor cursor(m_chatHistory->document());
     cursor.setPosition(m_thinkingBlockPosition);
-    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
-    // Also select the block itself so the whole line is removed
-    cursor.movePosition(QTextCursor::PreviousBlock, QTextCursor::KeepAnchor);
-    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
-    // Select from start of block to end
-    cursor.setPosition(m_thinkingBlockPosition);
     cursor.movePosition(QTextCursor::StartOfBlock);
     cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
     cursor.removeSelectedText();
-    // Remove the empty block
     if (cursor.atStart() && cursor.block().text().isEmpty()) {
         // nothing extra to do
     } else {
-        cursor.deletePreviousChar(); // remove the block separator
+        cursor.deletePreviousChar();
     }
 
     m_thinkingBlockPosition = -1;
@@ -298,10 +469,18 @@ void QAgentPanelWidget::removeThinkingIndicator() {
 
 void QAgentPanelWidget::setInputEnabled(bool enabled) {
     m_inputField->setEnabled(enabled);
-    m_sendButton->setEnabled(enabled);
     if (enabled) {
         m_inputField->setFocus();
     }
+}
+
+void QAgentPanelWidget::adjustFontSize(int delta) {
+    QFont f = font();
+    int newSize = qBound(6, f.pointSize() + delta, 32);
+    f.setPointSize(newSize);
+    setFont(f);
+    m_chatHistory->setFont(f);
+    m_inputField->setFont(f);
 }
 
 } // namespace ui::widgets

@@ -120,6 +120,10 @@ set(AGENT_SOURCES
     src/agent/provider.cpp
     src/agent/config.h
     src/agent/config.cpp
+    src/agent/tool_call.h
+    src/agent/tool_definitions.h
+    src/agent/agent_script_runner.h
+    src/agent/agent_script_runner.cpp
     src/agent/auth/auth_method.h
     src/agent/auth/api_key_auth.h
     src/agent/auth/api_key_auth.cpp

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "tool_call.h"
+#include <QJsonArray>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -35,6 +37,8 @@ class Provider : public QObject {
     virtual QString displayName() const = 0;
     virtual QStringList availableModels() const = 0;
     virtual void sendMessage(const QString &userMessage, const QString &systemContext) = 0;
+    virtual void sendToolResult(const ToolResult &result) = 0;
+    virtual void clearHistory() = 0;
     virtual void cancel() = 0;
     virtual bool isConfigured() const = 0;
 
@@ -52,9 +56,11 @@ class Provider : public QObject {
     void responseReceived(const QString &text);
     void responseError(const QString &error);
     void streamingChunk(const QString &chunk);
+    void toolCallReceived(const agent::ToolCall &call);
 
   protected:
     AuthMethod *m_authMethod = nullptr;
+    QJsonArray m_conversationHistory;
 };
 
 } // namespace agent

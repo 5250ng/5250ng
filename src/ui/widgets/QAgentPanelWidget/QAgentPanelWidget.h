@@ -17,6 +17,7 @@
 #pragma once
 
 #include "agent/provider.h"
+#include "agent/tool_call.h"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPlainTextEdit>
@@ -25,8 +26,15 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <optional>
+
+namespace agent {
+class AgentScriptRunner;
+}
 
 namespace ui::widgets {
+
+class Q5250ScreenWidget;
 
 class QAgentPanelWidget : public QWidget {
     Q_OBJECT
@@ -35,6 +43,7 @@ class QAgentPanelWidget : public QWidget {
     explicit QAgentPanelWidget(QWidget *parent = nullptr);
 
     void setProvider(agent::Provider *provider);
+    void setDisplayWidget(Q5250ScreenWidget *display);
     void setScreenContext(const QString &screenText);
     void appendUserMessage(const QString &text);
     void appendAssistantMessage(const QString &text);
@@ -45,21 +54,40 @@ class QAgentPanelWidget : public QWidget {
 
   protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
   private:
     void setInputEnabled(bool enabled);
     void submitMessage();
+    void adjustFontSize(int delta);
     void showThinkingIndicator();
     void removeThinkingIndicator();
+    void onToolCallReceived(const agent::ToolCall &call);
+    void onRunScriptClicked();
+    void onCancelScriptClicked();
+    void onScriptFinished(bool success, const QString &log);
+    void appendScriptBlock(const QString &script);
 
     QLabel *m_headerLabel;
     QPushButton *m_clearButton;
     QTextBrowser *m_chatHistory;
     QPlainTextEdit *m_inputField;
-    QPushButton *m_sendButton;
+
+    // Tool call action bar (visible only during pending tool calls)
+    QWidget *m_toolCallBar;
+    QPushButton *m_runScriptButton;
+    QPushButton *m_cancelScriptButton;
 
     agent::Provider *m_provider = nullptr;
+    Q5250ScreenWidget *m_displayWidget = nullptr;
+    agent::AgentScriptRunner *m_scriptRunner = nullptr;
     QString m_screenContext;
+
+    // Pending tool call state
+    struct PendingToolCall {
+        agent::ToolCall call;
+    };
+    std::optional<PendingToolCall> m_pendingToolCall;
 
     QTimer *m_thinkingTimer;
     int m_thinkingDots = 0;

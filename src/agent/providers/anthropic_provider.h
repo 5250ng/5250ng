@@ -17,6 +17,7 @@
 #pragma once
 
 #include "agent/provider.h"
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
@@ -32,6 +33,8 @@ class AnthropicProvider : public Provider {
     QString displayName() const override { return QStringLiteral("Claude (Anthropic)"); }
     QStringList availableModels() const override;
     void sendMessage(const QString &userMessage, const QString &systemContext) override;
+    void sendToolResult(const ToolResult &result) override;
+    void clearHistory() override;
     void cancel() override;
     bool isConfigured() const override;
 
@@ -41,10 +44,15 @@ class AnthropicProvider : public Provider {
     QString model() const override { return m_model; }
 
   private:
+    void sendRequest();
+    void handleResponse(QNetworkReply *reply);
+
     QNetworkAccessManager m_nam;
     QNetworkReply *m_activeReply = nullptr;
     QString m_apiKey;
     QString m_model;
+    QString m_systemContext;
+    QJsonObject m_pendingAssistantMessage;
 };
 
 } // namespace agent
