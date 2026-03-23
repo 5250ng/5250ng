@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/agent">
+    <file>5250script_prompt.md</file>
+  </qresource>
+</RCC>

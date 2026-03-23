@@ -18,6 +18,8 @@
 #include "agent/agent_script_runner.h"
 #include "agent/config.h"
 #include "agent/markdown_converter.h"
+#include "agent/script_generator.h"
+#include "agent/tool_definitions.h"
 #include "ui/themes/manager.h"
 #include <QEvent>
 #include <QKeyEvent>
@@ -74,6 +76,8 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
         m_chatHistory->clear();
         if (m_scriptRunner && m_scriptRunner->isRunning())
             m_scriptRunner->stop();
+        if (m_scriptGenerator)
+            m_scriptGenerator->cancel();
         m_pendingToolCall.reset();
         m_toolCallBar->setVisible(false);
         if (m_provider)
@@ -327,10 +331,14 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
         appendAssistantMessage(call.textBefore);
     }
 
-    // Display the script as a code block
+    if (call.name == agent::kToolGenerateScript) {
+        onGenerateScriptToolCall(call);
+        return;
+    }
+
+    // run_5250script: display the script and show Run/Cancel buttons
     QString script = call.scriptText();
     if (script.isEmpty()) {
-        // Unexpected: tool call has no script
         appendError("Agent requested a tool call but no script was provided.");
         if (m_provider) {
             agent::ToolResult result;
@@ -414,6 +422,84 @@ void QAgentPanelWidget::onScriptFinished(bool success, const QString &log) {
         result.toolCallId = toolCallId;
         result.success = success;
         result.output = log;
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Script generation via subagent
+// ---------------------------------------------------------------------------
+
+void QAgentPanelWidget::onGenerateScriptToolCall(const agent::ToolCall &call) {
+    QString task = call.taskText();
+    if (task.isEmpty()) {
+        appendError("Agent requested script generation but no task was provided.");
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No task description provided.";
+            m_provider->sendToolResult(result);
+        }
+        showThinkingIndicator();
+        return;
+    }
+
+    appendHtml(m_chatHistory,
+        QStringLiteral("<i>Generating script for: %1...</i>")
+            .arg(task.toHtmlEscaped()));
+
+    if (!m_scriptGenerator) {
+        m_scriptGenerator = new agent::ScriptGeneratorSubagent(this);
+    }
+
+    m_scriptGenerator->configure(
+        m_provider->id(), m_provider->model(),
+        m_provider->apiKey(), m_provider->authMethod());
+
+    QString toolCallId = call.id;
+
+    connect(m_scriptGenerator, &agent::ScriptGeneratorSubagent::scriptGenerated,
+            this, [this, toolCallId](const QString &script) {
+                onScriptGenerated(toolCallId, script);
+            }, Qt::SingleShotConnection);
+
+    connect(m_scriptGenerator, &agent::ScriptGeneratorSubagent::generationError,
+            this, [this, toolCallId](const QString &error) {
+                onScriptGenerationError(toolCallId, error);
+            }, Qt::SingleShotConnection);
+
+    m_scriptGenerator->generate(task, m_screenContext);
+}
+
+void QAgentPanelWidget::onScriptGenerated(const QString &toolCallId,
+                                          const QString &script) {
+    appendScriptBlock(script);
+
+    if (m_provider) {
+        agent::ToolResult result;
+        result.toolCallId = toolCallId;
+        result.success = true;
+        result.output = script;
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onScriptGenerationError(const QString &toolCallId,
+                                                const QString &error) {
+    appendError("Script generation failed: " + error);
+
+    if (m_provider) {
+        agent::ToolResult result;
+        result.toolCallId = toolCallId;
+        result.success = false;
+        result.output = "Script generation failed: " + error;
         showThinkingIndicator();
         m_provider->sendToolResult(result);
     } else {

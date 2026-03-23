@@ -33,6 +33,12 @@ struct ToolCall {
         QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
         return obj.value("script").toString();
     }
+
+    /// Parse the arguments JSON and return the "task" field.
+    QString taskText() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("task").toString();
+    }
 };
 
 struct ToolResult {
