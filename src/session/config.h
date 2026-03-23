@@ -17,6 +17,7 @@
 #pragma once
 
 #include "core/codepage.h"
+#include <QHash>
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
@@ -65,9 +66,16 @@ class SessionConfig : public QObject {
     QString terminalThemeId() const { return m_terminalThemeId; }
     void setTerminalThemeId(const QString &id) { m_terminalThemeId = id; }
 
-    // Startup script (persisted — path relative to scripts dir)
-    QString startupScript() const { return m_startupScript; }
-    void setStartupScript(const QString &script) { m_startupScript = script; }
+    // Startup script (embedded source)
+    QString startupScriptSource() const { return m_startupScriptSource; }
+    void setStartupScriptSource(const QString &source) { m_startupScriptSource = source; }
+
+    QString startupScriptName() const { return m_startupScriptName; }
+    void setStartupScriptName(const QString &name) { m_startupScriptName = name; }
+
+    // Session variables (for $SESSION_* script variables)
+    QHash<QString, QString> sessionVariables() const { return m_sessionVariables; }
+    void setSessionVariables(const QHash<QString, QString> &vars) { m_sessionVariables = vars; }
 
     // Credentials
     QString username() const { return m_username; }
@@ -96,7 +104,9 @@ class SessionConfig : public QObject {
     int m_screenCols;
     core::CodePage::ID m_codePage;
     QString m_terminalThemeId;
-    QString m_startupScript;
+    QString m_startupScriptSource;
+    QString m_startupScriptName;
+    QHash<QString, QString> m_sessionVariables;
     QString m_username;
     QString m_password;
 

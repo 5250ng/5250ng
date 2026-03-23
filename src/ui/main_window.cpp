@@ -302,17 +302,12 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                             .arg(session->config.hostname())
                             .arg(session->config.port()));
                     // Run startup script once on first connect
-                    if (!*startupScriptRan && !session->config.startupScript().isEmpty()) {
+                    if (!*startupScriptRan && !session->config.startupScriptSource().isEmpty()) {
                         *startupScriptRan = true;
-                        QString scriptPath = QStandardPaths::writableLocation(
-                            QStandardPaths::AppDataLocation)
-                            + "/scripts/" + session->config.startupScript();
-                        if (QFile::exists(scriptPath)) {
-                            // Delay to let the terminal finish setup
-                            QTimer::singleShot(500, this, [this, session, scriptPath]() {
-                                runStartupScript(session, scriptPath);
-                            });
-                        }
+                        // Delay to let the terminal finish setup
+                        QTimer::singleShot(500, this, [this, session]() {
+                            runStartupScript(session);
+                        });
                     }
                     break;
                 case tn5250::client::TN5250Client::ConnectionState::Connecting:

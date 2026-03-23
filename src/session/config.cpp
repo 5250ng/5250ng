@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "session/config.h"
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -22,7 +23,7 @@ namespace session {
 
 SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceName("IBM-3179-2"), m_screenRows(24), m_screenCols(80), m_codePage(core::CodePage::ID::CP037), m_terminalThemeId("classic_green") {}
 
-SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScript(other.m_startupScript), m_username(other.m_username), m_password(other.m_password) {}
+SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password) {}
 
 SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
     if (this != &other) {
@@ -35,7 +36,9 @@ SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
         m_screenCols = other.m_screenCols;
         m_codePage = other.m_codePage;
         m_terminalThemeId = other.m_terminalThemeId;
-        m_startupScript = other.m_startupScript;
+        m_startupScriptSource = other.m_startupScriptSource;
+        m_startupScriptName = other.m_startupScriptName;
+        m_sessionVariables = other.m_sessionVariables;
         m_username = other.m_username;
         m_password = other.m_password;
         emit changed();
@@ -54,8 +57,16 @@ QJsonObject SessionConfig::toJson() const {
     json["screenCols"] = m_screenCols;
     json["codePage"] = static_cast<int>(m_codePage);
     json["terminalTheme"] = m_terminalThemeId;
-    if (!m_startupScript.isEmpty())
-        json["startupScript"] = m_startupScript;
+    if (!m_startupScriptSource.isEmpty()) {
+        json["startupScriptSource"] = m_startupScriptSource;
+        json["startupScriptName"] = m_startupScriptName;
+    }
+    if (!m_sessionVariables.isEmpty()) {
+        QJsonObject vars;
+        for (auto it = m_sessionVariables.constBegin(); it != m_sessionVariables.constEnd(); ++it)
+            vars[it.key()] = it.value();
+        json["sessionVariables"] = vars;
+    }
     if (!m_username.isEmpty())
         json["username"] = m_username;
     if (!m_password.isEmpty())
@@ -91,8 +102,17 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     if (json.contains("terminalTheme") && json["terminalTheme"].isString()) {
         m_terminalThemeId = json["terminalTheme"].toString();
     }
-    if (json.contains("startupScript") && json["startupScript"].isString()) {
-        m_startupScript = json["startupScript"].toString();
+    if (json.contains("startupScriptSource") && json["startupScriptSource"].isString()) {
+        m_startupScriptSource = json["startupScriptSource"].toString();
+    }
+    if (json.contains("startupScriptName") && json["startupScriptName"].isString()) {
+        m_startupScriptName = json["startupScriptName"].toString();
+    }
+    if (json.contains("sessionVariables") && json["sessionVariables"].isObject()) {
+        m_sessionVariables.clear();
+        QJsonObject vars = json["sessionVariables"].toObject();
+        for (auto it = vars.constBegin(); it != vars.constEnd(); ++it)
+            m_sessionVariables[it.key()] = it.value().toString();
     }
     if (json.contains("username") && json["username"].isString()) {
         m_username = json["username"].toString();

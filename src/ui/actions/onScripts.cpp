@@ -592,10 +592,10 @@ void MainWindow::onOpenScriptsFolder() {
 }
 
 // ---------------------------------------------------------------------------
-// Run startup script for a session (with $SESSION_USERNAME and $SESSION_PASSWORD pre-seeded)
+// Run startup script for a session (with $SESSION_* variables pre-seeded)
 // ---------------------------------------------------------------------------
 
-void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
+void MainWindow::runStartupScript(Session *s) {
     if (!s || !s->displayWidget) return;
 
     // Make sure this session is active so the UI indicators work
@@ -603,20 +603,14 @@ void MainWindow::runStartupScript(Session *s, const QString &scriptPath) {
     if (idx >= 0 && idx != m_activeIndex)
         setActiveSession(idx);
 
-    // Set initial variables from session credentials
+    // Set initial variables from session variables (parsed from script)
     QHash<QString, QString> initialVars;
-    if (!s->config.username().isEmpty())
-        initialVars["$SESSION_USERNAME"] = s->config.username();
-    if (!s->config.password().isEmpty())
-        initialVars["$SESSION_PASSWORD"] = s->config.password();
+    const auto &sessionVars = s->config.sessionVariables();
+    for (auto it = sessionVars.constBegin(); it != sessionVars.constEnd(); ++it)
+        initialVars[it.key()] = it.value();
 
-    // Load script text
-    QFile file(scriptPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-    QString scriptText = QString::fromUtf8(file.readAll());
-    file.close();
-
-    // Parse
+    // Parse embedded script source
+    QString scriptText = s->config.startupScriptSource();
     core::scripting::ScriptParser parser;
     auto parseResult = parser.parse(scriptText);
     if (parseResult.hasErrors()) return;

@@ -15,10 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "connect_dialog.h"
+#include "5250script/script_parser.h"
+#include "5250script/script_utils.h"
 #include "core/codepage.h"
 #include "session/manager.h"
 #include "ui/themes/terminal_theme_manager.h"
 #include <QDir>
+#include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QGroupBox>
 #include <QStandardPaths>
@@ -176,17 +180,24 @@ void ConnectDialog::setupUI() {
     // Startup script group
     QGroupBox *scriptGroup = new QGroupBox("Startup Script", this);
     QFormLayout *scriptLayout = new QFormLayout(scriptGroup);
-    m_startupScriptCombo = new QComboBox(this);
-    m_startupScriptCombo->addItem("(None)", QString());
-    QString sDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-                   + "/scripts";
-    QDir scriptDir(sDir);
-    for (const QFileInfo &fi : scriptDir.entryInfoList({"*.5250script"}, QDir::Files, QDir::Name)) {
-        m_startupScriptCombo->addItem(fi.baseName(), fi.fileName());
-    }
-    scriptLayout->addRow("Run on connect:", m_startupScriptCombo);
+    m_scriptNameLabel = new QLabel("(None)", this);
+    scriptLayout->addRow("Script:", m_scriptNameLabel);
+    QHBoxLayout *scriptButtonsLayout = new QHBoxLayout();
+    m_attachScriptButton = new QPushButton("Attach Script...", this);
+    m_detachScriptButton = new QPushButton("Detach", this);
+    m_detachScriptButton->setEnabled(false);
+    scriptButtonsLayout->addWidget(m_attachScriptButton);
+    scriptButtonsLayout->addWidget(m_detachScriptButton);
+    scriptLayout->addRow(scriptButtonsLayout);
     scriptGroup->setLayout(scriptLayout);
     mainLayout->addWidget(scriptGroup);
+
+    // Script variables group (dynamic, initially hidden)
+    m_scriptVarsGroup = new QGroupBox("Script Variables", this);
+    m_scriptVarsLayout = new QFormLayout(m_scriptVarsGroup);
+    m_scriptVarsGroup->setLayout(m_scriptVarsLayout);
+    m_scriptVarsGroup->setVisible(false);
+    mainLayout->addWidget(m_scriptVarsGroup);
 
     // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -204,6 +215,8 @@ void ConnectDialog::setupUI() {
     connect(m_saveSessionButton, &QPushButton::clicked, this, &ConnectDialog::onSaveSessionClicked);
     connect(m_loadSessionButton, &QPushButton::clicked, this, &ConnectDialog::onLoadSessionClicked);
     connect(m_deleteSessionButton, &QPushButton::clicked, this, &ConnectDialog::onDeleteSessionClicked);
+    connect(m_attachScriptButton, &QPushButton::clicked, this, &ConnectDialog::onAttachScriptClicked);
+    connect(m_detachScriptButton, &QPushButton::clicked, this, &ConnectDialog::onDetachScriptClicked);
     connect(m_sessionCombo, QOverload<const QString &>::of(&QComboBox::currentTextChanged), this, &ConnectDialog::onSessionComboChanged);
     // Initial state: disable delete for "(New Session)"
     m_deleteSessionButton->setEnabled(false);
@@ -252,12 +265,14 @@ void ConnectDialog::updateUI() {
     }
 
     // Startup script
-    int scriptIdx = m_startupScriptCombo->findData(m_currentConfig.startupScript());
-    if (scriptIdx >= 0) {
-        m_startupScriptCombo->setCurrentIndex(scriptIdx);
+    if (!m_currentConfig.startupScriptSource().isEmpty()) {
+        m_scriptNameLabel->setText(m_currentConfig.startupScriptName());
+        m_detachScriptButton->setEnabled(true);
     } else {
-        m_startupScriptCombo->setCurrentIndex(0); // (None)
+        m_scriptNameLabel->setText("(None)");
+        m_detachScriptButton->setEnabled(false);
     }
+    rebuildScriptVariableFields();
 }
 
 session::SessionConfig ConnectDialog::getSessionConfig() const {
@@ -278,7 +293,12 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setCodePage(static_cast<core::CodePage::ID>(
         m_codePageCombo->currentData().toInt()));
     config.setTerminalThemeId(m_themeCombo->currentData().toString());
-    config.setStartupScript(m_startupScriptCombo->currentData().toString());
+    config.setStartupScriptSource(m_currentConfig.startupScriptSource());
+    config.setStartupScriptName(m_currentConfig.startupScriptName());
+    QHash<QString, QString> vars;
+    for (auto it = m_scriptVarEdits.constBegin(); it != m_scriptVarEdits.constEnd(); ++it)
+        vars[it.key()] = it.value()->text();
+    config.setSessionVariables(vars);
     return config;
 }
 
@@ -393,6 +413,85 @@ void ConnectDialog::onDeviceComboChanged(int index) {
         // Reflect device name in the field
         m_customDeviceEdit->setText(dev.model);
     }
+}
+
+void ConnectDialog::onAttachScriptClicked() {
+    QString startDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                       + "/scripts";
+    if (!QDir(startDir).exists())
+        startDir = QDir::homePath();
+
+    QString filePath = QFileDialog::getOpenFileName(
+        this, "Attach Startup Script", startDir, "5250 Scripts (*.5250script);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        ui::widgets::StyledMessageBox::warning(this, "Attach Script", "Failed to read script file.");
+        return;
+    }
+    QString source = QString::fromUtf8(file.readAll());
+    file.close();
+
+    // Parse script and check for errors
+    core::scripting::ScriptParser parser;
+    auto result = parser.parse(source);
+    if (result.hasErrors()) {
+        QStringList msgs;
+        for (const auto &err : result.errors)
+            msgs << QString("Line %1: %2").arg(err.line).arg(err.message);
+        ui::widgets::StyledMessageBox::warning(
+            this, "Script Error",
+            QString("The script contains errors:\n\n%1").arg(msgs.join("\n")));
+        return;
+    }
+
+    m_currentConfig.setStartupScriptSource(source);
+    m_currentConfig.setStartupScriptName(QFileInfo(filePath).fileName());
+    m_scriptNameLabel->setText(m_currentConfig.startupScriptName());
+    m_detachScriptButton->setEnabled(true);
+    rebuildScriptVariableFields();
+}
+
+void ConnectDialog::onDetachScriptClicked() {
+    m_currentConfig.setStartupScriptSource(QString());
+    m_currentConfig.setStartupScriptName(QString());
+    m_currentConfig.setSessionVariables({});
+    m_scriptNameLabel->setText("(None)");
+    m_detachScriptButton->setEnabled(false);
+    rebuildScriptVariableFields();
+}
+
+void ConnectDialog::rebuildScriptVariableFields() {
+    // Clear existing fields
+    while (m_scriptVarsLayout->count() > 0) {
+        QLayoutItem *item = m_scriptVarsLayout->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    m_scriptVarEdits.clear();
+
+    QStringList varNames = core::scripting::extractSessionVariables(
+        m_currentConfig.startupScriptSource());
+
+    if (varNames.isEmpty()) {
+        m_scriptVarsGroup->setVisible(false);
+        return;
+    }
+
+    QHash<QString, QString> savedVars = m_currentConfig.sessionVariables();
+    for (const QString &varName : varNames) {
+        // Derive label from variable name: $SESSION_USERNAME -> "USERNAME"
+        QString label = varName.mid(9); // skip "$SESSION_"
+
+        QLineEdit *edit = new QLineEdit(m_scriptVarsGroup);
+        edit->setText(savedVars.value(varName));
+        m_scriptVarsLayout->addRow(label, edit);
+        m_scriptVarEdits[varName] = edit;
+    }
+    m_scriptVarsGroup->setVisible(true);
 }
 
 void ConnectDialog::onDeleteSessionClicked() {

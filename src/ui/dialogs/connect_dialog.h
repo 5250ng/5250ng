@@ -29,6 +29,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
+#include <QHash>
 #include <QVector>
 
 namespace ui::themes { class TerminalThemeManager; }
@@ -61,10 +62,13 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     void onSessionComboChanged(const QString &sessionName);
     void onDeviceComboChanged(int index);
     void onDeleteSessionClicked();
+    void onAttachScriptClicked();
+    void onDetachScriptClicked();
 
   private:
     void setupUI();
     void updateUI();
+    void rebuildScriptVariableFields();
 
     QLineEdit *m_hostnameEdit;
     QSpinBox *m_portSpin;
@@ -84,7 +88,12 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     QGroupBox *m_displayGroup;
     QComboBox *m_codePageCombo;
     QComboBox *m_themeCombo;
-    QComboBox *m_startupScriptCombo;
+    QLabel *m_scriptNameLabel;
+    QPushButton *m_attachScriptButton;
+    QPushButton *m_detachScriptButton;
+    QGroupBox *m_scriptVarsGroup;
+    QFormLayout *m_scriptVarsLayout;
+    QHash<QString, QLineEdit*> m_scriptVarEdits;
 
     session::SessionConfig m_currentConfig;
     QVector<tn5250::devices::Device> m_supported;

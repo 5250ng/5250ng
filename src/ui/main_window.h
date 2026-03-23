@@ -156,7 +156,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         core::MatchReplaceEngine *matchReplace = nullptr;
     };
 
-    void runStartupScript(Session *session, const QString &scriptPath);
+    void runStartupScript(Session *session);
     void applyThemeToSession(Session *session, const QString &themeId);
 
     QTabWidget *m_tabWidget;
