@@ -54,9 +54,8 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
 
   private slots:
     void onCategoryChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
-    void onThemeChanged();
-    void onApplyThemeClicked();
     void onCloseClicked();
+    void onSaveClicked();
 
   private:
     void setupUI();
@@ -80,15 +79,16 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     // Application Theme page widgets
     QWidget *m_themePage;
     QComboBox *m_themeCombo;
-    QPushButton *m_applyThemeBtn;
 
     // 5250 Theme page (embedded SessionSettingsDialog)
     SessionSettingsDialog *m_terminalThemePage;
 
+    // Bottom bar
+    QPushButton *m_saveBtn;
+
     // Macros page widgets
     QWidget *m_macrosPage;
     QCheckBox *m_recordTimingsCheck;
-    QPushButton *m_macrosSaveBtn;
 
     // Agent page widgets
     QWidget *m_agentPage;
@@ -114,7 +114,6 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QCheckBox *m_autoAcceptAllCheck;
     QCheckBox *m_autoAcceptToolCallsCheck;
     QCheckBox *m_autoAcceptFileEditsCheck;
-    QPushButton *m_agentSaveBtn;
 
     agent::OAuthAuth *m_activeOAuth = nullptr;
 };
