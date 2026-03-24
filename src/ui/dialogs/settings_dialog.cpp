@@ -16,6 +16,7 @@
 
 #include "settings_dialog.h"
 #include "agent/config.h"
+#include "agent/tool_definitions.h"
 #include "core/macro_config.h"
 #include "agent/auth/api_key_auth.h"
 #include "agent/auth/oauth_auth.h"
@@ -25,6 +26,7 @@
 #include <QApplication>
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QGroupBox>
+#include <QHeaderView>
 
 SettingsDialog::SettingsDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
     setupUI();
@@ -59,6 +61,18 @@ void SettingsDialog::setupUI() {
     m_categoryTree->addTopLevelItem(macrosItem);
     QTreeWidgetItem *agentItem = new QTreeWidgetItem(QStringList() << "Agents");
     m_categoryTree->addTopLevelItem(agentItem);
+
+    // Per-tool items under Agents (alphabetically sorted)
+    QStringList toolNames = {
+        agent::kToolGenerateScript, agent::kToolGetCursorPosition,
+        agent::kToolGetFieldAt, agent::kToolListFiles,
+        agent::kToolReadFile, agent::kToolReadScreen,
+        agent::kToolRunScript, agent::kToolSendKeys,
+        agent::kToolWriteFile};
+    toolNames.sort();
+    for (const QString &toolName : toolNames)
+        new QTreeWidgetItem(agentItem, QStringList() << toolName);
+    agentItem->setExpanded(true);
     m_categoryTree->setCurrentItem(themeItem);
 
     // Right: pages wrapped in a frame to match the category tree style
@@ -80,6 +94,13 @@ void SettingsDialog::setupUI() {
     // Agent page
     m_agentPage = buildAgentPage();
     m_pages->addWidget(m_agentPage); // index 3: agent
+
+    // Per-tool config pages (indices 4+)
+    for (const QString &toolName : toolNames) {
+        QWidget *page = buildToolConfigPage(toolName);
+        m_toolPages[toolName] = page;
+        m_pages->addWidget(page);
+    }
 
     // Forward the embedded editor's signals
     connect(m_terminalThemePage, &SessionSettingsDialog::applyRequested,
@@ -332,6 +353,100 @@ QWidget *SettingsDialog::buildAgentPage() {
     connect(m_agentTestBtn, &QPushButton::clicked, this, &SettingsDialog::onAgentTestClicked);
     connect(m_oauthSignInBtn, &QPushButton::clicked, this, &SettingsDialog::onOAuthSignInClicked);
     connect(m_oauthSignOutBtn, &QPushButton::clicked, this, &SettingsDialog::onOAuthSignOutClicked);
+
+    return page;
+}
+
+static QString defaultDescriptionForTool(const QString &name) {
+    if (name == agent::kToolGenerateScript)    return agent::kToolGenerateScriptDescription;
+    if (name == agent::kToolGetCursorPosition) return agent::kToolGetCursorPositionDescription;
+    if (name == agent::kToolGetFieldAt)        return agent::kToolGetFieldAtDescription;
+    if (name == agent::kToolListFiles)         return agent::kToolListFilesDescription;
+    if (name == agent::kToolReadFile)          return agent::kToolReadFileDescription;
+    if (name == agent::kToolReadScreen)        return agent::kToolReadScreenDescription;
+    if (name == agent::kToolRunScript)         return agent::kToolRunScriptDescription;
+    if (name == agent::kToolSendKeys)          return agent::kToolSendKeysDescription;
+    if (name == agent::kToolWriteFile)         return agent::kToolWriteFileDescription;
+    return {};
+}
+
+static QJsonObject schemaForTool(const QString &name) {
+    if (name == agent::kToolGenerateScript)    return agent::toolGenerateScriptSchema();
+    if (name == agent::kToolGetCursorPosition) return agent::toolGetCursorPositionSchema();
+    if (name == agent::kToolGetFieldAt)        return agent::toolGetFieldAtSchema();
+    if (name == agent::kToolListFiles)         return agent::toolListFilesSchema();
+    if (name == agent::kToolReadFile)          return agent::toolReadFileSchema();
+    if (name == agent::kToolReadScreen)        return agent::toolReadScreenSchema();
+    if (name == agent::kToolRunScript)         return agent::toolRunScriptSchema();
+    if (name == agent::kToolSendKeys)          return agent::toolSendKeysSchema();
+    if (name == agent::kToolWriteFile)         return agent::toolWriteFileSchema();
+    return {};
+}
+
+QWidget *SettingsDialog::buildToolConfigPage(const QString &toolName) {
+    auto &cfg = agent::AgentConfig::instance();
+    agent::ToolConfig tc = cfg.toolConfig(toolName);
+
+    QWidget *page = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setSpacing(12);
+
+    // Tool name header
+    QLabel *nameLabel = new QLabel(toolName, page);
+    nameLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
+    layout->addWidget(nameLabel);
+
+    // Enabled checkbox
+    QCheckBox *enabledCheck = new QCheckBox("Enabled", page);
+    enabledCheck->setChecked(tc.enabled);
+    enabledCheck->setToolTip("When disabled, this tool will not be available to the agent.");
+    layout->addWidget(enabledCheck);
+    m_toolEnabledChecks[toolName] = enabledCheck;
+
+    // Default description (read-only)
+    QGroupBox *defaultGroup = new QGroupBox("Default Description", page);
+    QVBoxLayout *defaultLayout = new QVBoxLayout(defaultGroup);
+    QLabel *defaultDesc = new QLabel(defaultDescriptionForTool(toolName), page);
+    defaultDesc->setWordWrap(true);
+    defaultDesc->setStyleSheet("color: gray;");
+    defaultLayout->addWidget(defaultDesc);
+    layout->addWidget(defaultGroup);
+
+    // Custom description
+    QGroupBox *customGroup = new QGroupBox("Custom Description (overrides default when set)", page);
+    QVBoxLayout *customLayout = new QVBoxLayout(customGroup);
+    QTextEdit *customDesc = new QTextEdit(page);
+    customDesc->setMaximumHeight(120);
+    customDesc->setPlainText(tc.customDescription);
+    customDesc->setPlaceholderText(defaultDescriptionForTool(toolName));
+    customLayout->addWidget(customDesc);
+    layout->addWidget(customGroup);
+    m_toolDescriptionEdits[toolName] = customDesc;
+
+    // Parameters section (read-only)
+    QJsonObject schema = schemaForTool(toolName);
+    QJsonObject props = schema["properties"].toObject();
+    QJsonArray required = schema["required"].toArray();
+    if (!props.isEmpty()) {
+        QGroupBox *paramsGroup = new QGroupBox("Parameters", page);
+        QVBoxLayout *paramsLayout = new QVBoxLayout(paramsGroup);
+        for (auto it = props.begin(); it != props.end(); ++it) {
+            QJsonObject prop = it.value().toObject();
+            bool isRequired = required.contains(it.key());
+            QString text = QString("<b>%1</b> (%2)%3 — %4")
+                .arg(it.key(),
+                     prop["type"].toString(),
+                     isRequired ? " <i>required</i>" : "",
+                     prop["description"].toString());
+            QLabel *paramLabel = new QLabel(text, page);
+            paramLabel->setWordWrap(true);
+            paramLabel->setTextFormat(Qt::RichText);
+            paramsLayout->addWidget(paramLabel);
+        }
+        layout->addWidget(paramsGroup);
+    }
+
+    layout->addStretch();
 
     return page;
 }
@@ -625,18 +740,30 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
     Q_UNUSED(previous);
     if (!current)
         return;
-    if (current->text(0) == "Application Theme") {
+    QString text = current->text(0);
+    if (text == "Application Theme") {
         m_pages->setCurrentWidget(m_themePage);
-    } else if (current->text(0) == "5250 Theme") {
+    } else if (text == "5250 Theme") {
         m_pages->setCurrentWidget(m_terminalThemePage);
-    } else if (current->text(0) == "Macros") {
+    } else if (text == "Macros") {
         m_pages->setCurrentWidget(m_macrosPage);
-    } else if (current->text(0) == "Agents") {
+    } else if (text == "Agents") {
         m_pages->setCurrentWidget(m_agentPage);
+    } else if (m_toolPages.contains(text)) {
+        m_pages->setCurrentWidget(m_toolPages[text]);
     }
 }
 
 void SettingsDialog::onSaveClicked() {
+    // Check if the current page is a tool config page
+    QWidget *currentPage = m_pages->currentWidget();
+    for (auto it = m_toolPages.constBegin(); it != m_toolPages.constEnd(); ++it) {
+        if (it.value() == currentPage) {
+            onToolSaveClicked(it.key());
+            return;
+        }
+    }
+
     int idx = m_pages->currentIndex();
     switch (idx) {
     case 0: { // Application Theme
@@ -658,6 +785,18 @@ void SettingsDialog::onSaveClicked() {
         onAgentSaveClicked();
         break;
     }
+}
+
+void SettingsDialog::onToolSaveClicked(const QString &toolName) {
+    auto &cfg = agent::AgentConfig::instance();
+    agent::ToolConfig tc;
+    tc.enabled = m_toolEnabledChecks[toolName]->isChecked();
+    tc.customDescription = m_toolDescriptionEdits[toolName]->toPlainText().trimmed();
+    cfg.setToolConfig(toolName, tc);
+    cfg.save();
+    emit agentConfigChanged();
+    ui::widgets::StyledMessageBox::information(this, "Tool Settings",
+        QString("Settings for \"%1\" saved.").arg(toolName));
 }
 
 void SettingsDialog::onCloseClicked() { accept(); }

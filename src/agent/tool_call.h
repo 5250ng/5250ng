@@ -39,6 +39,36 @@ struct ToolCall {
         QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
         return obj.value("task").toString();
     }
+
+    /// Parse the arguments JSON and return the "path" field.
+    QString filePath() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("path").toString();
+    }
+
+    /// Parse the arguments JSON and return the "content" field.
+    QString fileContent() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("content").toString();
+    }
+
+    /// Parse the arguments JSON and return the "keys" field.
+    QString keysText() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("keys").toString();
+    }
+
+    /// Parse the arguments JSON and return the "row" field.
+    int row() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("row").toInt();
+    }
+
+    /// Parse the arguments JSON and return the "col" field.
+    int col() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("col").toInt();
+    }
 };
 
 struct ToolResult {

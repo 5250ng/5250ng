@@ -25,6 +25,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMap>
 #include <QPushButton>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -62,7 +63,9 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QWidget *buildThemePage();
     QWidget *buildMacrosPage();
     QWidget *buildAgentPage();
+    QWidget *buildToolConfigPage(const QString &toolName);
     void ensureThemesLoaded();
+    void onToolSaveClicked(const QString &toolName);
     void onAgentProviderChanged(int index);
     void onAgentAuthTypeChanged(int index);
     void onAgentTestClicked();
@@ -114,6 +117,11 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QCheckBox *m_autoAcceptAllCheck;
     QCheckBox *m_autoAcceptToolCallsCheck;
     QCheckBox *m_autoAcceptFileEditsCheck;
+
+    // Per-tool config pages
+    QMap<QString, QWidget*> m_toolPages;
+    QMap<QString, QCheckBox*> m_toolEnabledChecks;
+    QMap<QString, QTextEdit*> m_toolDescriptionEdits;
 
     agent::OAuthAuth *m_activeOAuth = nullptr;
 };

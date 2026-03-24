@@ -20,9 +20,17 @@
 #include "agent/markdown_converter.h"
 #include "agent/script_generator.h"
 #include "agent/tool_definitions.h"
+#include "core/ebcdic.h"
 #include "ui/themes/manager.h"
+#include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
+#include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
+#include <QDir>
 #include <QEvent>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
 #include <QKeyEvent>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QShortcut>
 #include <QTextBlock>
@@ -111,18 +119,16 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     toolBarLayout->setContentsMargins(4, 4, 4, 4);
     toolBarLayout->setSpacing(8);
 
-    m_runScriptButton = new QPushButton("Run Script", m_toolCallBar);
-    m_runScriptButton->setStyleSheet(
+    m_acceptButton = new QPushButton("Run Script", m_toolCallBar);
+    m_acceptButton->setStyleSheet(
         "QPushButton { background-color: #2e7d32; color: white; padding: 6px 16px; font-weight: bold; }"
         "QPushButton:disabled { background-color: #555; color: #999; }");
-    connect(m_runScriptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked);
-    toolBarLayout->addWidget(m_runScriptButton);
+    toolBarLayout->addWidget(m_acceptButton);
 
-    m_cancelScriptButton = new QPushButton("Cancel", m_toolCallBar);
-    m_cancelScriptButton->setStyleSheet(
+    m_cancelButton = new QPushButton("Cancel", m_toolCallBar);
+    m_cancelButton->setStyleSheet(
         "QPushButton { padding: 6px 16px; }");
-    connect(m_cancelScriptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked);
-    toolBarLayout->addWidget(m_cancelScriptButton);
+    toolBarLayout->addWidget(m_cancelButton);
 
     toolBarLayout->addStretch();
     m_toolCallBar->setVisible(false);
@@ -340,6 +346,41 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
         return;
     }
 
+    if (call.name == agent::kToolReadFile) {
+        onReadFileToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolWriteFile) {
+        onWriteFileToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolReadScreen) {
+        onReadScreenToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolListFiles) {
+        onListFilesToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolSendKeys) {
+        onSendKeysToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolGetCursorPosition) {
+        onGetCursorPositionToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolGetFieldAt) {
+        onGetFieldAtToolCall(call);
+        return;
+    }
+
     // run_5250script: display the script and show Run/Cancel buttons
     QString script = call.scriptText();
     if (script.isEmpty()) {
@@ -349,9 +390,11 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
             result.toolCallId = call.id;
             result.success = false;
             result.output = "No script text provided in tool call arguments.";
+            showThinkingIndicator();
             m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
         }
-        showThinkingIndicator();
         return;
     }
 
@@ -366,18 +409,23 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
         return;
     }
 
-    m_runScriptButton->setEnabled(true);
-    m_runScriptButton->setText("Run Script");
-    m_cancelScriptButton->setEnabled(true);
+    // Wire up buttons for script execution
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Run Script");
+    m_cancelButton->setEnabled(true);
     m_toolCallBar->setVisible(true);
 }
 
 void QAgentPanelWidget::onRunScriptClicked() {
     if (!m_pendingToolCall || !m_displayWidget) return;
 
-    m_runScriptButton->setEnabled(false);
-    m_runScriptButton->setText("Running...");
-    m_cancelScriptButton->setEnabled(false);
+    m_acceptButton->setEnabled(false);
+    m_acceptButton->setText("Running...");
+    m_cancelButton->setEnabled(false);
 
     // Create script runner if needed
     if (!m_scriptRunner) {
@@ -453,9 +501,11 @@ void QAgentPanelWidget::onGenerateScriptToolCall(const agent::ToolCall &call) {
             result.toolCallId = call.id;
             result.success = false;
             result.output = "No task description provided.";
+            showThinkingIndicator();
             m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
         }
-        showThinkingIndicator();
         return;
     }
 
@@ -511,6 +561,378 @@ void QAgentPanelWidget::onScriptGenerationError(const QString &toolCallId,
         result.toolCallId = toolCallId;
         result.success = false;
         result.output = "Script generation failed: " + error;
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// File tool call handling
+// ---------------------------------------------------------------------------
+
+void QAgentPanelWidget::onReadFileToolCall(const agent::ToolCall &call) {
+    QString path = call.filePath();
+    if (path.isEmpty()) {
+        appendError("Agent requested read_file but no path was provided.");
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No file path provided.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString labelColor = tm.color("agent.assistant.label", "#50c878");
+    appendHtml(m_chatHistory,
+        QStringLiteral("<span style='color:%1;'><b>Reading file:</b> %2</span>")
+            .arg(labelColor, path.toHtmlEscaped()));
+
+    QFile file(path);
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        result.success = true;
+        result.output = QString::fromUtf8(file.readAll());
+        file.close();
+    } else {
+        result.success = false;
+        result.output = "Failed to read file: " + file.errorString();
+        appendError(result.output);
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onWriteFileToolCall(const agent::ToolCall &call) {
+    QString path = call.filePath();
+    QString content = call.fileContent();
+    if (path.isEmpty()) {
+        appendError("Agent requested write_file but no path was provided.");
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No file path provided.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString codeBg   = tm.color("agent.code.background", "#1a1a2e");
+    QString codeText = tm.color("agent.code.text", "#d4d4d4");
+
+    QString preview = content.length() > 500
+        ? content.left(500).toHtmlEscaped().replace('\n', QStringLiteral("<br/>")) + "<br/><i>... (truncated)</i>"
+        : content.toHtmlEscaped().replace('\n', QStringLiteral("<br/>"));
+
+    QString html = QStringLiteral(
+        "<table width='100%' cellpadding='8' cellspacing='0'>"
+        "<tr><td style='background-color:%1; color:%2; font-family:monospace;'>"
+        "<b>write_file:</b> %3<br/>%4"
+        "</td></tr></table>")
+        .arg(codeBg, codeText, path.toHtmlEscaped(), preview);
+    appendHtml(m_chatHistory, html);
+
+    m_pendingToolCall = PendingToolCall{call};
+
+    // Auto-accept if enabled in settings
+    if (agent::AgentConfig::instance().autoAcceptFileEdits()) {
+        onAcceptFileWriteClicked();
+        return;
+    }
+
+    // Wire up buttons for file write
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onAcceptFileWriteClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelFileWriteClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Write File");
+    m_cancelButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
+void QAgentPanelWidget::onAcceptFileWriteClicked() {
+    if (!m_pendingToolCall) return;
+
+    QString path = m_pendingToolCall->call.filePath();
+    QString content = m_pendingToolCall->call.fileContent();
+    QString toolCallId = m_pendingToolCall->call.id;
+
+    m_acceptButton->setEnabled(false);
+    m_acceptButton->setText("Writing...");
+    m_cancelButton->setEnabled(false);
+
+    // Ensure parent directories exist
+    QFileInfo fi(path);
+    QDir().mkpath(fi.absolutePath());
+
+    QFile file(path);
+    agent::ToolResult result;
+    result.toolCallId = toolCallId;
+
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        file.write(content.toUtf8());
+        file.close();
+        result.success = true;
+        result.output = "File written successfully: " + path;
+
+        auto &tm = ui::themes::ThemeManager::instance();
+        QString labelColor = tm.color("agent.assistant.label", "#50c878");
+        appendHtml(m_chatHistory,
+            QStringLiteral("<span style='color:%1;'><b>File written:</b> %2</span>")
+                .arg(labelColor, path.toHtmlEscaped()));
+    } else {
+        result.success = false;
+        result.output = "Failed to write file: " + file.errorString();
+        appendError(result.output);
+    }
+
+    m_pendingToolCall.reset();
+    m_toolCallBar->setVisible(false);
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onCancelFileWriteClicked() {
+    if (!m_pendingToolCall) return;
+
+    QString toolCallId = m_pendingToolCall->call.id;
+    m_pendingToolCall.reset();
+    m_toolCallBar->setVisible(false);
+
+    appendError("File write cancelled by user.");
+
+    if (m_provider) {
+        agent::ToolResult result;
+        result.toolCallId = toolCallId;
+        result.success = false;
+        result.output = "User cancelled file write.";
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Screen & terminal tool call handling
+// ---------------------------------------------------------------------------
+
+void QAgentPanelWidget::onReadScreenToolCall(const agent::ToolCall &call) {
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+    result.success = true;
+    result.output = m_screenContext.isEmpty() ? "(no screen content available)" : m_screenContext;
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onListFilesToolCall(const agent::ToolCall &call) {
+    QString path = call.filePath();
+    if (path.isEmpty()) path = ".";
+
+    QDir dir(path);
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!dir.exists()) {
+        result.success = false;
+        result.output = "Directory does not exist: " + path;
+        appendError(result.output);
+    } else {
+        QFileInfoList entries = dir.entryInfoList(
+            QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+            QDir::Name | QDir::DirsFirst);
+        QStringList lines;
+        for (const QFileInfo &fi : entries) {
+            QString type = fi.isDir() ? "[DIR] " : "      ";
+            QString size = fi.isFile() ? QString::number(fi.size()) : "-";
+            lines << QString("%1 %2  %3").arg(type, -6).arg(size, 10).arg(fi.fileName());
+        }
+        result.success = true;
+        result.output = lines.isEmpty() ? "(empty directory)" : lines.join('\n');
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onSendKeysToolCall(const agent::ToolCall &call) {
+    QString keys = call.keysText();
+    if (keys.isEmpty()) {
+        appendError("Agent requested send_keys but no keys were provided.");
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No keys provided.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    if (!m_displayWidget) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No terminal session available.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    // Build a minimal 5250script from the key names and run it
+    // Parse the keys string: quoted strings become TYPE commands, bare words become KEY commands
+    QStringList scriptLines;
+    QRegularExpression tokenRe("\"([^\"]*)\"|\\S+");
+    auto it = tokenRe.globalMatch(keys);
+    while (it.hasNext()) {
+        auto match = it.next();
+        if (!match.captured(1).isNull()) {
+            // Quoted text -> TYPE command
+            scriptLines << QString("TYPE \"%1\"").arg(match.captured(1));
+        } else {
+            // Bare key name -> KEY command
+            scriptLines << QString("KEY %1").arg(match.captured(0).toUpper());
+        }
+    }
+
+    QString script = scriptLines.join('\n');
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString labelColor = tm.color("agent.assistant.label", "#50c878");
+    appendHtml(m_chatHistory,
+        QStringLiteral("<span style='color:%1;'><b>Sending keys:</b> %2</span>")
+            .arg(labelColor, keys.toHtmlEscaped()));
+
+    // Store as pending and run through the script runner (same flow as run_5250script)
+    agent::ToolCall scriptCall;
+    scriptCall.id = call.id;
+    scriptCall.name = agent::kToolRunScript;
+    QJsonObject args;
+    args["script"] = script;
+    scriptCall.arguments = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+
+    appendScriptBlock(script);
+
+    m_pendingToolCall = PendingToolCall{scriptCall};
+
+    // Respect auto-accept setting
+    if (agent::AgentConfig::instance().autoAcceptToolCalls()) {
+        onRunScriptClicked();
+        return;
+    }
+
+    // Show Run/Cancel buttons for user confirmation
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Send Keys");
+    m_cancelButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
+void QAgentPanelWidget::onGetCursorPositionToolCall(const agent::ToolCall &call) {
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        result.success = false;
+        result.output = "No terminal session available.";
+    } else {
+        auto *buf = m_displayWidget->screenBuffer();
+        QPoint pos = buf->cursorPosition();
+        result.success = true;
+        result.output = QString("row: %1, col: %2").arg(pos.y()).arg(pos.x());
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onGetFieldAtToolCall(const agent::ToolCall &call) {
+    int row = call.row();
+    int col = call.col();
+
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        result.success = false;
+        result.output = "No terminal session available.";
+    } else {
+        auto *buf = m_displayWidget->screenBuffer();
+        if (row < 0 || row >= buf->rows() || col < 0 || col >= buf->cols()) {
+            result.success = false;
+            result.output = QString("Position (%1, %2) is out of bounds (screen is %3x%4).")
+                .arg(row).arg(col).arg(buf->rows()).arg(buf->cols());
+        } else if (!buf->isInField(row, col)) {
+            result.success = false;
+            result.output = QString("No field at position (%1, %2).").arg(row).arg(col);
+        } else {
+            auto field = buf->getField(row, col);
+            // Read field text
+            QByteArray fieldData = buf->getFieldData(field);
+            QString fieldText;
+            for (uint8_t byte : fieldData)
+                fieldText += core::EBCDIC::ebcdicToChar(byte);
+
+            result.success = true;
+            result.output = QString(
+                "startRow: %1, startCol: %2, length: %3, protected: %4, modified: %5, text: \"%6\"")
+                .arg(field.startRow).arg(field.startCol).arg(field.length)
+                .arg(field.protected_field ? "true" : "false")
+                .arg(field.modified ? "true" : "false")
+                .arg(fieldText.trimmed());
+        }
+    }
+
+    if (m_provider) {
         showThinkingIndicator();
         m_provider->sendToolResult(result);
     } else {

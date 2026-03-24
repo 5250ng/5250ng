@@ -122,6 +122,7 @@ set(AGENT_SOURCES
     src/agent/config.cpp
     src/agent/tool_call.h
     src/agent/tool_definitions.h
+    src/agent/tool_definitions.cpp
     src/agent/agent_script_runner.h
     src/agent/agent_script_runner.cpp
     src/agent/script_generator.h
