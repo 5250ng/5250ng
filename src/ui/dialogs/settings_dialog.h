@@ -111,6 +111,9 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
 
     QComboBox *m_agentModelCombo;
     QTextEdit *m_agentSystemPromptEdit;
+    QCheckBox *m_autoAcceptAllCheck;
+    QCheckBox *m_autoAcceptToolCallsCheck;
+    QCheckBox *m_autoAcceptFileEditsCheck;
     QPushButton *m_agentSaveBtn;
 
     agent::OAuthAuth *m_activeOAuth = nullptr;

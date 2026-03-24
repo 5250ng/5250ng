@@ -61,6 +61,12 @@ class AgentConfig {
     OAuthConfig openaiOAuthConfig() const { return m_openaiOAuth; }
     void setOpenaiOAuthConfig(const OAuthConfig &cfg) { m_openaiOAuth = cfg; }
 
+    bool autoAcceptToolCalls() const { return m_autoAcceptToolCalls; }
+    void setAutoAcceptToolCalls(bool enabled) { m_autoAcceptToolCalls = enabled; }
+
+    bool autoAcceptFileEdits() const { return m_autoAcceptFileEdits; }
+    void setAutoAcceptFileEdits(bool enabled) { m_autoAcceptFileEdits = enabled; }
+
   private:
     AgentConfig();
 
@@ -75,6 +81,8 @@ class AgentConfig {
     AuthType m_openaiAuthType = AuthType::ApiKey;
     OAuthConfig m_anthropicOAuth;
     OAuthConfig m_openaiOAuth;
+    bool m_autoAcceptToolCalls = false;
+    bool m_autoAcceptFileEdits = false;
 };
 
 } // namespace agent
