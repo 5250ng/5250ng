@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "config.h"
+#include "tool_definitions.h"
 #include <QSettings>
 
 namespace agent {
@@ -96,6 +97,22 @@ void AgentConfig::load() {
     m_autoAcceptToolCalls = settings.value("autoAcceptToolCalls", false).toBool();
     m_autoAcceptFileEdits = settings.value("autoAcceptFileEdits", false).toBool();
 
+    // Per-tool config
+    const QStringList toolNames = {
+        kToolGenerateScript, kToolGetCursorPosition, kToolGetFieldAt,
+        kToolListFiles, kToolReadFile, kToolReadScreen,
+        kToolRunScript, kToolSendKeys, kToolWriteFile};
+    settings.beginGroup("tools");
+    for (const QString &name : toolNames) {
+        settings.beginGroup(name);
+        ToolConfig tc;
+        tc.enabled = settings.value("enabled", true).toBool();
+        tc.customDescription = settings.value("customDescription").toString();
+        m_toolConfigs[name] = tc;
+        settings.endGroup();
+    }
+    settings.endGroup();
+
     settings.endGroup();
 }
 
@@ -118,7 +135,25 @@ void AgentConfig::save() {
     settings.setValue("autoAcceptToolCalls", m_autoAcceptToolCalls);
     settings.setValue("autoAcceptFileEdits", m_autoAcceptFileEdits);
 
+    // Per-tool config
+    settings.beginGroup("tools");
+    for (auto it = m_toolConfigs.constBegin(); it != m_toolConfigs.constEnd(); ++it) {
+        settings.beginGroup(it.key());
+        settings.setValue("enabled", it.value().enabled);
+        settings.setValue("customDescription", it.value().customDescription);
+        settings.endGroup();
+    }
     settings.endGroup();
+
+    settings.endGroup();
+}
+
+ToolConfig AgentConfig::toolConfig(const QString &toolName) const {
+    return m_toolConfigs.value(toolName);
+}
+
+void AgentConfig::setToolConfig(const QString &toolName, const ToolConfig &cfg) {
+    m_toolConfigs[toolName] = cfg;
 }
 
 } // namespace agent

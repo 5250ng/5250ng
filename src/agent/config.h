@@ -18,9 +18,15 @@
 
 #include "auth/auth_method.h"
 #include "auth/oauth_config.h"
+#include <QMap>
 #include <QString>
 
 namespace agent {
+
+struct ToolConfig {
+    bool enabled = true;
+    QString customDescription; // empty = use default from tool_definitions.h
+};
 
 class AgentConfig {
   public:
@@ -67,6 +73,10 @@ class AgentConfig {
     bool autoAcceptFileEdits() const { return m_autoAcceptFileEdits; }
     void setAutoAcceptFileEdits(bool enabled) { m_autoAcceptFileEdits = enabled; }
 
+    // Per-tool configuration
+    ToolConfig toolConfig(const QString &toolName) const;
+    void setToolConfig(const QString &toolName, const ToolConfig &cfg);
+
   private:
     AgentConfig();
 
@@ -83,6 +93,8 @@ class AgentConfig {
     OAuthConfig m_openaiOAuth;
     bool m_autoAcceptToolCalls = false;
     bool m_autoAcceptFileEdits = false;
+
+    QMap<QString, ToolConfig> m_toolConfigs;
 };
 
 } // namespace agent

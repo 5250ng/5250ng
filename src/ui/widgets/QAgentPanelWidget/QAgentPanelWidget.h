@@ -71,6 +71,15 @@ class QAgentPanelWidget : public QWidget {
     void onScriptGenerated(const QString &toolCallId, const QString &script);
     void onScriptGenerationError(const QString &toolCallId, const QString &error);
     void appendScriptBlock(const QString &script);
+    void onReadFileToolCall(const agent::ToolCall &call);
+    void onWriteFileToolCall(const agent::ToolCall &call);
+    void onAcceptFileWriteClicked();
+    void onCancelFileWriteClicked();
+    void onReadScreenToolCall(const agent::ToolCall &call);
+    void onListFilesToolCall(const agent::ToolCall &call);
+    void onSendKeysToolCall(const agent::ToolCall &call);
+    void onGetCursorPositionToolCall(const agent::ToolCall &call);
+    void onGetFieldAtToolCall(const agent::ToolCall &call);
 
     QLabel *m_headerLabel;
     QPushButton *m_clearButton;
@@ -79,8 +88,8 @@ class QAgentPanelWidget : public QWidget {
 
     // Tool call action bar (visible only during pending tool calls)
     QWidget *m_toolCallBar;
-    QPushButton *m_runScriptButton;
-    QPushButton *m_cancelScriptButton;
+    QPushButton *m_acceptButton;
+    QPushButton *m_cancelButton;
 
     agent::Provider *m_provider = nullptr;
     Q5250ScreenWidget *m_displayWidget = nullptr;

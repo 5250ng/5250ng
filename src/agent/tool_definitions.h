@@ -78,41 +78,185 @@ inline QJsonObject toolGenerateScriptSchema() {
 }
 
 // ---------------------------------------------------------------------------
-// Provider-specific tool array builders
+// read_file — read a file from the local filesystem
 // ---------------------------------------------------------------------------
 
-inline QJsonArray anthropicToolsArray() {
-    QJsonObject runTool;
-    runTool["name"] = kToolRunScript;
-    runTool["description"] = kToolRunScriptDescription;
-    runTool["input_schema"] = toolRunScriptSchema();
+inline const QString kToolReadFile = QStringLiteral("read_file");
 
-    QJsonObject genTool;
-    genTool["name"] = kToolGenerateScript;
-    genTool["description"] = kToolGenerateScriptDescription;
-    genTool["input_schema"] = toolGenerateScriptSchema();
+inline const QString kToolReadFileDescription = QStringLiteral(
+    "Read the contents of a file from the local filesystem. "
+    "Returns the full text content of the file.");
 
-    return QJsonArray{genTool, runTool};
+inline QJsonObject toolReadFileSchema() {
+    QJsonObject pathProp;
+    pathProp["type"] = "string";
+    pathProp["description"] = "The absolute or relative path to the file to read";
+
+    QJsonObject properties;
+    properties["path"] = pathProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"path"};
+    return schema;
 }
 
-inline QJsonArray openaiToolsArray() {
-    QJsonObject runFunc;
-    runFunc["name"] = kToolRunScript;
-    runFunc["description"] = kToolRunScriptDescription;
-    runFunc["parameters"] = toolRunScriptSchema();
-    QJsonObject runTool;
-    runTool["type"] = "function";
-    runTool["function"] = runFunc;
+// ---------------------------------------------------------------------------
+// write_file — write content to a file on the local filesystem
+// ---------------------------------------------------------------------------
 
-    QJsonObject genFunc;
-    genFunc["name"] = kToolGenerateScript;
-    genFunc["description"] = kToolGenerateScriptDescription;
-    genFunc["parameters"] = toolGenerateScriptSchema();
-    QJsonObject genTool;
-    genTool["type"] = "function";
-    genTool["function"] = genFunc;
+inline const QString kToolWriteFile = QStringLiteral("write_file");
 
-    return QJsonArray{genTool, runTool};
+inline const QString kToolWriteFileDescription = QStringLiteral(
+    "Write content to a file on the local filesystem. "
+    "Creates the file if it does not exist, or overwrites it if it does.");
+
+inline QJsonObject toolWriteFileSchema() {
+    QJsonObject pathProp;
+    pathProp["type"] = "string";
+    pathProp["description"] = "The absolute or relative path to the file to write";
+
+    QJsonObject contentProp;
+    contentProp["type"] = "string";
+    contentProp["description"] = "The text content to write to the file";
+
+    QJsonObject properties;
+    properties["path"] = pathProp;
+    properties["content"] = contentProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"path", "content"};
+    return schema;
 }
+
+// ---------------------------------------------------------------------------
+// read_screen — read the current terminal screen content
+// ---------------------------------------------------------------------------
+
+inline const QString kToolReadScreen = QStringLiteral("read_screen");
+
+inline const QString kToolReadScreenDescription = QStringLiteral(
+    "Read the current content of the 5250 terminal screen. "
+    "Returns the full text of all rows on the screen. "
+    "Use this to see what is displayed after running a script or at any time.");
+
+inline QJsonObject toolReadScreenSchema() {
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = QJsonObject();
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// list_files — list files and directories
+// ---------------------------------------------------------------------------
+
+inline const QString kToolListFiles = QStringLiteral("list_files");
+
+inline const QString kToolListFilesDescription = QStringLiteral(
+    "List files and directories at a given path on the local filesystem. "
+    "Returns names, types (file or directory), and sizes.");
+
+inline QJsonObject toolListFilesSchema() {
+    QJsonObject pathProp;
+    pathProp["type"] = "string";
+    pathProp["description"] = "The directory path to list. Defaults to current directory if empty.";
+
+    QJsonObject properties;
+    properties["path"] = pathProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// send_keys — send keystrokes to the terminal
+// ---------------------------------------------------------------------------
+
+inline const QString kToolSendKeys = QStringLiteral("send_keys");
+
+inline const QString kToolSendKeysDescription = QStringLiteral(
+    "Send one or more keystrokes to the terminal session. "
+    "Accepts a space-separated list of key names. "
+    "Supported keys: Enter, F1-F24, Tab, Backspace, PageUp, PageDown, "
+    "Home, End, Insert, Delete, Escape, Up, Down, Left, Right, FieldExit. "
+    "Text can be typed by wrapping in quotes, e.g. send_keys with keys='\"hello\" Enter'. "
+    "This is lighter weight than run_5250script for simple key presses.");
+
+inline QJsonObject toolSendKeysSchema() {
+    QJsonObject keysProp;
+    keysProp["type"] = "string";
+    keysProp["description"] =
+        "Space-separated key names to send, e.g. 'F3' or 'Tab \"mytext\" Enter'";
+
+    QJsonObject properties;
+    properties["keys"] = keysProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"keys"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// get_cursor_position — get the current cursor position
+// ---------------------------------------------------------------------------
+
+inline const QString kToolGetCursorPosition = QStringLiteral("get_cursor_position");
+
+inline const QString kToolGetCursorPositionDescription = QStringLiteral(
+    "Get the current cursor position on the terminal screen. "
+    "Returns the row and column (0-based) of the cursor.");
+
+inline QJsonObject toolGetCursorPositionSchema() {
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = QJsonObject();
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// get_field_at — get field information at a screen position
+// ---------------------------------------------------------------------------
+
+inline const QString kToolGetFieldAt = QStringLiteral("get_field_at");
+
+inline const QString kToolGetFieldAtDescription = QStringLiteral(
+    "Get information about the input field at a given screen position. "
+    "Returns the field's start position, length, whether it is protected (read-only), "
+    "and its current text content. Returns an error if no field exists at the position.");
+
+inline QJsonObject toolGetFieldAtSchema() {
+    QJsonObject rowProp;
+    rowProp["type"] = "integer";
+    rowProp["description"] = "Row on the screen (0-based)";
+
+    QJsonObject colProp;
+    colProp["type"] = "integer";
+    colProp["description"] = "Column on the screen (0-based)";
+
+    QJsonObject properties;
+    properties["row"] = rowProp;
+    properties["col"] = colProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"row", "col"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// Provider-specific tool array builders (defined in tool_definitions.cpp)
+// ---------------------------------------------------------------------------
+
+QJsonArray anthropicToolsArray();
+QJsonArray openaiToolsArray();
 
 } // namespace agent
