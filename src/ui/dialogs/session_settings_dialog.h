@@ -42,9 +42,16 @@ class SessionSettingsDialog : public QDialog {
 
     QString selectedThemeId() const;
 
+    /// Hide the bottom Apply/Apply to All buttons when embedded in another dialog.
+    void setEmbeddedMode(bool embedded);
+
   signals:
     void applyRequested(const ui::themes::TerminalTheme &theme);
     void applyToAllRequested(const ui::themes::TerminalTheme &theme);
+
+  public slots:
+    void onApply();
+    void onApplyToAll();
 
   private slots:
     void onThemeDropdownChanged(int index);
@@ -57,9 +64,6 @@ class SessionSettingsDialog : public QDialog {
     void onRandomizeColors();
     void onImportTheme();
     void onExportTheme();
-    void onApply();
-    void onApplyToAll();
-    void onOk();
     void onBackgroundModeChanged();
     void onBrowseBackgroundImage();
     void onColorSwatchClicked();
@@ -198,6 +202,9 @@ class SessionSettingsDialog : public QDialog {
 
     // Preview
     ThemePreviewWidget *m_preview;
+
+    // Bottom button row (hidden in embedded mode)
+    QWidget *m_buttonBar = nullptr;
 
     // Current state
     QString m_currentThemeId;

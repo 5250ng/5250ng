@@ -23,8 +23,8 @@
 #include "agent/providers/anthropic_provider.h"
 #include "agent/providers/openai_provider.h"
 #include <QApplication>
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QGroupBox>
-#include <QMessageBox>
 
 SettingsDialog::SettingsDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
     setupUI();
@@ -61,7 +61,7 @@ void SettingsDialog::setupUI() {
     m_categoryTree->addTopLevelItem(agentItem);
     m_categoryTree->setCurrentItem(themeItem);
 
-    // Right: pages
+    // Right: pages wrapped in a frame to match the category tree style
     m_pages = new QStackedWidget(this);
     m_themePage = buildThemePage();
     m_pages->addWidget(m_themePage); // index 0: application theme
@@ -70,6 +70,7 @@ void SettingsDialog::setupUI() {
     m_terminalThemePage = new SessionSettingsDialog(this);
     m_terminalThemePage->setWindowFlags(Qt::Widget);
     m_terminalThemePage->setWindowTitle(QString()); // not shown as dialog
+    m_terminalThemePage->setEmbeddedMode(true);
     m_pages->addWidget(m_terminalThemePage); // index 1: 5250 theme
 
     // Macros page
@@ -86,8 +87,15 @@ void SettingsDialog::setupUI() {
     connect(m_terminalThemePage, &SessionSettingsDialog::applyToAllRequested,
             this, &SettingsDialog::terminalThemeApplyToAllRequested);
 
+    QFrame *pagesFrame = new QFrame(this);
+    pagesFrame->setFrameShape(QFrame::StyledPanel);
+    pagesFrame->setFrameShadow(QFrame::Sunken);
+    QVBoxLayout *pagesFrameLayout = new QVBoxLayout(pagesFrame);
+    pagesFrameLayout->setContentsMargins(0, 0, 0, 0);
+    pagesFrameLayout->addWidget(m_pages);
+
     m_splitter->addWidget(m_categoryTree);
-    m_splitter->addWidget(m_pages);
+    m_splitter->addWidget(pagesFrame);
     // 1/5 vs 4/5
     QList<int> sizes;
     sizes << width() / 5 << (width() * 4) / 5;
@@ -98,6 +106,10 @@ void SettingsDialog::setupUI() {
     // Bottom buttons
     QHBoxLayout *btnLayout = new QHBoxLayout();
     btnLayout->addStretch();
+    m_saveBtn = new QPushButton("Save", this);
+    connect(m_saveBtn, &QPushButton::clicked, this,
+            &SettingsDialog::onSaveClicked);
+    btnLayout->addWidget(m_saveBtn);
     QPushButton *closeBtn = new QPushButton("Close", this);
     connect(closeBtn, &QPushButton::clicked, this,
             &SettingsDialog::onCloseClicked);
@@ -113,20 +125,12 @@ QWidget *SettingsDialog::buildThemePage() {
     QVBoxLayout *v = new QVBoxLayout(page);
     QLabel *label = new QLabel("Select UI Theme:", page);
     m_themeCombo = new QComboBox(page);
-    m_applyThemeBtn = new QPushButton("Apply", page);
     v->addWidget(label);
-    QHBoxLayout *h = new QHBoxLayout();
-    h->setContentsMargins(0, 0, 0, 0);
-    h->setSpacing(6);
-    h->addWidget(m_themeCombo, 1);
-    h->addWidget(m_applyThemeBtn, 0);
-    v->addLayout(h);
+    v->addWidget(m_themeCombo);
     v->addStretch();
 
     // Populated by ensureThemesLoaded() which runs immediately after setupUI()
-    connect(m_themeCombo, &QComboBox::currentIndexChanged, this,
-            [this](int) { onThemeChanged(); });
-    connect(m_applyThemeBtn, &QPushButton::clicked, this, &SettingsDialog::onApplyThemeClicked);
+    // Theme is applied only when the user clicks Save (via onSaveClicked)
 
     return page;
 }
@@ -313,13 +317,6 @@ QWidget *SettingsDialog::buildAgentPage() {
 
     layout->addWidget(dangerGroup);
 
-    // Save button
-    QHBoxLayout *saveRow = new QHBoxLayout();
-    saveRow->addStretch();
-    m_agentSaveBtn = new QPushButton("Save", page);
-    saveRow->addWidget(m_agentSaveBtn);
-    layout->addLayout(saveRow);
-
     layout->addStretch();
 
     // Populate from config
@@ -333,7 +330,6 @@ QWidget *SettingsDialog::buildAgentPage() {
     connect(m_agentAuthTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SettingsDialog::onAgentAuthTypeChanged);
     connect(m_agentTestBtn, &QPushButton::clicked, this, &SettingsDialog::onAgentTestClicked);
-    connect(m_agentSaveBtn, &QPushButton::clicked, this, &SettingsDialog::onAgentSaveClicked);
     connect(m_oauthSignInBtn, &QPushButton::clicked, this, &SettingsDialog::onOAuthSignInClicked);
     connect(m_oauthSignOutBtn, &QPushButton::clicked, this, &SettingsDialog::onOAuthSignOutClicked);
 
@@ -369,16 +365,7 @@ QWidget *SettingsDialog::buildMacrosPage() {
 
     layout->addWidget(recordingGroup);
 
-    // Save button
-    QHBoxLayout *saveRow = new QHBoxLayout();
-    saveRow->addStretch();
-    m_macrosSaveBtn = new QPushButton("Save", page);
-    saveRow->addWidget(m_macrosSaveBtn);
-    layout->addLayout(saveRow);
-
     layout->addStretch();
-
-    connect(m_macrosSaveBtn, &QPushButton::clicked, this, &SettingsDialog::onMacrosSaveClicked);
 
     return page;
 }
@@ -387,7 +374,7 @@ void SettingsDialog::onMacrosSaveClicked() {
     auto &cfg = core::MacroConfig::instance();
     cfg.setRecordTimings(m_recordTimingsCheck->isChecked());
     cfg.save();
-    QMessageBox::information(this, "Macros Settings", "Settings saved.");
+    ui::widgets::StyledMessageBox::information(this, "Macros Settings", "Settings saved.");
 }
 
 void SettingsDialog::onAgentProviderChanged(int index) {
@@ -444,7 +431,7 @@ void SettingsDialog::onAgentTestClicked() {
     QString model = m_agentModelCombo->currentText();
 
     if (apiKey.isEmpty()) {
-        QMessageBox::warning(this, "Test Connection", "Please enter an API key first.");
+        ui::widgets::StyledMessageBox::warning(this, "Test Connection", "Please enter an API key first.");
         return;
     }
 
@@ -463,13 +450,13 @@ void SettingsDialog::onAgentTestClicked() {
     connect(provider, &agent::Provider::responseReceived, this, [this, provider](const QString &) {
         m_agentTestBtn->setEnabled(true);
         m_agentTestBtn->setText("Test");
-        QMessageBox::information(this, "Test Connection", "Connection successful!");
+        ui::widgets::StyledMessageBox::information(this, "Test Connection", "Connection successful!");
         provider->deleteLater();
     });
     connect(provider, &agent::Provider::responseError, this, [this, provider](const QString &error) {
         m_agentTestBtn->setEnabled(true);
         m_agentTestBtn->setText("Test");
-        QMessageBox::critical(this, "Test Connection", "Connection failed:\n" + error);
+        ui::widgets::StyledMessageBox::warning(this, "Test Connection", "Connection failed:\n" + error);
         provider->deleteLater();
     });
 
@@ -515,18 +502,13 @@ void SettingsDialog::onAgentSaveClicked() {
                     || (wantFileEdits && !cfg.autoAcceptFileEdits());
 
     if (enablingAny) {
-        QMessageBox warn(this);
-        warn.setWindowTitle("Enable Auto-Accept");
-        warn.setIcon(QMessageBox::Warning);
-        warn.setText("Are you sure you want to enable auto-accept?");
-        warn.setInformativeText(
+        auto result = ui::widgets::StyledMessageBox::question(this, "Enable Auto-Accept",
+            "Are you sure you want to enable auto-accept?\n\n"
             "The agent will perform the selected actions on your live AS/400 "
             "session without asking for confirmation. This can result in data "
             "loss or unintended system changes.\n\n"
             "Do you want to proceed?");
-        warn.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-        warn.setDefaultButton(QMessageBox::No);
-        if (warn.exec() != QMessageBox::Yes) {
+        if (result != ui::widgets::StyledMessageBox::Yes) {
             m_autoAcceptToolCallsCheck->setChecked(cfg.autoAcceptToolCalls());
             m_autoAcceptFileEditsCheck->setChecked(cfg.autoAcceptFileEdits());
             wantToolCalls = cfg.autoAcceptToolCalls();
@@ -539,7 +521,7 @@ void SettingsDialog::onAgentSaveClicked() {
     cfg.save();
     emit agentConfigChanged();
 
-    QMessageBox::information(this, "Agent Settings", "Settings saved.");
+    ui::widgets::StyledMessageBox::information(this, "Agent Settings", "Settings saved.");
 }
 
 void SettingsDialog::onOAuthSignInClicked() {
@@ -548,7 +530,7 @@ void SettingsDialog::onOAuthSignInClicked() {
     QString tokenEndpoint = m_oauthTokenEndpointEdit->text().trimmed();
 
     if (clientId.isEmpty() || authEndpoint.isEmpty() || tokenEndpoint.isEmpty()) {
-        QMessageBox::warning(this, "OAuth Sign In",
+        ui::widgets::StyledMessageBox::warning(this, "OAuth Sign In",
                              "Please fill in the Client ID, Auth Endpoint, and Token Endpoint.");
         return;
     }
@@ -574,14 +556,14 @@ void SettingsDialog::onOAuthSignInClicked() {
         m_oauthSignInBtn->setEnabled(true);
         m_oauthSignInBtn->setText("Sign In with Browser");
         updateOAuthStatus();
-        QMessageBox::information(this, "OAuth", "Successfully signed in!");
+        ui::widgets::StyledMessageBox::information(this, "OAuth", "Successfully signed in!");
     });
     connect(m_activeOAuth, &agent::AuthMethod::authenticationFailed, this, [this](const QString &error) {
         m_oauthSignInBtn->setEnabled(true);
         m_oauthSignInBtn->setText("Sign In with Browser");
         m_oauthStatusLabel->setText("Not signed in");
         m_oauthStatusLabel->setStyleSheet("color: red; font-style: italic;");
-        QMessageBox::critical(this, "OAuth", "Sign in failed:\n" + error);
+        ui::widgets::StyledMessageBox::warning(this, "OAuth", "Sign in failed:\n" + error);
     });
 
     m_activeOAuth->authenticate();
@@ -596,7 +578,7 @@ void SettingsDialog::onOAuthSignOutClicked() {
         m_activeOAuth = nullptr;
     }
     updateOAuthStatus();
-    QMessageBox::information(this, "OAuth", "Signed out.");
+    ui::widgets::StyledMessageBox::information(this, "OAuth", "Signed out.");
 }
 
 void SettingsDialog::updateOAuthStatus() {
@@ -654,24 +636,28 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
     }
 }
 
-void SettingsDialog::onThemeChanged() {
-    const QString name = m_themeCombo->currentData().toString();
-    if (name.isEmpty())
-        return;
-    auto &mgr = ui::themes::ThemeManager::instance();
-    if (!mgr.hasTheme(name))
-        return;
-    mgr.setCurrentTheme(name);
-}
-
-void SettingsDialog::onApplyThemeClicked() {
-    const QString name = m_themeCombo->currentData().toString();
-    if (name.isEmpty())
-        return;
-    auto &mgr = ui::themes::ThemeManager::instance();
-    if (!mgr.hasTheme(name))
-        return;
-    mgr.setCurrentTheme(name);
+void SettingsDialog::onSaveClicked() {
+    int idx = m_pages->currentIndex();
+    switch (idx) {
+    case 0: { // Application Theme
+        const QString name = m_themeCombo->currentData().toString();
+        if (!name.isEmpty()) {
+            auto &mgr = ui::themes::ThemeManager::instance();
+            if (mgr.hasTheme(name))
+                mgr.setCurrentTheme(name);
+        }
+        break;
+    }
+    case 1: // 5250 Theme
+        m_terminalThemePage->onApplyToAll();
+        break;
+    case 2: // Macros
+        onMacrosSaveClicked();
+        break;
+    case 3: // Agent
+        onAgentSaveClicked();
+        break;
+    }
 }
 
 void SettingsDialog::onCloseClicked() { accept(); }

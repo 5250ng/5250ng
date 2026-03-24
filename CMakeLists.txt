@@ -208,6 +208,12 @@ set(UI_SOURCES
     src/ui/widgets/Frameless/titlebar_icons.qrc
     src/ui/widgets/Frameless/StyledMessageBox.cpp
     src/ui/widgets/Frameless/StyledMessageBox.h
+    src/ui/widgets/Frameless/StyledInputDialog.cpp
+    src/ui/widgets/Frameless/StyledInputDialog.h
+    src/ui/widgets/Frameless/StyledColorDialog.cpp
+    src/ui/widgets/Frameless/StyledColorDialog.h
+    src/ui/widgets/Frameless/StyledFileDialog.cpp
+    src/ui/widgets/Frameless/StyledFileDialog.h
     # dialogs
     src/ui/dialogs/log_viewer.cpp
     src/ui/dialogs/log_viewer.h

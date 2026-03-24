@@ -16,14 +16,14 @@
 
 #include "session_settings_dialog.h"
 #include "ui/themes/terminal_theme_manager.h"
-#include <QColorDialog>
-#include <QFileDialog>
+#include "ui/widgets/Frameless/StyledColorDialog.h"
+#include "ui/widgets/Frameless/StyledFileDialog.h"
+#include "ui/widgets/Frameless/StyledInputDialog.h"
+#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QFontDatabase>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
-#include <QInputDialog>
-#include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QRandomGenerator>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -76,15 +76,17 @@ void SessionSettingsDialog::setupUI() {
     scroll->setWidget(content);
     root->addWidget(scroll, 1);
 
-    // Bottom buttons
-    QHBoxLayout *btnLayout = new QHBoxLayout();
+    // Bottom buttons (hidden when embedded in SettingsDialog)
+    m_buttonBar = new QWidget(this);
+    QHBoxLayout *btnLayout = new QHBoxLayout(m_buttonBar);
+    btnLayout->setContentsMargins(0, 0, 0, 0);
     QPushButton *applyAllBtn = new QPushButton("Apply to All Sessions", this);
     QPushButton *applyBtn = new QPushButton("Apply", this);
 
     btnLayout->addWidget(applyAllBtn);
     btnLayout->addStretch();
     btnLayout->addWidget(applyBtn);
-    root->addLayout(btnLayout);
+    root->addWidget(m_buttonBar);
 
     connect(applyAllBtn, &QPushButton::clicked, this, &SessionSettingsDialog::onApplyToAll);
     connect(applyBtn, &QPushButton::clicked, this, &SessionSettingsDialog::onApply);
@@ -614,10 +616,9 @@ void SessionSettingsDialog::onColorSwatchClicked() {
     if (!btn) return;
 
     QColor current = swatchColor(btn);
-    QColorDialog dlg(current, this);
-    dlg.setOption(QColorDialog::ShowAlphaChannel, true);
-    if (dlg.exec() == QDialog::Accepted) {
-        setSwatchColor(btn, dlg.selectedColor());
+    QColor selected = ui::widgets::StyledColorDialog::getColor(current, this, "Select Color", true);
+    if (selected.isValid()) {
+        setSwatchColor(btn, selected);
         onThemePropertyChanged();
     }
 }
@@ -909,7 +910,7 @@ void SessionSettingsDialog::onBackgroundModeChanged() {
 }
 
 void SessionSettingsDialog::onBrowseBackgroundImage() {
-    QString path = QFileDialog::getOpenFileName(
+    QString path = ui::widgets::StyledFileDialog::getOpenFileName(
         this, "Select Background Image", QString(),
         "Images (*.png *.jpg *.jpeg *.bmp *.gif)");
     if (!path.isEmpty()) {
@@ -929,7 +930,7 @@ void SessionSettingsDialog::updatePreview() {
 
 void SessionSettingsDialog::onNewTheme() {
     bool ok;
-    QString name = QInputDialog::getText(this, "New Theme", "Theme name:", QLineEdit::Normal,
+    QString name = ui::widgets::StyledInputDialog::getText(this, "New Theme", "Theme name:", QLineEdit::Normal,
                                           "My Custom Theme", &ok);
     if (!ok || name.trimmed().isEmpty()) return;
 
@@ -951,7 +952,7 @@ void SessionSettingsDialog::onDuplicateTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     ui::themes::TerminalTheme original = mgr.theme(m_currentThemeId);
     QString baseName = original.displayName + " (copy)";
-    QString name = QInputDialog::getText(this, "Duplicate Theme", "Theme name:", QLineEdit::Normal,
+    QString name = ui::widgets::StyledInputDialog::getText(this, "Duplicate Theme", "Theme name:", QLineEdit::Normal,
                                           baseName, &ok);
     if (!ok || name.trimmed().isEmpty()) return;
 
@@ -1012,7 +1013,7 @@ void SessionSettingsDialog::onDeleteTheme() {
 }
 
 void SessionSettingsDialog::onImportTheme() {
-    QString path = QFileDialog::getOpenFileName(
+    QString path = ui::widgets::StyledFileDialog::getOpenFileName(
         this, "Import Theme", QString(),
         "Theme files (*.json *.5250theme)");
     if (path.isEmpty()) return;
@@ -1027,7 +1028,7 @@ void SessionSettingsDialog::onImportTheme() {
 }
 
 void SessionSettingsDialog::onExportTheme() {
-    QString path = QFileDialog::getSaveFileName(
+    QString path = ui::widgets::StyledFileDialog::getSaveFileName(
         this, "Export Theme", m_currentThemeId + ".5250theme",
         "Theme files (*.5250theme *.json)");
     if (path.isEmpty()) return;
@@ -1053,9 +1054,9 @@ void SessionSettingsDialog::onApplyToAll() {
     emit applyToAllRequested(collectThemeFromUI());
 }
 
-void SessionSettingsDialog::onOk() {
-    emit applyRequested(collectThemeFromUI());
-    accept();
+void SessionSettingsDialog::setEmbeddedMode(bool embedded) {
+    if (m_buttonBar)
+        m_buttonBar->setVisible(!embedded);
 }
 
 void SessionSettingsDialog::onMonochromeToggled(bool checked) {
