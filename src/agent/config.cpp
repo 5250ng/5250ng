@@ -93,6 +93,9 @@ void AgentConfig::load() {
     loadOAuthConfig(settings, "anthropicOAuth", m_anthropicOAuth);
     loadOAuthConfig(settings, "openaiOAuth", m_openaiOAuth);
 
+    m_autoAcceptToolCalls = settings.value("autoAcceptToolCalls", false).toBool();
+    m_autoAcceptFileEdits = settings.value("autoAcceptFileEdits", false).toBool();
+
     settings.endGroup();
 }
 
@@ -111,6 +114,9 @@ void AgentConfig::save() {
 
     saveOAuthConfig(settings, "anthropicOAuth", m_anthropicOAuth);
     saveOAuthConfig(settings, "openaiOAuth", m_openaiOAuth);
+
+    settings.setValue("autoAcceptToolCalls", m_autoAcceptToolCalls);
+    settings.setValue("autoAcceptFileEdits", m_autoAcceptFileEdits);
 
     settings.endGroup();
 }

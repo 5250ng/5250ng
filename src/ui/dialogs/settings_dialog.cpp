@@ -256,6 +256,63 @@ QWidget *SettingsDialog::buildAgentPage() {
     m_agentSystemPromptEdit->setPlainText(cfg.systemPrompt());
     layout->addWidget(m_agentSystemPromptEdit);
 
+    // Separator
+    QFrame *sep3 = new QFrame(page);
+    sep3->setFrameShape(QFrame::HLine);
+    sep3->setFrameShadow(QFrame::Sunken);
+    layout->addWidget(sep3);
+
+    // Auto-accept settings
+    QGroupBox *dangerGroup = new QGroupBox("Danger Zone", page);
+    dangerGroup->setStyleSheet(
+        "QGroupBox { border: 2px solid #c62828; border-radius: 4px; margin-top: 8px; padding-top: 12px; font-weight: bold; color: #c62828; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }");
+    QVBoxLayout *dangerLayout = new QVBoxLayout(dangerGroup);
+
+    QLabel *autoAcceptWarning = new QLabel(dangerGroup);
+    autoAcceptWarning->setWordWrap(true);
+    autoAcceptWarning->setStyleSheet("color: #c62828; font-size: 11px; font-weight: normal;");
+    autoAcceptWarning->setText(
+        "WARNING: Auto-accept lets the agent act WITHOUT asking for confirmation. "
+        "Scripts will run immediately on your live AS/400 session and file edits will "
+        "be applied without review. This can result in data loss, unintended system "
+        "changes, or destructive operations. Only enable these if you fully understand "
+        "the risks and trust the agent's output.");
+    dangerLayout->addWidget(autoAcceptWarning);
+
+    m_autoAcceptAllCheck = new QCheckBox("All", dangerGroup);
+    dangerLayout->addWidget(m_autoAcceptAllCheck);
+
+    m_autoAcceptToolCallsCheck = new QCheckBox("Script execution", dangerGroup);
+    m_autoAcceptToolCallsCheck->setChecked(cfg.autoAcceptToolCalls());
+    dangerLayout->addWidget(m_autoAcceptToolCallsCheck);
+
+    m_autoAcceptFileEditsCheck = new QCheckBox("File edits", dangerGroup);
+    m_autoAcceptFileEditsCheck->setChecked(cfg.autoAcceptFileEdits());
+    dangerLayout->addWidget(m_autoAcceptFileEditsCheck);
+
+    // "All" toggles every individual checkbox
+    connect(m_autoAcceptAllCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        m_autoAcceptToolCallsCheck->setChecked(checked);
+        m_autoAcceptFileEditsCheck->setChecked(checked);
+    });
+
+    // Keep "All" in sync when individual checkboxes change
+    auto updateAllCheck = [this]() {
+        bool allChecked = m_autoAcceptToolCallsCheck->isChecked()
+                       && m_autoAcceptFileEditsCheck->isChecked();
+        m_autoAcceptAllCheck->blockSignals(true);
+        m_autoAcceptAllCheck->setChecked(allChecked);
+        m_autoAcceptAllCheck->blockSignals(false);
+    };
+    connect(m_autoAcceptToolCallsCheck, &QCheckBox::toggled, this, updateAllCheck);
+    connect(m_autoAcceptFileEditsCheck, &QCheckBox::toggled, this, updateAllCheck);
+
+    // Initialize "All" state
+    m_autoAcceptAllCheck->setChecked(cfg.autoAcceptToolCalls() && cfg.autoAcceptFileEdits());
+
+    layout->addWidget(dangerGroup);
+
     // Save button
     QHBoxLayout *saveRow = new QHBoxLayout();
     saveRow->addStretch();
@@ -450,6 +507,35 @@ void SettingsDialog::onAgentSaveClicked() {
         cfg.setAnthropicOAuthConfig(oauthCfg);
     }
     cfg.setSystemPrompt(m_agentSystemPromptEdit->toPlainText());
+
+    // Handle auto-accept with confirmation when enabling any option
+    bool wantToolCalls = m_autoAcceptToolCallsCheck->isChecked();
+    bool wantFileEdits = m_autoAcceptFileEditsCheck->isChecked();
+    bool enablingAny = (wantToolCalls && !cfg.autoAcceptToolCalls())
+                    || (wantFileEdits && !cfg.autoAcceptFileEdits());
+
+    if (enablingAny) {
+        QMessageBox warn(this);
+        warn.setWindowTitle("Enable Auto-Accept");
+        warn.setIcon(QMessageBox::Warning);
+        warn.setText("Are you sure you want to enable auto-accept?");
+        warn.setInformativeText(
+            "The agent will perform the selected actions on your live AS/400 "
+            "session without asking for confirmation. This can result in data "
+            "loss or unintended system changes.\n\n"
+            "Do you want to proceed?");
+        warn.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        warn.setDefaultButton(QMessageBox::No);
+        if (warn.exec() != QMessageBox::Yes) {
+            m_autoAcceptToolCallsCheck->setChecked(cfg.autoAcceptToolCalls());
+            m_autoAcceptFileEditsCheck->setChecked(cfg.autoAcceptFileEdits());
+            wantToolCalls = cfg.autoAcceptToolCalls();
+            wantFileEdits = cfg.autoAcceptFileEdits();
+        }
+    }
+    cfg.setAutoAcceptToolCalls(wantToolCalls);
+    cfg.setAutoAcceptFileEdits(wantFileEdits);
+
     cfg.save();
     emit agentConfigChanged();
 

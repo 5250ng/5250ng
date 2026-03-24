@@ -240,9 +240,13 @@ static QPalette buildPaletteFromTheme(const QMap<QString, QString> &colors) {
         pal.setColor(group, QPalette::LinkVisited,     QColor("#7f3fbf"));
         pal.setColor(group, QPalette::PlaceholderText, disabledText);
     }
-    pal.setColor(QPalette::Disabled, QPalette::WindowText,  disabledText);
-    pal.setColor(QPalette::Disabled, QPalette::Text,        disabledText);
-    pal.setColor(QPalette::Disabled, QPalette::ButtonText,  disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::Window,       bg);
+    pal.setColor(QPalette::Disabled, QPalette::Base,         base);
+    pal.setColor(QPalette::Disabled, QPalette::AlternateBase, altBase);
+    pal.setColor(QPalette::Disabled, QPalette::Button,       button);
+    pal.setColor(QPalette::Disabled, QPalette::WindowText,   disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::Text,         disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::ButtonText,   disabledText);
     return pal;
 }
 

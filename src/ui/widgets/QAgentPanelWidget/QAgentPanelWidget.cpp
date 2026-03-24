@@ -359,6 +359,13 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
 
     // Store pending state and show action buttons
     m_pendingToolCall = PendingToolCall{call};
+
+    // Auto-accept if enabled in settings
+    if (agent::AgentConfig::instance().autoAcceptToolCalls()) {
+        onRunScriptClicked();
+        return;
+    }
+
     m_runScriptButton->setEnabled(true);
     m_runScriptButton->setText("Run Script");
     m_cancelScriptButton->setEnabled(true);
