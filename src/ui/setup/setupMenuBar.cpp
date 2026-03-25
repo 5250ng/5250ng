@@ -43,6 +43,8 @@ void MainWindow::setupMenuBar() {
     fileMenu->addSeparator();
     fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
     fileMenu->addSeparator();
+    m_mcpServerAction = fileMenu->addAction("&MCP Server...", this, &MainWindow::onMcpServer);
+    fileMenu->addSeparator();
     m_exitAction = fileMenu->addAction("E&xit", this, &QWidget::close);
     m_exitAction->setShortcut(QKeySequence::Quit);
 

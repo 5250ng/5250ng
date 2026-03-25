@@ -183,9 +183,9 @@ inline const QString kToolSendKeys = QStringLiteral("send_keys");
 inline const QString kToolSendKeysDescription = QStringLiteral(
     "Send one or more keystrokes to the terminal session. "
     "Accepts a space-separated list of key names. "
-    "Supported keys: Enter, F1-F24, Tab, Backspace, PageUp, PageDown, "
-    "Home, End, Insert, Delete, Escape, Up, Down, Left, Right, FieldExit. "
-    "Text can be typed by wrapping in quotes, e.g. send_keys with keys='\"hello\" Enter'. "
+    "Supported keys: ENTER, F1-F24, TAB, BACKSPACE, PAGEUP, PAGEDOWN, "
+    "HOME, END, INSERT, DELETE, ESCAPE, UP, DOWN, LEFT, RIGHT, FIELDEXIT. "
+    "Text can be typed by wrapping in quotes, e.g. send_keys with keys='\"hello\" ENTER'. "
     "This is lighter weight than run_5250script for simple key presses.");
 
 inline QJsonObject toolSendKeysSchema() {
@@ -249,6 +249,174 @@ inline QJsonObject toolGetFieldAtSchema() {
     schema["type"] = "object";
     schema["properties"] = properties;
     schema["required"] = QJsonArray{"row", "col"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// connect — connect to an AS/400 host
+// ---------------------------------------------------------------------------
+
+inline const QString kToolConnect = QStringLiteral("connect");
+
+inline const QString kToolConnectDescription = QStringLiteral(
+    "Connect to an AS/400 (IBM i) host via TN5250. "
+    "Creates a new terminal session and establishes the connection. "
+    "Returns when the connection is established and the terminal is ready.");
+
+inline QJsonObject toolConnectSchema() {
+    QJsonObject hostProp;
+    hostProp["type"] = "string";
+    hostProp["description"] = "Hostname or IP address of the AS/400 system";
+
+    QJsonObject portProp;
+    portProp["type"] = "integer";
+    portProp["description"] = "TCP port number (default 23)";
+
+    QJsonObject tlsProp;
+    tlsProp["type"] = "boolean";
+    tlsProp["description"] = "Use TLS/SSL encryption (default false)";
+
+    QJsonObject properties;
+    properties["hostname"] = hostProp;
+    properties["port"] = portProp;
+    properties["useTLS"] = tlsProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"hostname"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// login — auto-login to the AS/400 using username and password
+// ---------------------------------------------------------------------------
+
+inline const QString kToolLogin = QStringLiteral("login");
+
+inline const QString kToolLoginDescription = QStringLiteral(
+    "Log in to the AS/400 system using a username and password. "
+    "Waits for the sign-on screen, types the credentials, and presses Enter. "
+    "Requires an active terminal connection (use the connect tool first).");
+
+inline QJsonObject toolLoginSchema() {
+    QJsonObject userProp;
+    userProp["type"] = "string";
+    userProp["description"] = "AS/400 user profile name";
+
+    QJsonObject passProp;
+    passProp["type"] = "string";
+    passProp["description"] = "Password for the user profile";
+
+    QJsonObject properties;
+    properties["username"] = userProp;
+    properties["password"] = passProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"username", "password"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// MCP-only tools (not sent to AI providers, only exposed via MCP server)
+// ---------------------------------------------------------------------------
+
+// create_session — create a new MCP-controlled TN5250 session
+inline const QString kToolCreateSession = QStringLiteral("create_session");
+
+inline const QString kToolCreateSessionDescription = QStringLiteral(
+    "Create a new TN5250 terminal session and connect to an AS/400 host. "
+    "Returns a session_id that must be used in subsequent tool calls to "
+    "target this session. The session appears as a read-only tab in the UI.");
+
+inline QJsonObject toolCreateSessionSchema() {
+    QJsonObject hostProp;
+    hostProp["type"] = "string";
+    hostProp["description"] = "Hostname or IP address of the AS/400 system";
+
+    QJsonObject portProp;
+    portProp["type"] = "integer";
+    portProp["description"] = "TCP port number (default 23)";
+
+    QJsonObject tlsProp;
+    tlsProp["type"] = "boolean";
+    tlsProp["description"] = "Use TLS/SSL encryption (default false)";
+
+    QJsonObject properties;
+    properties["hostname"] = hostProp;
+    properties["port"] = portProp;
+    properties["useTLS"] = tlsProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"hostname"};
+    return schema;
+}
+
+// close_session — close an MCP-controlled session
+inline const QString kToolCloseSession = QStringLiteral("close_session");
+
+inline const QString kToolCloseSessionDescription = QStringLiteral(
+    "Close an MCP-controlled terminal session. "
+    "Disconnects from the host and removes the tab.");
+
+inline QJsonObject toolCloseSessionSchema() {
+    QJsonObject sidProp;
+    sidProp["type"] = "string";
+    sidProp["description"] = "Session ID returned by create_session";
+
+    QJsonObject properties;
+    properties["session_id"] = sidProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"session_id"};
+    return schema;
+}
+
+// list_sessions — list all MCP-managed sessions
+inline const QString kToolListSessions = QStringLiteral("list_sessions");
+
+inline const QString kToolListSessionsDescription = QStringLiteral(
+    "List all MCP-managed terminal sessions with their IDs, "
+    "hostnames, ports, and connection status.");
+
+inline QJsonObject toolListSessionsSchema() {
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = QJsonObject();
+    return schema;
+}
+
+// screenshot — capture terminal screen as PNG
+inline const QString kToolScreenshot = QStringLiteral("screenshot");
+
+inline const QString kToolScreenshotDescription = QStringLiteral(
+    "Capture the terminal screen of a session as a PNG image. "
+    "Saves the screenshot to the specified file path. "
+    "Useful for generating visual reports.");
+
+inline QJsonObject toolScreenshotSchema() {
+    QJsonObject sidProp;
+    sidProp["type"] = "string";
+    sidProp["description"] = "Session ID returned by create_session";
+
+    QJsonObject pathProp;
+    pathProp["type"] = "string";
+    pathProp["description"] = "File path where the PNG screenshot will be saved";
+
+    QJsonObject properties;
+    properties["session_id"] = sidProp;
+    properties["path"] = pathProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"session_id", "path"};
     return schema;
 }
 

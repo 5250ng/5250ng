@@ -123,6 +123,15 @@ set(AGENT_SOURCES
     src/agent/tool_call.h
     src/agent/tool_definitions.h
     src/agent/tool_definitions.cpp
+    # MCP server
+    src/mcp/McpServer.h
+    src/mcp/McpServer.cpp
+    src/mcp/McpSessionRegistry.h
+    src/mcp/McpSessionRegistry.cpp
+    src/mcp/McpToolHandler.h
+    src/mcp/McpToolHandler.cpp
+    src/mcp/McpHttpParser.h
+    src/mcp/McpHttpParser.cpp
     src/agent/agent_script_runner.h
     src/agent/agent_script_runner.cpp
     src/agent/script_generator.h
@@ -218,6 +227,8 @@ set(UI_SOURCES
     # dialogs
     src/ui/dialogs/log_viewer.cpp
     src/ui/dialogs/log_viewer.h
+    src/ui/dialogs/mcp_log_viewer.h
+    src/ui/dialogs/mcp_log_viewer.cpp
     src/ui/dialogs/connect_dialog.cpp
     src/ui/dialogs/connect_dialog.h
     src/ui/dialogs/settings_dialog.cpp

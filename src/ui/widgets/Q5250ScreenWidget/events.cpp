@@ -37,6 +37,7 @@ bool Q5250ScreenWidget::event(QEvent *ev) {
     // QWidget::event() normally converts these into focus-next/focus-prev and
     // never calls keyPressEvent, so we must catch them here.
     if (ev->type() == QEvent::KeyPress) {
+        if (m_readOnly) return QWidget::event(ev);
         QKeyEvent *ke = static_cast<QKeyEvent *>(ev);
         if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
             keyPressEvent(ke);
@@ -74,6 +75,19 @@ void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {
 }
 
 void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
+    // In read-only mode, only allow copy
+    if (m_readOnly) {
+        if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_C) {
+            if (hasSelection()) {
+                copySelection();
+                event->accept();
+                return;
+            }
+        }
+        event->ignore();
+        return;
+    }
+
     // Handle Ctrl+C for copying selection
     if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_C) {
         if (hasSelection()) {

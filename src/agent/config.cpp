@@ -96,11 +96,14 @@ void AgentConfig::load() {
 
     m_autoAcceptToolCalls = settings.value("autoAcceptToolCalls", false).toBool();
     m_autoAcceptFileEdits = settings.value("autoAcceptFileEdits", false).toBool();
+    m_mcpServerEnabled = settings.value("mcpServerEnabled", false).toBool();
+    m_mcpServerPort = static_cast<quint16>(settings.value("mcpServerPort", 9250).toUInt());
 
     // Per-tool config
     const QStringList toolNames = {
-        kToolGenerateScript, kToolGetCursorPosition, kToolGetFieldAt,
-        kToolListFiles, kToolReadFile, kToolReadScreen,
+        kToolConnect, kToolGenerateScript, kToolGetCursorPosition,
+        kToolGetFieldAt, kToolListFiles, kToolLogin,
+        kToolReadFile, kToolReadScreen,
         kToolRunScript, kToolSendKeys, kToolWriteFile};
     settings.beginGroup("tools");
     for (const QString &name : toolNames) {
@@ -134,6 +137,8 @@ void AgentConfig::save() {
 
     settings.setValue("autoAcceptToolCalls", m_autoAcceptToolCalls);
     settings.setValue("autoAcceptFileEdits", m_autoAcceptFileEdits);
+    settings.setValue("mcpServerEnabled", m_mcpServerEnabled);
+    settings.setValue("mcpServerPort", m_mcpServerPort);
 
     // Per-tool config
     settings.beginGroup("tools");

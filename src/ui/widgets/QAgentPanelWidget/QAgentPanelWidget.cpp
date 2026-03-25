@@ -351,6 +351,21 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
         return;
     }
 
+    if (call.name == agent::kToolConnect || call.name == agent::kToolLogin) {
+        // connect and login are only available via MCP, not the built-in agent
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = call.name + " is only available via the MCP server.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
     if (call.name == agent::kToolWriteFile) {
         onWriteFileToolCall(call);
         return;
@@ -831,8 +846,8 @@ void QAgentPanelWidget::onSendKeysToolCall(const agent::ToolCall &call) {
             // Quoted text -> TYPE command
             scriptLines << QString("TYPE \"%1\"").arg(match.captured(1));
         } else {
-            // Bare key name -> KEY command
-            scriptLines << QString("KEY %1").arg(match.captured(0).toUpper());
+            // Bare key name -> PRESS command
+            scriptLines << QString("PRESS %1").arg(match.captured(0).toUpper());
         }
     }
 

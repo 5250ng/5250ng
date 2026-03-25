@@ -215,17 +215,31 @@ bool AgentScriptRunner::isRunning() const {
 
 void AgentScriptRunner::cleanup() {
     m_running = false;
+
+    // Disconnect all signals first — prevents any further callbacks
+    // into the executor or screen adapter after this point.
     for (auto &conn : m_connections)
         QObject::disconnect(conn);
     m_connections.clear();
 
-    delete m_screenAdapter;
+    // Defer actual deletion to after the current signal chain unwinds.
+    // cleanup() is called from signal handlers (executionFinished, executionError)
+    // which may still be on the call stack. Deleting the executor or screen
+    // adapter here can cause use-after-free.
+    auto *adapter = m_screenAdapter;
     m_screenAdapter = nullptr;
+    auto *executor = m_executor;
+    m_executor = nullptr;
 
-    if (m_executor) {
-        m_executor->deleteLater();
-        m_executor = nullptr;
-    }
+    // Reparent the executor so deleting the runner doesn't double-free it.
+    if (executor)
+        executor->setParent(nullptr);
+
+    // Defer deletion to after the current signal chain unwinds.
+    QTimer::singleShot(0, qApp, [adapter, executor]() {
+        delete adapter;
+        delete executor;
+    });
 }
 
 } // namespace agent
