@@ -64,8 +64,9 @@ void SettingsDialog::setupUI() {
 
     // Per-tool items under Agents (alphabetically sorted)
     QStringList toolNames = {
-        agent::kToolGenerateScript, agent::kToolGetCursorPosition,
-        agent::kToolGetFieldAt, agent::kToolListFiles,
+        agent::kToolConnect, agent::kToolGenerateScript,
+        agent::kToolGetCursorPosition, agent::kToolGetFieldAt,
+        agent::kToolListFiles, agent::kToolLogin,
         agent::kToolReadFile, agent::kToolReadScreen,
         agent::kToolRunScript, agent::kToolSendKeys,
         agent::kToolWriteFile};
@@ -338,6 +339,32 @@ QWidget *SettingsDialog::buildAgentPage() {
 
     layout->addWidget(dangerGroup);
 
+    // MCP Server section
+    QGroupBox *mcpGroup = new QGroupBox("MCP Server", page);
+    QVBoxLayout *mcpLayout = new QVBoxLayout(mcpGroup);
+
+    m_mcpEnabledCheck = new QCheckBox("Enable MCP server", mcpGroup);
+    m_mcpEnabledCheck->setChecked(cfg.mcpServerEnabled());
+    m_mcpEnabledCheck->setToolTip("Expose terminal tools over HTTP for external AI clients (e.g. Claude Desktop).");
+    mcpLayout->addWidget(m_mcpEnabledCheck);
+
+    QHBoxLayout *mcpPortRow = new QHBoxLayout();
+    mcpPortRow->addWidget(new QLabel("Port:", mcpGroup));
+    m_mcpPortSpin = new QSpinBox(mcpGroup);
+    m_mcpPortSpin->setRange(1024, 65535);
+    m_mcpPortSpin->setValue(cfg.mcpServerPort());
+    mcpPortRow->addWidget(m_mcpPortSpin);
+    mcpPortRow->addStretch();
+    mcpLayout->addLayout(mcpPortRow);
+
+    QLabel *mcpHint = new QLabel(mcpGroup);
+    mcpHint->setWordWrap(true);
+    mcpHint->setStyleSheet("color: gray; font-size: 11px;");
+    mcpHint->setText("MCP clients connect via HTTP POST to http://localhost:<port>/mcp");
+    mcpLayout->addWidget(mcpHint);
+
+    layout->addWidget(mcpGroup);
+
     layout->addStretch();
 
     // Populate from config
@@ -358,10 +385,12 @@ QWidget *SettingsDialog::buildAgentPage() {
 }
 
 static QString defaultDescriptionForTool(const QString &name) {
+    if (name == agent::kToolConnect)           return agent::kToolConnectDescription;
     if (name == agent::kToolGenerateScript)    return agent::kToolGenerateScriptDescription;
     if (name == agent::kToolGetCursorPosition) return agent::kToolGetCursorPositionDescription;
     if (name == agent::kToolGetFieldAt)        return agent::kToolGetFieldAtDescription;
     if (name == agent::kToolListFiles)         return agent::kToolListFilesDescription;
+    if (name == agent::kToolLogin)            return agent::kToolLoginDescription;
     if (name == agent::kToolReadFile)          return agent::kToolReadFileDescription;
     if (name == agent::kToolReadScreen)        return agent::kToolReadScreenDescription;
     if (name == agent::kToolRunScript)         return agent::kToolRunScriptDescription;
@@ -371,10 +400,12 @@ static QString defaultDescriptionForTool(const QString &name) {
 }
 
 static QJsonObject schemaForTool(const QString &name) {
+    if (name == agent::kToolConnect)           return agent::toolConnectSchema();
     if (name == agent::kToolGenerateScript)    return agent::toolGenerateScriptSchema();
     if (name == agent::kToolGetCursorPosition) return agent::toolGetCursorPositionSchema();
     if (name == agent::kToolGetFieldAt)        return agent::toolGetFieldAtSchema();
     if (name == agent::kToolListFiles)         return agent::toolListFilesSchema();
+    if (name == agent::kToolLogin)            return agent::toolLoginSchema();
     if (name == agent::kToolReadFile)          return agent::toolReadFileSchema();
     if (name == agent::kToolReadScreen)        return agent::toolReadScreenSchema();
     if (name == agent::kToolRunScript)         return agent::toolRunScriptSchema();
@@ -632,6 +663,10 @@ void SettingsDialog::onAgentSaveClicked() {
     }
     cfg.setAutoAcceptToolCalls(wantToolCalls);
     cfg.setAutoAcceptFileEdits(wantFileEdits);
+
+    // MCP server settings
+    cfg.setMcpServerEnabled(m_mcpEnabledCheck->isChecked());
+    cfg.setMcpServerPort(static_cast<quint16>(m_mcpPortSpin->value()));
 
     cfg.save();
     emit agentConfigChanged();

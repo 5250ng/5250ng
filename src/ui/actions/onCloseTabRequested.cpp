@@ -15,12 +15,17 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
+#include "mcp/McpServer.h"
 
 void MainWindow::onCloseTabRequested(int index) {
     if (index < 0 || index >= m_sessions.size()) {
         return;
     }
     Session *s = m_sessions[index];
+    // Notify MCP registry if this is an MCP-controlled session being closed by the user
+    if (s->mcpControlled && !s->mcpSessionId.isEmpty() && m_mcpServer) {
+        m_mcpServer->onSessionClosed(s->mcpSessionId);
+    }
     // Disconnect all signals from worker to prevent queued signals from
     // firing after the session is deleted (use-after-free guard)
     if (s->worker) {

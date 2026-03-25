@@ -16,6 +16,7 @@
 
 #include "main_window.h"
 #include "agent/config.h"
+#include "ui/dialogs/mcp_log_viewer.h"
 #include "agent/auth/api_key_auth.h"
 #include "agent/auth/oauth_auth.h"
 #include "agent/providers/anthropic_provider.h"
@@ -87,6 +88,38 @@ MainWindow::MainWindow(QWidget *parent)
     // Initialize logger
     logger::Logger::instance()->debug("5250ng started");
     connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &MainWindow::onLogMessage);
+
+    // MCP server
+    m_mcpServer = new mcp::McpServer(this);
+    connect(m_mcpServer, &mcp::McpServer::createSessionRequested, this,
+            [this](const QString &sessionId, const QString &hostname, quint16 port, bool useTLS) {
+        session::SessionConfig cfg;
+        cfg.setHostname(hostname);
+        cfg.setPort(port);
+        cfg.setUseTLS(useTLS);
+        cfg.setName(QString("MCP: %1").arg(hostname));
+        connectToServer(cfg, sessionId);
+    });
+    connect(m_mcpServer, &mcp::McpServer::closeSessionRequested, this,
+            [this](const QString &sessionId) {
+        for (int i = 0; i < m_sessions.size(); ++i) {
+            if (m_sessions[i]->mcpSessionId == sessionId) {
+                onCloseTabRequested(i);
+                return;
+            }
+        }
+    });
+    auto &agentCfg = agent::AgentConfig::instance();
+    agentCfg.load();
+    if (agentCfg.mcpServerEnabled()) {
+        m_mcpServer->start(agentCfg.mcpServerPort());
+    }
+}
+
+void MainWindow::onMcpServer() {
+    auto *dlg = new McpLogViewerDialog(m_mcpServer, this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose, true);
+    dlg->show();
 }
 
 void MainWindow::onViewSessionLogs() {
@@ -127,7 +160,8 @@ MainWindow::~MainWindow() {
  *
  * @param config Session configuration (host, port, TLS, device, rows/cols).
  */
-void MainWindow::connectToServer(const session::SessionConfig &config) {
+void MainWindow::connectToServer(const session::SessionConfig &config,
+                                 const QString &mcpSessionId) {
     m_currentSession = config;
 
     // Apply the configured EBCDIC code page
@@ -236,64 +270,74 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     // Keep overlay sized to terminalContainer
     session->terminalContainer->installEventFilter(this);
 
+    // MCP-controlled sessions: no agent panel, but NOT read-only
+    // (scripts injected via MCP need to send key events to the widget)
+    if (!mcpSessionId.isEmpty()) {
+        session->mcpControlled = true;
+        session->mcpSessionId = mcpSessionId;
+    }
+
     // Agent panel (hidden by default, second child of splitter)
-    session->agentPanel = new ui::widgets::QAgentPanelWidget(session->splitter);
-    session->agentPanel->setVisible(false);
+    // Skipped for MCP-controlled sessions
+    if (!session->mcpControlled) {
+        session->agentPanel = new ui::widgets::QAgentPanelWidget(session->splitter);
+        session->agentPanel->setVisible(false);
 
-    // Wire provider to agent panel
-    {
-        auto &cfg = agent::AgentConfig::instance();
-        cfg.load();
-        agent::Provider *provider = nullptr;
-        if (cfg.activeProviderId() == "anthropic") {
-            auto *p = new agent::AnthropicProvider(session->agentPanel);
-            p->setModel(cfg.anthropicModel());
-            if (cfg.anthropicAuthType() == agent::AuthType::OAuth) {
-                auto *auth = new agent::OAuthAuth(cfg.anthropicOAuthConfig(), "anthropic", p);
-                auth->loadFromStorage();
-                p->setAuthMethod(auth);
+        // Wire provider to agent panel
+        {
+            auto &cfg = agent::AgentConfig::instance();
+            cfg.load();
+            agent::Provider *provider = nullptr;
+            if (cfg.activeProviderId() == "anthropic") {
+                auto *p = new agent::AnthropicProvider(session->agentPanel);
+                p->setModel(cfg.anthropicModel());
+                if (cfg.anthropicAuthType() == agent::AuthType::OAuth) {
+                    auto *auth = new agent::OAuthAuth(cfg.anthropicOAuthConfig(), "anthropic", p);
+                    auth->loadFromStorage();
+                    p->setAuthMethod(auth);
+                } else {
+                    p->setApiKey(cfg.anthropicApiKey());
+                }
+                provider = p;
             } else {
-                p->setApiKey(cfg.anthropicApiKey());
+                auto *p = new agent::OpenAiProvider(session->agentPanel);
+                p->setModel(cfg.openaiModel());
+                if (cfg.openaiAuthType() == agent::AuthType::OAuth) {
+                    auto *auth = new agent::OAuthAuth(cfg.openaiOAuthConfig(), "openai", p);
+                    auth->loadFromStorage();
+                    p->setAuthMethod(auth);
+                } else {
+                    p->setApiKey(cfg.openaiApiKey());
+                }
+                provider = p;
             }
-            provider = p;
-        } else {
-            auto *p = new agent::OpenAiProvider(session->agentPanel);
-            p->setModel(cfg.openaiModel());
-            if (cfg.openaiAuthType() == agent::AuthType::OAuth) {
-                auto *auth = new agent::OAuthAuth(cfg.openaiOAuthConfig(), "openai", p);
-                auth->loadFromStorage();
-                p->setAuthMethod(auth);
-            } else {
-                p->setApiKey(cfg.openaiApiKey());
-            }
-            provider = p;
-        }
-        session->agentPanel->setProvider(provider);
-        session->agentPanel->setDisplayWidget(session->displayWidget);
+            session->agentPanel->setProvider(provider);
+            session->agentPanel->setDisplayWidget(session->displayWidget);
 
-        // Feed screen content to agent panel on screen changes
-        auto *agentPanel = session->agentPanel;
-        auto *screenBuf = session->displayWidget->screenBuffer();
-        connect(screenBuf, &ui::widgets::ScreenBuffer::screenChanged,
-                agentPanel, [agentPanel, screenBuf]() {
-                    if (!screenBuf) return;
-                    QString screenText;
-                    screenText.reserve(screenBuf->rows() * (screenBuf->cols() + 1));
-                    for (int r = 0; r < screenBuf->rows(); ++r) {
-                        QString line;
-                        line.reserve(screenBuf->cols());
-                        for (int c = 0; c < screenBuf->cols(); ++c) {
-                            uint8_t ch = screenBuf->character(r, c);
-                            QChar qc = core::EBCDIC::ebcdicToChar(ch);
-                            line += qc.isPrint() ? qc : QChar(' ');
+            // Feed screen content to agent panel on screen changes
+            auto *agentPanel = session->agentPanel;
+            auto *screenBuf = session->displayWidget->screenBuffer();
+            connect(screenBuf, &ui::widgets::ScreenBuffer::screenChanged,
+                    agentPanel, [agentPanel, screenBuf]() {
+                        if (!screenBuf) return;
+                        QString screenText;
+                        screenText.reserve(screenBuf->rows() * (screenBuf->cols() + 1));
+                        for (int r = 0; r < screenBuf->rows(); ++r) {
+                            QString line;
+                            line.reserve(screenBuf->cols());
+                            for (int c = 0; c < screenBuf->cols(); ++c) {
+                                uint8_t ch = screenBuf->character(r, c);
+                                QChar qc = core::EBCDIC::ebcdicToChar(ch);
+                                line += qc.isPrint() ? qc : QChar(' ');
+                            }
+                            // Trim trailing spaces
+                            while (line.endsWith(' ') && !line.isEmpty())
+                                line.chop(1);
+                            screenText += line + '\n';
                         }
-                        // Trim trailing spaces
-                        while (line.endsWith(' ') && !line.isEmpty())
-                            line.chop(1);
-                        screenText += line + '\n';
-                    }
-                    agentPanel->setScreenContext(screenText);
-                });
+                        agentPanel->setScreenContext(screenText);
+                    });
+        }
     }
 
     session->parser = new tn5250::client::DecoderAdapter(session->terminalContainer);
@@ -355,6 +399,12 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                 m_globalConnectionStatus->setState(state);
                 m_globalConnectionStatus->setStatusText(session->connectionStatus->statusText());
             }
+            // Update MCP registry with connection status
+            if (session->mcpControlled && m_mcpServer) {
+                bool isConnected = (state == tn5250::client::TN5250Client::ConnectionState::Connected
+                                 || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
+                m_mcpServer->updateSessionStatus(session->mcpSessionId, isConnected);
+            }
         });
     connect(session->worker, &tn5250::session::Worker::errorOccurred, this,
         [this, session](const QString &error) {
@@ -402,6 +452,13 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
     }
     m_sessions.insert(newIndex, session);
     m_tabWidget->setCurrentIndex(newIndex);
+
+    // MCP tab styling
+    if (session->mcpControlled) {
+        m_tabWidget->tabBar()->setTabTextColor(newIndex, QColor("#00BFFF"));
+        session->container->setStyleSheet("border-left: 3px solid #00BFFF;");
+        m_tabWidget->setTabToolTip(newIndex, "MCP session: " + session->mcpSessionId);
+    }
 
     // Setup display size from session config
     session->displayWidget->setScreenSize(config.screenRows(), config.screenCols());
@@ -562,6 +619,11 @@ void MainWindow::connectToServer(const session::SessionConfig &config) {
                 session->savedScreen = session->displayWidget->screenBuffer()->saveState();
             }
         });
+
+    // Notify MCP server that the session tab is ready
+    if (session->mcpControlled && m_mcpServer) {
+        m_mcpServer->onSessionCreated(session->mcpSessionId, session->displayWidget);
+    }
 
     // Start the session thread (which triggers the worker start)
     session->thread->start();

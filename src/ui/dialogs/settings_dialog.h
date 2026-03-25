@@ -27,6 +27,7 @@
 #include <QLineEdit>
 #include <QMap>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QTextEdit>
@@ -117,6 +118,10 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QCheckBox *m_autoAcceptAllCheck;
     QCheckBox *m_autoAcceptToolCallsCheck;
     QCheckBox *m_autoAcceptFileEditsCheck;
+
+    // MCP server settings
+    QCheckBox *m_mcpEnabledCheck;
+    QSpinBox *m_mcpPortSpin;
 
     // Per-tool config pages
     QMap<QString, QWidget*> m_toolPages;

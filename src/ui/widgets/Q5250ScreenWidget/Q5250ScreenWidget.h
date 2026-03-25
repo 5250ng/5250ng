@@ -121,6 +121,10 @@ class Q5250ScreenWidget : public QWidget {
     void setSelectionEnabled(bool enabled) { m_selectionEnabled = enabled; update(); }
     bool isSelectionEnabled() const { return m_selectionEnabled; }
 
+    // Read-only mode (blocks all keyboard input except copy)
+    void setReadOnly(bool readOnly) { m_readOnly = readOnly; }
+    bool isReadOnly() const { return m_readOnly; }
+
     // 5250 terminal state (keyboard lock, insert mode, etc.)
     KeyboardState keyboardState() const { return m_keyboardState; }
     void setKeyboardState(KeyboardState state);
@@ -281,6 +285,7 @@ class Q5250ScreenWidget : public QWidget {
     QPoint m_selectionStart; // Cell coordinates (row, col)
     QPoint m_selectionEnd;   // Cell coordinates (row, col)
     bool m_selectionEnabled = true;
+    bool m_readOnly = false;
 
     // Overlay
     bool m_showCursorRules;

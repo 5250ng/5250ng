@@ -32,6 +32,7 @@
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
 #include "ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.h"
+#include "mcp/McpServer.h"
 #include "ui/widgets/QAgentPanelWidget/QAgentPanelWidget.h"
 #include "ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h"
 #include <QAction>
@@ -107,6 +108,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onSavedSessionChosen(QAction *action);
     void onOpenSettings();
     void onToggleAgentPanel();
+    void onMcpServer();
     void onViewSessionLogs();
     void onFileTransfer();
     void onToggleMatchReplace();
@@ -118,7 +120,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void setupUI();
     void setupMenuBar();
     void setupStatusBar();
-    void connectToServer(const session::SessionConfig &config);
+    void connectToServer(const session::SessionConfig &config,
+                         const QString &mcpSessionId = QString());
     void refreshAgentProviders();
     void setActiveSession(int index);
     void openContextMenuForTab(const QPoint &pos);
@@ -155,6 +158,8 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         core::scripting::ScriptExecutor *scriptExecutor = nullptr;
         core::SessionLogger *sessionLogger = nullptr;
         core::MatchReplaceEngine *matchReplace = nullptr;
+        bool mcpControlled = false;
+        QString mcpSessionId;
     };
 
     void runStartupScript(Session *session);
@@ -191,11 +196,13 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_showCellGridAction;
     QAction *m_agentPanelAction;
     QAction *m_fileTransferAction;
+    QAction *m_mcpServerAction;
     QAction *m_matchReplaceEnableAction;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
     ui::widgets::QConnectionStatusWidget *m_globalConnectionStatus; // Global bottom-bar status
 
     bool m_connected;
+    mcp::McpServer *m_mcpServer = nullptr;
     QTimer m_resizeLogTimer;            // Debounce resize logging
 
     void updateCursorCoordinates();     // Update cursor position display

@@ -77,6 +77,12 @@ class AgentConfig {
     ToolConfig toolConfig(const QString &toolName) const;
     void setToolConfig(const QString &toolName, const ToolConfig &cfg);
 
+    // MCP server
+    bool mcpServerEnabled() const { return m_mcpServerEnabled; }
+    void setMcpServerEnabled(bool enabled) { m_mcpServerEnabled = enabled; }
+    quint16 mcpServerPort() const { return m_mcpServerPort; }
+    void setMcpServerPort(quint16 port) { m_mcpServerPort = port; }
+
   private:
     AgentConfig();
 
@@ -95,6 +101,9 @@ class AgentConfig {
     bool m_autoAcceptFileEdits = false;
 
     QMap<QString, ToolConfig> m_toolConfigs;
+
+    bool m_mcpServerEnabled = false;
+    quint16 m_mcpServerPort = 9250;
 };
 
 } // namespace agent
