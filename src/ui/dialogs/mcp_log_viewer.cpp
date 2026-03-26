@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "mcp_log_viewer.h"
-#include "agent/config.h"
 #include "mcp/McpServer.h"
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -25,33 +24,12 @@
 
 McpLogViewerDialog::McpLogViewerDialog(mcp::McpServer *server, QWidget *parent)
     : ui::widgets::BaseFramelessWindow(parent), m_server(server) {
-    setWindowTitle("MCP Server");
+    setWindowTitle("MCP Server Logs");
     resize(650, 500);
 
     QVBoxLayout *root = contentLayout();
     root->setContentsMargins(8, 8, 8, 8);
     root->setSpacing(6);
-
-    auto &cfg = agent::AgentConfig::instance();
-
-    // Top bar: enable + port + apply + status
-    QHBoxLayout *topBar = new QHBoxLayout();
-    m_enableCheck = new QCheckBox("Enable MCP Server", this);
-    m_enableCheck->setChecked(cfg.mcpServerEnabled());
-    topBar->addWidget(m_enableCheck);
-
-    topBar->addWidget(new QLabel("Port:", this));
-    m_portSpin = new QSpinBox(this);
-    m_portSpin->setRange(1024, 65535);
-    m_portSpin->setValue(cfg.mcpServerPort());
-    topBar->addWidget(m_portSpin);
-
-    m_applyBtn = new QPushButton("Apply", this);
-    connect(m_applyBtn, &QPushButton::clicked, this, &McpLogViewerDialog::onApplyClicked);
-    topBar->addWidget(m_applyBtn);
-
-    topBar->addStretch();
-    root->addLayout(topBar);
 
     // Status label
     m_statusLabel = new QLabel(this);
@@ -76,13 +54,16 @@ McpLogViewerDialog::McpLogViewerDialog(mcp::McpServer *server, QWidget *parent)
     findLayout->addWidget(nextBtn);
     root->addWidget(m_findBar);
 
-    // Log area
+    // Log area — black background, white text
     m_log = new QPlainTextEdit(this);
     m_log->setReadOnly(true);
     m_log->setLineWrapMode(QPlainTextEdit::NoWrap);
     QFont monoFont("Monospace", 9);
     monoFont.setStyleHint(QFont::TypeWriter);
     m_log->setFont(monoFont);
+    m_log->setStyleSheet(
+        "QPlainTextEdit { background-color: #000000; color: #FFFFFF; "
+        "border: 1px solid #333333; }");
     root->addWidget(m_log, 1);
 
     // Bottom bar
@@ -123,28 +104,6 @@ bool McpLogViewerDialog::event(QEvent *event) {
         }
     }
     return BaseFramelessWindow::event(event);
-}
-
-void McpLogViewerDialog::onApplyClicked() {
-    auto &cfg = agent::AgentConfig::instance();
-    bool enabled = m_enableCheck->isChecked();
-    quint16 port = static_cast<quint16>(m_portSpin->value());
-
-    cfg.setMcpServerEnabled(enabled);
-    cfg.setMcpServerPort(port);
-    cfg.save();
-
-    if (enabled) {
-        if (m_server->isRunning())
-            m_server->stop();
-        m_server->start(port);
-        appendLog(QString("Server started on port %1").arg(port));
-    } else {
-        m_server->stop();
-        appendLog("Server stopped");
-    }
-
-    updateStatus();
 }
 
 void McpLogViewerDialog::updateStatus() {

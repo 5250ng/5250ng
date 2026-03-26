@@ -30,6 +30,7 @@
 #include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
 #include <QApplication>
 #include <QContextMenuEvent>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QEvent>
 #include <QFile>
@@ -43,6 +44,7 @@
 #include <QMessageBox>
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
@@ -53,8 +55,173 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QProxyStyle>
 #include <QScreen>
+#include <QStyleOptionTab>
 #include <climits>
+
+// ---------------------------------------------------------------------------
+// Custom tab bar style: custom-paints ALL tabs with rounded top corners,
+// black border, orange background for MCP tabs, and activity indicators.
+//
+// Per-tab data is a QVariantMap stored via tabBar->setTabData(index, map):
+//   "mcp"      (bool)  — MCP-controlled session
+//   "activity"  (bool)  — screen changed while tab was not focused
+// ---------------------------------------------------------------------------
+static QColor lerpColor(const QColor &a, const QColor &b, double t) {
+    return QColor(
+        int(a.red()   * (1 - t) + b.red()   * t),
+        int(a.green() * (1 - t) + b.green() * t),
+        int(a.blue()  * (1 - t) + b.blue()  * t),
+        int(a.alpha() * (1 - t) + b.alpha() * t));
+}
+
+class McpTabStyle : public QProxyStyle {
+  public:
+    using QProxyStyle::QProxyStyle;
+
+    QSize sizeFromContents(ContentsType type, const QStyleOption *option,
+                           const QSize &size, const QWidget *widget) const override {
+        QSize s = QProxyStyle::sizeFromContents(type, option, size, widget);
+        if (type == CT_TabBarTab) {
+            if (auto *tabOpt = qstyleoption_cast<const QStyleOptionTab *>(option)) {
+                // Truncate text to 20 chars for width calculation
+                QString text = tabOpt->text;
+                if (text.length() > 20)
+                    text = text.left(19) + QStringLiteral("\xe2\x80\xa6"); // ellipsis
+                QFontMetrics fm(tabOpt->fontMetrics);
+                int textWidth = fm.horizontalAdvance(text);
+                // Add padding: 12px left + 12px right + 20px for close button area
+                int maxWidth = textWidth + 44;
+                // Account for activity dot space
+                auto *tabBar = qobject_cast<const QTabBar *>(widget);
+                if (tabBar) {
+                    QVariantMap data = tabBar->tabData(tabOpt->tabIndex).toMap();
+                    if (data.value("activity", false).toBool())
+                        maxWidth += 14;
+                }
+                s.setWidth(qMin(s.width(), maxWidth));
+                s.setHeight(qMax(s.height(), 28));
+            }
+        }
+        return s;
+    }
+
+    void drawControl(ControlElement element, const QStyleOption *option,
+                     QPainter *painter, const QWidget *widget) const override {
+        if (element != CE_TabBarTab && element != CE_TabBarTabShape
+            && element != CE_TabBarTabLabel) {
+            QProxyStyle::drawControl(element, option, painter, widget);
+            return;
+        }
+
+        // Only handle CE_TabBarTab (which wraps Shape + Label)
+        if (element == CE_TabBarTabShape || element == CE_TabBarTabLabel) {
+            // We draw everything in CE_TabBarTab; skip sub-elements to
+            // avoid double-drawing when called by the base style.
+            return;
+        }
+
+        auto *tabOpt = qstyleoption_cast<const QStyleOptionTab *>(option);
+        if (!tabOpt) {
+            QProxyStyle::drawControl(element, option, painter, widget);
+            return;
+        }
+
+        auto *tabBar = qobject_cast<const QTabBar *>(widget);
+        QVariantMap data;
+        if (tabBar)
+            data = tabBar->tabData(tabOpt->tabIndex).toMap();
+        bool isMcp = data.value("mcp", false).toBool();
+        bool hasActivity = data.value("activity", false).toBool();
+        bool isSelected = tabOpt->state & QStyle::State_Selected;
+        bool isHovered = tabOpt->state & QStyle::State_MouseOver;
+
+        QRect r = tabOpt->rect;
+
+        // --- Determine background color ---
+        QColor bgColor;
+        if (isMcp) {
+            bgColor = QColor("#FF8C00");
+            if (!isSelected) bgColor = bgColor.darker(120);
+        } else {
+            bgColor = tabOpt->palette.color(QPalette::Button);
+            if (!isSelected) bgColor = bgColor.darker(115);
+        }
+        if (isHovered && !isSelected)
+            bgColor = bgColor.lighter(110);
+
+        // Apply activity tint
+        QColor activityDotColor;
+        if (hasActivity) {
+            if (isMcp) {
+                bgColor = lerpColor(bgColor, QColor("#FFD54F"), 0.25);
+                activityDotColor = QColor("#FFD54F");
+            } else {
+                bgColor = lerpColor(bgColor, QColor("#4FC3F7"), 0.20);
+                activityDotColor = QColor("#4FC3F7");
+            }
+        }
+
+        // --- Build rounded path (top corners only) ---
+        const qreal radius = 2.0;
+        QPainterPath path;
+        if (isSelected) {
+            // Selected: rounded top, open bottom (no bottom line)
+            path.moveTo(r.left(), r.bottom() + 1);
+            path.lineTo(r.left(), r.top() + radius);
+            path.quadTo(r.left(), r.top(), r.left() + radius, r.top());
+            path.lineTo(r.right() - radius, r.top());
+            path.quadTo(r.right(), r.top(), r.right(), r.top() + radius);
+            path.lineTo(r.right(), r.bottom() + 1);
+        } else {
+            // Unselected: rounded top, closed bottom
+            path.moveTo(r.left(), r.bottom());
+            path.lineTo(r.left(), r.top() + radius);
+            path.quadTo(r.left(), r.top(), r.left() + radius, r.top());
+            path.lineTo(r.right() - radius, r.top());
+            path.quadTo(r.right(), r.top(), r.right(), r.top() + radius);
+            path.lineTo(r.right(), r.bottom());
+            path.closeSubpath();
+        }
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+
+        // --- Fill background ---
+        painter->fillPath(path, bgColor);
+
+        // --- Draw border ---
+        painter->setPen(QPen(QColor("#000000"), 1.0));
+        painter->drawPath(path);
+
+        // --- Draw activity dot ---
+        if (hasActivity) {
+            int dotSize = 6;
+            int dotX = r.left() + 8;
+            int dotY = r.center().y() - dotSize / 2;
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(activityDotColor);
+            painter->drawEllipse(dotX, dotY, dotSize, dotSize);
+        }
+
+        painter->restore();
+
+        // --- Draw label (text + icon) ---
+        QStyleOptionTab labelOpt(*tabOpt);
+        // Truncate text to 20 characters with ellipsis
+        if (labelOpt.text.length() > 20)
+            labelOpt.text = labelOpt.text.left(19) + QStringLiteral("\xe2\x80\xa6");
+        // Shift text right if activity dot is shown to avoid overlap
+        if (hasActivity)
+            labelOpt.rect.setLeft(labelOpt.rect.left() + 14);
+        if (isMcp) {
+            labelOpt.palette.setColor(QPalette::WindowText, Qt::white);
+            labelOpt.palette.setColor(QPalette::ButtonText, Qt::white);
+        }
+        QProxyStyle::drawControl(CE_TabBarTabLabel, &labelOpt, painter, widget);
+    }
+};
 
 /**
  * Construct the main application window.
@@ -76,6 +243,9 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     setupMenuBar();
     setupStatusBar();
+
+    // Custom tab bar style for MCP-controlled tabs (orange background)
+    m_tabWidget->tabBar()->setStyle(new McpTabStyle(m_tabWidget->tabBar()->style()));
 
     // Debounced resize logger — fires once 300ms after the last resize event
     m_resizeLogTimer.setSingleShot(true);
@@ -114,9 +284,27 @@ MainWindow::MainWindow(QWidget *parent)
     if (agentCfg.mcpServerEnabled()) {
         m_mcpServer->start(agentCfg.mcpServerPort());
     }
+    // Sync the menu checkbox with the persisted config
+    m_mcpEnableAction->setChecked(agentCfg.mcpServerEnabled());
 }
 
-void MainWindow::onMcpServer() {
+void MainWindow::onMcpToggleEnabled() {
+    auto &cfg = agent::AgentConfig::instance();
+    bool enable = m_mcpEnableAction->isChecked();
+
+    cfg.setMcpServerEnabled(enable);
+    cfg.save();
+
+    if (enable) {
+        if (!m_mcpServer->isRunning())
+            m_mcpServer->start(cfg.mcpServerPort());
+    } else {
+        if (m_mcpServer->isRunning())
+            m_mcpServer->stop();
+    }
+}
+
+void MainWindow::onMcpShowLogs() {
     auto *dlg = new McpLogViewerDialog(m_mcpServer, this);
     dlg->setAttribute(Qt::WA_DeleteOnClose, true);
     dlg->show();
@@ -267,6 +455,34 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // Invalidate bloom cache when screen content changes
     connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
             session->crtOverlay, &ui::widgets::QCRTOverlayWidget::invalidateBloom);
+
+    // Track screen activity for unfocused tabs (shows indicator on tab header)
+    connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
+            this, [this, session]() {
+        int idx = m_sessions.indexOf(session);
+        if (idx < 0 || idx == m_activeIndex) return;
+        // Hash screen content to detect actual changes (ignore cursor-only moves)
+        auto *buf = session->displayWidget->screenBuffer();
+        if (!buf) return;
+        QByteArray content;
+        content.reserve(buf->rows() * buf->cols());
+        for (int r = 0; r < buf->rows(); ++r)
+            for (int c = 0; c < buf->cols(); ++c)
+                content.append(static_cast<char>(buf->character(r, c)));
+        QByteArray hash = QCryptographicHash::hash(content, QCryptographicHash::Md5);
+        if (hash != session->lastScreenHash) {
+            session->lastScreenHash = hash;
+            if (!session->hasActivity) {
+                session->hasActivity = true;
+                // Update tabData so the custom style can read the flag
+                QVariantMap td = m_tabWidget->tabBar()->tabData(idx).toMap();
+                td["activity"] = true;
+                m_tabWidget->tabBar()->setTabData(idx, td);
+                m_tabWidget->tabBar()->update();
+            }
+        }
+    });
+
     // Keep overlay sized to terminalContainer
     session->terminalContainer->installEventFilter(this);
 
@@ -452,12 +668,25 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     }
     m_sessions.insert(newIndex, session);
     m_tabWidget->setCurrentIndex(newIndex);
+    // Ensure m_activeIndex is set even if currentChanged didn't fire
+    // (happens when addTab auto-selects the first tab before m_sessions is populated)
+    if (m_activeIndex != newIndex)
+        setActiveSession(newIndex);
 
-    // MCP tab styling
+    // Set per-tab data for the custom McpTabStyle
+    {
+        QVariantMap tabData;
+        tabData["mcp"] = session->mcpControlled;
+        tabData["activity"] = false;
+        m_tabWidget->tabBar()->setTabData(newIndex, tabData);
+    }
+
+    // MCP tab styling: orange border on content container only
     if (session->mcpControlled) {
-        m_tabWidget->tabBar()->setTabTextColor(newIndex, QColor("#00BFFF"));
-        session->container->setStyleSheet("border-left: 3px solid #00BFFF;");
         m_tabWidget->setTabToolTip(newIndex, "MCP session: " + session->mcpSessionId);
+        session->container->setObjectName("mcpContainer");
+        session->container->setStyleSheet(
+            "#mcpContainer { border: 2px solid #FF8C00; }");
     }
 
     // Setup display size from session config

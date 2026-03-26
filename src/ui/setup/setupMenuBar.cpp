@@ -43,7 +43,11 @@ void MainWindow::setupMenuBar() {
     fileMenu->addSeparator();
     fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
     fileMenu->addSeparator();
-    m_mcpServerAction = fileMenu->addAction("&MCP Server...", this, &MainWindow::onMcpServer);
+    QMenu *mcpMenu = fileMenu->addMenu("&MCP Server");
+    m_mcpEnableAction = mcpMenu->addAction("&Enabled", this, &MainWindow::onMcpToggleEnabled);
+    m_mcpEnableAction->setCheckable(true);
+    m_mcpEnableAction->setChecked(false); // Updated in MainWindow constructor after config load
+    mcpMenu->addAction("Show &Logs...", this, &MainWindow::onMcpShowLogs);
     fileMenu->addSeparator();
     m_exitAction = fileMenu->addAction("E&xit", this, &QWidget::close);
     m_exitAction->setShortcut(QKeySequence::Quit);

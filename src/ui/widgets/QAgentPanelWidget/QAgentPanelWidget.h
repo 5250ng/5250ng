@@ -25,6 +25,7 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QMap>
 #include <QWidget>
 #include <optional>
 
@@ -106,6 +107,19 @@ class QAgentPanelWidget : public QWidget {
     QTimer *m_thinkingTimer;
     int m_thinkingDots = 0;
     int m_thinkingBlockPosition = -1;
+
+    // Collapsible subagent output blocks
+    struct CollapsibleBlock {
+        QString title;       // e.g. "Script generation output"
+        QString fullHtml;    // full content HTML
+        bool collapsed;
+    };
+    QMap<int, CollapsibleBlock> m_collapsibleBlocks;
+    int m_nextBlockId = 0;
+    void appendCollapsibleBlock(const QString &title, const QString &contentHtml);
+    void onAnchorClicked(const QUrl &url);
+    void replaceCollapsibleBlock(int blockId);
+    QString buildCollapsibleHtml(int blockId) const;
 };
 
 } // namespace ui::widgets

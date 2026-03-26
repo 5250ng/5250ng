@@ -24,8 +24,10 @@
 #include "ui/themes/manager.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
+#include <QDesktopServices>
 #include <QDir>
 #include <QEvent>
+#include <QTextTable>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -106,7 +108,9 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     // --- Chat history ---
     m_chatHistory = new QTextBrowser(this);
     m_chatHistory->setReadOnly(true);
-    m_chatHistory->setOpenExternalLinks(true);
+    m_chatHistory->setOpenExternalLinks(false);
+    connect(m_chatHistory, &QTextBrowser::anchorClicked,
+            this, &QAgentPanelWidget::onAnchorClicked);
     m_chatHistory->setFocusPolicy(Qt::NoFocus);
     m_chatHistory->setTextInteractionFlags(
         Qt::TextBrowserInteraction | Qt::LinksAccessibleByMouse);
@@ -327,6 +331,149 @@ void QAgentPanelWidget::appendScriptBlock(const QString &script) {
         .arg(codeBg, codeText, escaped);
 
     appendHtml(m_chatHistory, html);
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible blocks (for subagent output)
+// ---------------------------------------------------------------------------
+
+QString QAgentPanelWidget::buildCollapsibleHtml(int blockId) const {
+    auto it = m_collapsibleBlocks.find(blockId);
+    if (it == m_collapsibleBlocks.end()) return {};
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString codeBg   = tm.color("agent.code.background", "#1a1a2e");
+    QString codeText = tm.color("agent.code.text", "#d4d4d4");
+    QString labelClr = tm.color("agent.assistant.label", "#50c878");
+    // Dimmed color for the fading lines (blend codeText toward codeBg)
+    QString dimText  = tm.color("agent.code.text", "#d4d4d4");
+
+    const auto &block = it.value();
+    QString arrow = block.collapsed
+        ? QStringLiteral("\xe2\x96\xb6")   // ▶
+        : QStringLiteral("\xe2\x96\xbc");   // ▼
+
+    QString content;
+
+    if (block.collapsed) {
+        // Show first ~3 lines, then progressively dimmed lines to simulate fade
+        QStringList lines = block.fullHtml.split(QStringLiteral("<br/>"));
+        if (lines.size() <= 1)
+            lines = block.fullHtml.split(QStringLiteral("<br>"));
+
+        int totalLines = lines.size();
+        int visibleLines = qMin(3, totalLines);
+        content = lines.mid(0, visibleLines).join(QStringLiteral("<br/>"));
+
+        if (totalLines > visibleLines) {
+            // Add 1-2 progressively faded lines
+            int fadeCount = qMin(2, totalLines - visibleLines);
+            // Opacity steps: 50%, 25%
+            const int opacities[] = {128, 64};
+            for (int i = 0; i < fadeCount; ++i) {
+                // Build a color with reduced alpha by blending with background
+                // QTextBrowser doesn't support rgba, so approximate by mixing colors
+                int alpha = opacities[i];
+                QString fadedColor = QString("color: rgba(%1, %2)")
+                    .arg(dimText.mid(1))  // won't work — use hex blending instead
+                    .arg(alpha);
+                Q_UNUSED(fadedColor);
+                // Since QTextBrowser doesn't support rgba(), use pre-blended colors
+                // Parse codeBg and codeText to blend manually
+                QColor bg(codeBg), fg(codeText);
+                double a = alpha / 255.0;
+                QColor blended(
+                    int(fg.red() * a + bg.red() * (1 - a)),
+                    int(fg.green() * a + bg.green() * (1 - a)),
+                    int(fg.blue() * a + bg.blue() * (1 - a)));
+
+                content += QStringLiteral("<br/><span style='color:%1;'>%2</span>")
+                    .arg(blended.name(), lines[visibleLines + i].toHtmlEscaped());
+            }
+
+            int remaining = totalLines - visibleLines - fadeCount;
+            if (remaining > 0) {
+                content += QStringLiteral(
+                    "<br/><a href='toggle://%1' style='color:%2; font-size:11px;'>"
+                    "... %3 more lines</a>")
+                    .arg(blockId).arg(labelClr).arg(remaining);
+            }
+        }
+    } else {
+        content = block.fullHtml;
+    }
+
+    return QStringLiteral(
+        "<table width='100%%' cellpadding='6' cellspacing='0'>"
+        "<tr><td style='background-color:%1; border-left: 3px solid %2;'>"
+        "<a href='toggle://%3' style='color:%2; text-decoration:none; font-weight:bold;'>"
+        "%4 %5</a><br/>"
+        "<span style='color:%6; font-family:monospace; font-size:12px;'>%7</span>"
+        "</td></tr></table>")
+        .arg(codeBg, labelClr)
+        .arg(blockId)
+        .arg(arrow, block.title.toHtmlEscaped(), codeText, content);
+}
+
+void QAgentPanelWidget::appendCollapsibleBlock(const QString &title,
+                                                const QString &contentHtml) {
+    int blockId = m_nextBlockId++;
+    CollapsibleBlock block;
+    block.title = title;
+    block.fullHtml = contentHtml;
+    block.collapsed = true;
+    m_collapsibleBlocks.insert(blockId, block);
+
+    QString html = buildCollapsibleHtml(blockId);
+    appendHtml(m_chatHistory, html);
+}
+
+void QAgentPanelWidget::replaceCollapsibleBlock(int blockId) {
+    // Find the anchor in the document, locate its enclosing table, and
+    // replace the entire table with the new collapsed/expanded HTML.
+    QTextDocument *doc = m_chatHistory->document();
+    QString anchorTarget = QStringLiteral("toggle://%1").arg(blockId);
+
+    QTextBlock textBlock = doc->begin();
+    while (textBlock.isValid()) {
+        for (auto fragIt = textBlock.begin(); !fragIt.atEnd(); ++fragIt) {
+            QTextFragment fragment = fragIt.fragment();
+            if (fragment.charFormat().anchorHref() == anchorTarget) {
+                QTextCursor cursor(textBlock);
+                QTextTable *table = cursor.currentTable();
+                if (!table) { textBlock = textBlock.next(); continue; }
+
+                // Select the full table content
+                QTextCursor start = table->firstCursorPosition();
+                QTextCursor end = table->lastCursorPosition();
+
+                // Expand selection to cover the table frame itself:
+                // move one position before the table start and one after the end
+                cursor.setPosition(start.position() - 1);
+                cursor.setPosition(end.position() + 1, QTextCursor::KeepAnchor);
+                cursor.removeSelectedText();
+                cursor.insertHtml(buildCollapsibleHtml(blockId));
+                return;
+            }
+        }
+        textBlock = textBlock.next();
+    }
+}
+
+void QAgentPanelWidget::onAnchorClicked(const QUrl &url) {
+    if (url.scheme() == QStringLiteral("toggle")) {
+        bool ok;
+        int blockId = url.host().toInt(&ok);
+        if (ok && m_collapsibleBlocks.contains(blockId)) {
+            m_collapsibleBlocks[blockId].collapsed =
+                !m_collapsibleBlocks[blockId].collapsed;
+            replaceCollapsibleBlock(blockId);
+        }
+        return;
+    }
+    // For external links, open in browser
+    if (url.scheme() == QStringLiteral("http") || url.scheme() == QStringLiteral("https"))
+        QDesktopServices::openUrl(url);
 }
 
 // ---------------------------------------------------------------------------
@@ -553,7 +700,9 @@ void QAgentPanelWidget::onGenerateScriptToolCall(const agent::ToolCall &call) {
 
 void QAgentPanelWidget::onScriptGenerated(const QString &toolCallId,
                                           const QString &script) {
-    appendScriptBlock(script);
+    // Show subagent output in a collapsible block (folded by default)
+    QString escaped = script.toHtmlEscaped().replace('\n', QStringLiteral("<br/>"));
+    appendCollapsibleBlock("Script generation output", escaped);
 
     if (m_provider) {
         agent::ToolResult result;

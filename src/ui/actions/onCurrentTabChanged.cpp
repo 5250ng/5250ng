@@ -20,8 +20,24 @@ void MainWindow::onCurrentTabChanged(int index) {
     setActiveSession(index);
     if (index >= 0 && index < m_sessions.size()) {
         Session *s = m_sessions[index];
-        if (s && s->agentPanel && m_agentPanelAction)
-            m_agentPanelAction->setChecked(s->agentPanel->isVisible());
+        // Clear activity indicator when the tab gains focus
+        if (s->hasActivity) {
+            s->hasActivity = false;
+            QVariantMap td = m_tabWidget->tabBar()->tabData(index).toMap();
+            td["activity"] = false;
+            m_tabWidget->tabBar()->setTabData(index, td);
+            m_tabWidget->tabBar()->update();
+        }
+        if (m_agentPanelAction) {
+            if (s && s->agentPanel) {
+                m_agentPanelAction->setEnabled(true);
+                m_agentPanelAction->setChecked(s->agentPanel->isVisible());
+            } else {
+                // MCP-controlled sessions have no agent panel
+                m_agentPanelAction->setEnabled(false);
+                m_agentPanelAction->setChecked(false);
+            }
+        }
         // Sync match-and-replace check state with active session
         if (m_matchReplaceEnableAction) {
             bool enabled = s->matchReplace && s->matchReplace->isEnabled();

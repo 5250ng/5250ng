@@ -26,6 +26,34 @@
 #define MCP_INFO(msg) logger::Logger::instance()->info_with_prefix("[MCP]", msg)
 #define MCP_ERROR(msg) logger::Logger::instance()->error_with_prefix("[MCP]", msg)
 
+/// Escape non-printable characters as \xHH and wrap in double quotes.
+static QString sanitizeForLog(const QString &s, int maxLen = 80) {
+    QString out;
+    out.reserve(qMin(s.length(), maxLen) * 2 + 2);
+    out += '"';
+    int count = 0;
+    for (const QChar &ch : s) {
+        if (count >= maxLen) { out += QStringLiteral("..."); break; }
+        ushort code = ch.unicode();
+        if (code >= 0x20 && code < 0x7F) {
+            if (ch == '"') out += QStringLiteral("\\\"");
+            else if (ch == '\\') out += QStringLiteral("\\\\");
+            else out += ch;
+        } else if (ch == '\n') {
+            out += QStringLiteral("\\n");
+        } else if (ch == '\r') {
+            out += QStringLiteral("\\r");
+        } else if (ch == '\t') {
+            out += QStringLiteral("\\t");
+        } else {
+            out += QStringLiteral("\\x") + QString::number(code, 16).rightJustified(2, '0');
+        }
+        ++count;
+    }
+    out += '"';
+    return out;
+}
+
 namespace mcp {
 
 McpServer::McpServer(QObject *parent)
@@ -236,7 +264,7 @@ QJsonObject McpServer::handleJsonRpc(const QJsonObject &request) {
     bool isError = response.contains("error");
     if (isError) {
         QString errMsg = response["error"].toObject()["message"].toString();
-        emit requestLog(QString("[%1] <- ERROR: %2").arg(ts, errMsg));
+        emit requestLog(QString("[%1] <- ERROR: %2").arg(ts, sanitizeForLog(errMsg)));
     } else {
         QJsonObject result = response["result"].toObject();
         if (method == "tools/call") {
@@ -244,7 +272,7 @@ QJsonObject McpServer::handleJsonRpc(const QJsonObject &request) {
             QJsonArray content = result.value("content").toArray();
             QString preview;
             if (!content.isEmpty())
-                preview = content[0].toObject()["text"].toString().left(80);
+                preview = sanitizeForLog(content[0].toObject()["text"].toString());
             emit requestLog(QString("[%1] <- %2 (%3)")
                 .arg(ts, toolError ? "TOOL ERROR" : "OK", preview));
         } else if (method == "tools/list") {

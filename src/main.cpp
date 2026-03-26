@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include "agent/config.h"
 #include "logger/logger.h"
 #include "session/config.h"
 #include "session/manager.h"
@@ -64,6 +65,12 @@ int main(int argc, char *argv[]) {
     // Session file option (load session from JSON file path)
     QCommandLineOption sessionFileOption(QStringList() << "f" << "load-session-from-file", "Load a session from a JSON file", "path");
     parser.addOption(sessionFileOption);
+
+    // MCP server options
+    QCommandLineOption mcpEnableOption(QStringList() << "enable-mcp-server", "Enable the MCP server on startup");
+    parser.addOption(mcpEnableOption);
+    QCommandLineOption mcpPortOption(QStringList() << "mcp-server-port", "MCP server port (default: 9250)", "port");
+    parser.addOption(mcpPortOption);
 
     parser.process(app);
 
@@ -164,6 +171,27 @@ int main(int argc, char *argv[]) {
             );
             return 1;
         }
+    }
+
+    // Apply MCP server CLI overrides to config (before MainWindow reads it)
+    if (parser.isSet(mcpEnableOption)) {
+        auto &agentCfg = agent::AgentConfig::instance();
+        agentCfg.load();
+        agentCfg.setMcpServerEnabled(true);
+        if (parser.isSet(mcpPortOption)) {
+            bool portOk = false;
+            int mcpPort = parser.value(mcpPortOption).toInt(&portOk);
+            if (portOk && mcpPort >= 1024 && mcpPort <= 65535) {
+                agentCfg.setMcpServerPort(static_cast<quint16>(mcpPort));
+            } else {
+                logger::Logger::instance()->error(
+                    QString("Invalid MCP port number: %1").arg(parser.value(mcpPortOption)));
+                return 1;
+            }
+        }
+        agentCfg.save();
+        logger::Logger::instance()->debug(
+            QString("MCP server enabled via CLI (port %1)").arg(agentCfg.mcpServerPort()));
     }
 
     // Register bundled terminal fonts before any widget creation

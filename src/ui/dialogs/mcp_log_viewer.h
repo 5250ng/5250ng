@@ -17,12 +17,10 @@
 #pragma once
 
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
-#include <QCheckBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSpinBox>
 
 namespace mcp { class McpServer; }
 
@@ -35,7 +33,6 @@ class McpLogViewerDialog : public ui::widgets::BaseFramelessWindow {
     bool event(QEvent *event) override;
 
   private:
-    void onApplyClicked();
     void updateStatus();
     void appendLog(const QString &entry);
     void onFindNext();
@@ -44,9 +41,6 @@ class McpLogViewerDialog : public ui::widgets::BaseFramelessWindow {
     mcp::McpServer *m_server;
 
     // Controls
-    QCheckBox *m_enableCheck;
-    QSpinBox *m_portSpin;
-    QPushButton *m_applyBtn;
     QLabel *m_statusLabel;
     QPlainTextEdit *m_log;
     QPushButton *m_clearBtn;
