@@ -687,6 +687,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         session->container->setObjectName("mcpContainer");
         session->container->setStyleSheet(
             "#mcpContainer { border: 2px solid #FF8C00; }");
+        // Add margins so the border doesn't overlap the content
+        session->container->layout()->setContentsMargins(2, 2, 2, 2);
     }
 
     // Setup display size from session config
