@@ -26,7 +26,6 @@
 #include "session/config.h"
 #include "session/worker.h"
 #include "ui/dialogs/connect_dialog.h"
-#include "ui/dialogs/file_transfer_dialog.h"
 #include "ui/rendering/tn5250_command_handler.h"
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
@@ -111,7 +110,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onMcpToggleEnabled();
     void onMcpShowLogs();
     void onViewSessionLogs();
-    void onFileTransfer();
     void onToggleMatchReplace();
     void onEditMatchReplacePatterns();
     void rebuildQuickThemeMenu();
@@ -198,7 +196,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_showInputFieldsAction;
     QAction *m_showCellGridAction;
     QAction *m_agentPanelAction;
-    QAction *m_fileTransferAction;
     QAction *m_mcpEnableAction;
     QAction *m_matchReplaceEnableAction;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)

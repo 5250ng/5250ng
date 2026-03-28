@@ -109,10 +109,6 @@ set(HOSTSERVER_SOURCES
     src/network/hostserver/password_encrypt.h
     src/network/hostserver/signon_client.cpp
     src/network/hostserver/signon_client.h
-    src/network/hostserver/ifs_client.cpp
-    src/network/hostserver/ifs_client.h
-    src/network/hostserver/ifs_transfer.cpp
-    src/network/hostserver/ifs_transfer.h
 )
 
 set(AGENT_SOURCES
@@ -237,8 +233,6 @@ set(UI_SOURCES
     src/ui/dialogs/session_settings_dialog.h
     src/ui/dialogs/theme_preview_widget.cpp
     src/ui/dialogs/theme_preview_widget.h
-    src/ui/dialogs/file_transfer_dialog.cpp
-    src/ui/dialogs/file_transfer_dialog.h
     src/ui/dialogs/match_replace_dialog.cpp
     src/ui/dialogs/match_replace_dialog.h
     # themes
@@ -276,7 +270,6 @@ set(UI_SOURCES
     src/ui/actions/onSessionLogging.cpp
     src/ui/actions/onScreenHistory.cpp
     src/ui/actions/onToggleAgentPanel.cpp
-    src/ui/actions/onFileTransfer.cpp
     src/ui/actions/onMatchReplace.cpp
     # setup
     src/ui/setup/setupUI.cpp

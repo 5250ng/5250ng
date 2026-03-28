@@ -108,10 +108,6 @@ void MainWindow::setupMenuBar() {
 
     // Tools menu
     QMenu *toolsMenu = bar->addMenu("&Tools");
-    m_fileTransferAction = toolsMenu->addAction("&File Transfer...", this, &MainWindow::onFileTransfer);
-    m_fileTransferAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
-    m_fileTransferAction->setEnabled(false);
-    toolsMenu->addSeparator();
     toolsMenu->addAction("&Take a Screenshot", this, &MainWindow::onTakeScreenshot);
     m_cursorRulesAction = toolsMenu->addAction("Show &cursor rules", this, &MainWindow::onToggleCursorRules);
     m_cursorRulesAction->setCheckable(true);

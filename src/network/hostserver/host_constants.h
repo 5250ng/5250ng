@@ -130,6 +130,7 @@ namespace ifs_rc {
     constexpr uint16_t RESOURCE_LIMIT_EXCEEDED  = 11;
     constexpr uint16_t ACCESS_DENIED_TO_REQUEST = 13;
     constexpr uint16_t INVALID_REQUEST          = 16;
+    constexpr uint16_t DATA_STREAM_SYNTAX_ERROR = 17;
     constexpr uint16_t NO_MORE_FILES            = 18;
     constexpr uint16_t NO_MORE_DATA             = 22;
     constexpr uint16_t SHARING_VIOLATION        = 32;
@@ -151,6 +152,7 @@ namespace ifs_rc {
         case RESOURCE_LIMIT_EXCEEDED:   return "Resource limit exceeded";
         case ACCESS_DENIED_TO_REQUEST:  return "Access denied to request";
         case INVALID_REQUEST:           return "Invalid request";
+        case DATA_STREAM_SYNTAX_ERROR:  return "Data stream syntax error";
         case NO_MORE_FILES:             return "No more files";
         case NO_MORE_DATA:              return "No more data (EOF)";
         case SHARING_VIOLATION:         return "Sharing violation";
