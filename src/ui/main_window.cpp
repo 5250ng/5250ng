@@ -618,7 +618,6 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                                || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
                 m_connected = connected;
                 m_disconnectAction->setEnabled(connected);
-                m_fileTransferAction->setEnabled(connected);
                 // Sync global bottom-bar status from active session
                 m_globalConnectionStatus->setState(state);
                 m_globalConnectionStatus->setStatusText(session->connectionStatus->statusText());
@@ -1004,7 +1003,6 @@ void MainWindow::setActiveSession(int index) {
         m_connected = false;
         m_connectAction->setEnabled(true);
         m_disconnectAction->setEnabled(false);
-        m_fileTransferAction->setEnabled(false);
         m_reconnectAction->setEnabled(false);
         m_duplicateAction->setEnabled(false);
         // Reset global status to disconnected when no session is active
@@ -1025,7 +1023,6 @@ void MainWindow::setActiveSession(int index) {
                    || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
     m_connected = connected;
     m_disconnectAction->setEnabled(connected);
-    m_fileTransferAction->setEnabled(connected);
     m_reconnectAction->setEnabled(true);
     m_duplicateAction->setEnabled(true);
     // Sync global bottom-bar status from active session
