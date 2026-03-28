@@ -65,12 +65,27 @@ cmake --build build
 ./build/bin/5250ng.app/Contents/MacOS/5250ng
 ```
 
-### Windows (PowerShell)
+### Windows
 
-```powershell
-cmake -G "Visual Studio 17 2022" -S . -B build
-cmake --build build --config Release
-.\build\bin\Release\5250ng.exe
+**Prerequisites:** Install [Qt6](https://www.qt.io/download-qt-installer) (select a **MinGW** or **MSVC 2022** kit — Qt bundles CMake, Ninja, and MinGW automatically). For TLS, install [OpenSSL](https://slproweb.com/products/Win32OpenSSL.html) (Win64).
+
+**Using `build.bat` (recommended):**
+
+```cmd
+git clone --recursive https://github.com/5250ng/5250ng.git
+cd 5250ng
+build.bat release
+```
+
+The script auto-detects Qt6, CMake, Ninja, and the compiler from common install paths. Run `build.bat help` for all options (`clean`, `test`, `package`). To create a distributable folder with all Qt DLLs bundled, run `build.bat package`.
+
+**Manual CMake (MinGW example):**
+
+```cmd
+set PATH=C:\Qt\Tools\CMake_64\bin;C:\Qt\Tools\Ninja;C:\Qt\Tools\mingw1310_64\bin;%PATH%
+cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.10.2\mingw_64
+cmake --build build
+.\build\bin\5250ng.exe
 ```
 
 > **TLS support** requires Qt6 SSL libraries. On Debian/Ubuntu: `sudo apt install libqt6network6 libssl-dev` then rebuild.

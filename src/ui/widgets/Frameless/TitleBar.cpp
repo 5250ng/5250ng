@@ -98,9 +98,6 @@ TitleBar::TitleBar(QWidget *parent)
     m_layout->addWidget(m_closeButton, 0, Qt::AlignRight | Qt::AlignVCenter);
     setLayout(m_layout);
 
-    // Remove menubar bottom border (if any, depending on style)
-    m_menuBar->setStyleSheet("QMenuBar { border: none; }");
-
     connect(m_minButton, &QPushButton::clicked, this, &TitleBar::minimizeRequested);
     connect(m_maxButton, &QPushButton::clicked, this, &TitleBar::maximizeRestoreRequested);
     connect(m_closeButton, &QPushButton::clicked, this, &TitleBar::closeRequested);

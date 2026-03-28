@@ -25,6 +25,9 @@
 namespace ui {
 namespace themes {
 
+// Forward declarations
+static QString generateWidgetStylesheet(const QMap<QString, QString> &colors);
+
 /**
  * Retrieve the global ThemeManager singleton.
  *
@@ -108,6 +111,7 @@ bool ThemeManager::registerThemeFromJson(const QString &defaultName, const QByte
             }
         }
     }
+    t.stylesheet = generateWidgetStylesheet(t.colors);
     registerTheme(t);
     return true;
 }
@@ -195,58 +199,205 @@ Theme ThemeManager::currentTheme() const {
     return m_themes.value(m_current, Theme{});
 }
 
-/**
- * Build a complete QPalette from a theme's colors map.
- *
- * Derives foreground/background palette roles from the two key color entries
- * ("mainwindow.background" and "mainwindow.titlebar.hline").  Detects
- * dark vs. light by the background luminance and fills all standard roles
- * so that Qt widgets render correctly without needing an explicit stylesheet.
- */
-static QPalette buildPaletteFromTheme(const QMap<QString, QString> &colors) {
-    const QColor bg(colors.value("mainwindow.background", "#1e1e1e"));
-    const bool isDark = bg.lightness() < 128;
+struct ThemeColors {
+    QColor bg, windowText, base, altBase, button, mid, highlight, disabledText;
+    bool isDark;
+};
 
-    const QColor windowText   = colors.contains("mainwindow.text")
-                                    ? QColor(colors.value("mainwindow.text"))
-                                    : (isDark ? QColor("#d4d4d4") : QColor("#212121"));
-    const QColor base         = isDark ? QColor("#252526") : QColor("#ffffff");
-    const QColor altBase      = isDark ? QColor("#2d2d30") : QColor("#f0f0f0");
-    const QColor button       = isDark ? QColor("#3c3c3c") : QColor("#e0e0e0");
-    const QColor mid          = QColor(colors.value("mainwindow.titlebar.hline",
-                                      isDark ? "#3c3c3c" : "#cccccc"));
-    const QColor highlight    = QColor("#0065ff");
-    const QColor disabledText = isDark ? QColor("#6d6d6d") : QColor("#9e9e9e");
+static ThemeColors deriveThemeColors(const QMap<QString, QString> &colors) {
+    ThemeColors c;
+    c.bg           = QColor(colors.value("mainwindow.background", "#1e1e1e"));
+    c.isDark       = c.bg.lightness() < 128;
+    c.windowText   = colors.contains("mainwindow.text")
+                         ? QColor(colors.value("mainwindow.text"))
+                         : (c.isDark ? QColor("#d4d4d4") : QColor("#212121"));
+    c.base         = c.isDark ? QColor("#252526") : QColor("#ffffff");
+    c.altBase      = c.isDark ? QColor("#2d2d30") : QColor("#f0f0f0");
+    c.button       = c.isDark ? QColor("#3c3c3c") : QColor("#e0e0e0");
+    c.mid          = QColor(colors.value("mainwindow.titlebar.hline",
+                            c.isDark ? "#3c3c3c" : "#cccccc"));
+    c.highlight    = QColor("#0065ff");
+    c.disabledText = c.isDark ? QColor("#6d6d6d") : QColor("#9e9e9e");
+    return c;
+}
+
+static QString generateWidgetStylesheet(const QMap<QString, QString> &colors) {
+    const ThemeColors c = deriveThemeColors(colors);
+    const QString bg           = c.bg.name();
+    const QString text         = c.windowText.name();
+    const QString base         = c.base.name();
+    const QString altBase      = c.altBase.name();
+    const QString button       = c.button.name();
+    const QString buttonLighter = c.button.lighter(110).name();
+    const QString mid          = c.mid.name();
+    const QString highlight    = c.highlight.name();
+    const QString highlightDark = c.highlight.darker(120).name();
+    const QString disabledText = c.disabledText.name();
+
+    return QStringLiteral(
+        /* ── QComboBox ── */
+        "QComboBox {"
+        "  background-color: %1;"
+        "  color: %2;"
+        "  border: 1px solid %3;"
+        "  border-radius: 3px;"
+        "  padding: 4px 8px;"
+        "  min-height: 20px;"
+        "}"
+        "QComboBox:hover { border-color: %4; }"
+        "QComboBox:focus { border-color: %4; }"
+        "QComboBox:disabled {"
+        "  color: %5;"
+        "  background-color: %6;"
+        "}"
+        "QComboBox:on {"
+        "  border-bottom-left-radius: 0;"
+        "  border-bottom-right-radius: 0;"
+        "}"
+        "QComboBox::drop-down {"
+        "  subcontrol-origin: padding;"
+        "  subcontrol-position: top right;"
+        "  width: 20px;"
+        "  border-left: 1px solid %3;"
+        "  border-top-right-radius: 3px;"
+        "  border-bottom-right-radius: 3px;"
+        "  background-color: %7;"
+        "}"
+        "QComboBox::drop-down:hover { background-color: %8; }"
+        "QComboBox::down-arrow {"
+        "  width: 0; height: 0;"
+        "  border-left: 4px solid transparent;"
+        "  border-right: 4px solid transparent;"
+        "  border-top: 5px solid %2;"
+        "}"
+        "QComboBox::down-arrow:disabled { border-top-color: %5; }"
+        "QComboBox QAbstractItemView {"
+        "  background-color: %1;"
+        "  color: %2;"
+        "  border: 1px solid %3;"
+        "  selection-background-color: %4;"
+        "  selection-color: #ffffff;"
+        "  outline: none;"
+        "  padding: 2px;"
+        "}"
+        "QComboBox QAbstractItemView::item {"
+        "  padding: 4px 8px;"
+        "  min-height: 20px;"
+        "}"
+        "QComboBox QAbstractItemView::item:hover {"
+        "  background-color: %4;"
+        "  color: #ffffff;"
+        "}"
+
+        /* ── QMenuBar ── */
+        "QMenuBar {"
+        "  background-color: transparent;"
+        "  color: %2;"
+        "  border: none;"
+        "  spacing: 2px;"
+        "}"
+        "QMenuBar::item {"
+        "  background-color: transparent;"
+        "  color: %2;"
+        "  padding: 4px 8px;"
+        "  border-radius: 3px;"
+        "}"
+        "QMenuBar::item:selected {"
+        "  background-color: %4;"
+        "  color: #ffffff;"
+        "}"
+        "QMenuBar::item:pressed {"
+        "  background-color: %9;"
+        "}"
+
+        /* ── QMenu ── */
+        "QMenu {"
+        "  background-color: %1;"
+        "  color: %2;"
+        "  border: 1px solid %3;"
+        "  padding: 4px 0px;"
+        "  border-radius: 4px;"
+        "}"
+        "QMenu::item {"
+        "  padding: 6px 28px 6px 24px;"
+        "  background-color: transparent;"
+        "}"
+        "QMenu::item:selected {"
+        "  background-color: %4;"
+        "  color: #ffffff;"
+        "}"
+        "QMenu::item:disabled { color: %5; }"
+        "QMenu::separator {"
+        "  height: 1px;"
+        "  background-color: %3;"
+        "  margin: 4px 8px;"
+        "}"
+        "QMenu::indicator {"
+        "  width: 14px; height: 14px;"
+        "  margin-left: 6px;"
+        "}"
+        "QMenu::indicator:checked {"
+        "  image: none;"
+        "  background-color: %4;"
+        "  border: 1px solid %4;"
+        "  border-radius: 2px;"
+        "}"
+        "QMenu::indicator:unchecked {"
+        "  background-color: transparent;"
+        "  border: 1px solid %3;"
+        "  border-radius: 2px;"
+        "}"
+        "QMenu::right-arrow {"
+        "  width: 0; height: 0;"
+        "  border-top: 4px solid transparent;"
+        "  border-bottom: 4px solid transparent;"
+        "  border-left: 5px solid %2;"
+        "  margin-right: 8px;"
+        "}"
+    ).arg(base,       // %1
+          text,       // %2
+          mid,        // %3
+          highlight,  // %4
+          disabledText, // %5
+          altBase,    // %6
+          button,     // %7
+          buttonLighter, // %8
+          highlightDark  // %9
+    );
+}
+
+static QPalette buildPaletteFromTheme(const QMap<QString, QString> &colors) {
+    const ThemeColors c = deriveThemeColors(colors);
 
     QPalette pal;
     for (const auto group : {QPalette::Active, QPalette::Inactive}) {
-        pal.setColor(group, QPalette::Window,          bg);
-        pal.setColor(group, QPalette::WindowText,      windowText);
-        pal.setColor(group, QPalette::Base,            base);
-        pal.setColor(group, QPalette::AlternateBase,   altBase);
-        pal.setColor(group, QPalette::Text,            windowText);
-        pal.setColor(group, QPalette::Button,          button);
-        pal.setColor(group, QPalette::ButtonText,      windowText);
-        pal.setColor(group, QPalette::Highlight,       highlight);
+        pal.setColor(group, QPalette::Window,          c.bg);
+        pal.setColor(group, QPalette::WindowText,      c.windowText);
+        pal.setColor(group, QPalette::Base,            c.base);
+        pal.setColor(group, QPalette::AlternateBase,   c.altBase);
+        pal.setColor(group, QPalette::Text,            c.windowText);
+        pal.setColor(group, QPalette::Button,          c.button);
+        pal.setColor(group, QPalette::ButtonText,      c.windowText);
+        pal.setColor(group, QPalette::Highlight,       c.highlight);
         pal.setColor(group, QPalette::HighlightedText, QColor("#ffffff"));
-        pal.setColor(group, QPalette::ToolTipBase,     altBase);
-        pal.setColor(group, QPalette::ToolTipText,     windowText);
-        pal.setColor(group, QPalette::Mid,             mid);
-        pal.setColor(group, QPalette::Dark,            bg.darker(150));
-        pal.setColor(group, QPalette::Midlight,        button.lighter(110));
-        pal.setColor(group, QPalette::Light,           button.lighter(160));
-        pal.setColor(group, QPalette::Shadow,          bg.darker(200));
+        pal.setColor(group, QPalette::ToolTipBase,     c.altBase);
+        pal.setColor(group, QPalette::ToolTipText,     c.windowText);
+        pal.setColor(group, QPalette::Mid,             c.mid);
+        pal.setColor(group, QPalette::Dark,            c.bg.darker(150));
+        pal.setColor(group, QPalette::Midlight,        c.button.lighter(110));
+        pal.setColor(group, QPalette::Light,           c.button.lighter(160));
+        pal.setColor(group, QPalette::Shadow,          c.bg.darker(200));
         pal.setColor(group, QPalette::Link,            QColor("#3794ff"));
         pal.setColor(group, QPalette::LinkVisited,     QColor("#7f3fbf"));
-        pal.setColor(group, QPalette::PlaceholderText, disabledText);
+        pal.setColor(group, QPalette::PlaceholderText, c.disabledText);
     }
-    pal.setColor(QPalette::Disabled, QPalette::Window,       bg);
-    pal.setColor(QPalette::Disabled, QPalette::Base,         base);
-    pal.setColor(QPalette::Disabled, QPalette::AlternateBase, altBase);
-    pal.setColor(QPalette::Disabled, QPalette::Button,       button);
-    pal.setColor(QPalette::Disabled, QPalette::WindowText,   disabledText);
-    pal.setColor(QPalette::Disabled, QPalette::Text,         disabledText);
-    pal.setColor(QPalette::Disabled, QPalette::ButtonText,   disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::Window,       c.bg);
+    pal.setColor(QPalette::Disabled, QPalette::Base,         c.base);
+    pal.setColor(QPalette::Disabled, QPalette::AlternateBase, c.altBase);
+    pal.setColor(QPalette::Disabled, QPalette::Button,       c.button);
+    pal.setColor(QPalette::Disabled, QPalette::WindowText,   c.disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::Text,         c.disabledText);
+    pal.setColor(QPalette::Disabled, QPalette::ButtonText,   c.disabledText);
     return pal;
 }
 
