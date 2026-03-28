@@ -77,11 +77,15 @@ class AgentConfig {
     ToolConfig toolConfig(const QString &toolName) const;
     void setToolConfig(const QString &toolName, const ToolConfig &cfg);
 
-    // MCP server
+    // MCP server (runtime-only state — not persisted)
     bool mcpServerEnabled() const { return m_mcpServerEnabled; }
     void setMcpServerEnabled(bool enabled) { m_mcpServerEnabled = enabled; }
     quint16 mcpServerPort() const { return m_mcpServerPort; }
     void setMcpServerPort(quint16 port) { m_mcpServerPort = port; }
+
+    // MCP auto-start on launch (persisted)
+    bool mcpAutoStart() const { return m_mcpAutoStart; }
+    void setMcpAutoStart(bool enabled) { m_mcpAutoStart = enabled; }
 
   private:
     AgentConfig();
@@ -103,6 +107,7 @@ class AgentConfig {
     QMap<QString, ToolConfig> m_toolConfigs;
 
     bool m_mcpServerEnabled = false;
+    bool m_mcpAutoStart = false;
     quint16 m_mcpServerPort = 9250;
 };
 

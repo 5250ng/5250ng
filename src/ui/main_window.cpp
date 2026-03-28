@@ -52,6 +52,7 @@
 #include <QTimer>
 #include <QWidgetAction>
 #include "ui/themes/terminal_theme_manager.h"
+#include "ui/themes/manager.h"
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -140,9 +141,13 @@ class McpTabStyle : public QProxyStyle {
         QRect r = tabOpt->rect;
 
         // --- Determine background color ---
+        auto &themeMgr = ui::themes::ThemeManager::instance();
+        QColor mcpTabBg(themeMgr.color("mcp.tab.background", "#4a90d9"));
+        QColor mcpTabActivity(themeMgr.color("mcp.tab.activity", "#90caf9"));
+
         QColor bgColor;
         if (isMcp) {
-            bgColor = QColor("#FF8C00");
+            bgColor = mcpTabBg;
             if (!isSelected) bgColor = bgColor.darker(120);
         } else {
             bgColor = tabOpt->palette.color(QPalette::Button);
@@ -155,8 +160,8 @@ class McpTabStyle : public QProxyStyle {
         QColor activityDotColor;
         if (hasActivity) {
             if (isMcp) {
-                bgColor = lerpColor(bgColor, QColor("#FFD54F"), 0.25);
-                activityDotColor = QColor("#FFD54F");
+                bgColor = lerpColor(bgColor, mcpTabActivity, 0.25);
+                activityDotColor = mcpTabActivity;
             } else {
                 bgColor = lerpColor(bgColor, QColor("#4FC3F7"), 0.20);
                 activityDotColor = QColor("#4FC3F7");
@@ -216,8 +221,9 @@ class McpTabStyle : public QProxyStyle {
         if (hasActivity)
             labelOpt.rect.setLeft(labelOpt.rect.left() + 14);
         if (isMcp) {
-            labelOpt.palette.setColor(QPalette::WindowText, Qt::white);
-            labelOpt.palette.setColor(QPalette::ButtonText, Qt::white);
+            QColor mcpTextColor(themeMgr.color("mcp.tab.text", "#ffffff"));
+            labelOpt.palette.setColor(QPalette::WindowText, mcpTextColor);
+            labelOpt.palette.setColor(QPalette::ButtonText, mcpTextColor);
         }
         QProxyStyle::drawControl(CE_TabBarTabLabel, &labelOpt, painter, widget);
     }
@@ -281,10 +287,12 @@ MainWindow::MainWindow(QWidget *parent)
     });
     auto &agentCfg = agent::AgentConfig::instance();
     agentCfg.load();
-    if (agentCfg.mcpServerEnabled()) {
+    // Start server if enabled via CLI flag or auto-start setting
+    if (agentCfg.mcpServerEnabled() || agentCfg.mcpAutoStart()) {
+        agentCfg.setMcpServerEnabled(true);
         m_mcpServer->start(agentCfg.mcpServerPort());
     }
-    // Sync the menu checkbox with the persisted config
+    // Sync menu checkbox with state
     m_mcpEnableAction->setChecked(agentCfg.mcpServerEnabled());
 }
 
@@ -293,7 +301,6 @@ void MainWindow::onMcpToggleEnabled() {
     bool enable = m_mcpEnableAction->isChecked();
 
     cfg.setMcpServerEnabled(enable);
-    cfg.save();
 
     if (enable) {
         if (!m_mcpServer->isRunning())
@@ -486,11 +493,12 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // Keep overlay sized to terminalContainer
     session->terminalContainer->installEventFilter(this);
 
-    // MCP-controlled sessions: no agent panel, but NOT read-only
-    // (scripts injected via MCP need to send key events to the widget)
+    // MCP-controlled sessions: read-only for user input, but MCP-injected
+    // input bypasses the read-only gate via the mcpInjecting flag.
     if (!mcpSessionId.isEmpty()) {
         session->mcpControlled = true;
         session->mcpSessionId = mcpSessionId;
+        session->displayWidget->setReadOnly(true);
     }
 
     // Agent panel (hidden by default, second child of splitter)
@@ -681,12 +689,14 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         m_tabWidget->tabBar()->setTabData(newIndex, tabData);
     }
 
-    // MCP tab styling: orange border on content container only
+    // MCP tab styling: themed border on content container only
     if (session->mcpControlled) {
         m_tabWidget->setTabToolTip(newIndex, "MCP session: " + session->mcpSessionId);
         session->container->setObjectName("mcpContainer");
+        QString borderColor = ui::themes::ThemeManager::instance()
+            .color("mcp.border.color", "#4a90d9");
         session->container->setStyleSheet(
-            "#mcpContainer { border: 2px solid #FF8C00; }");
+            QString("#mcpContainer { border: 2px solid %1; }").arg(borderColor));
         // Add margins so the border doesn't overlap the content
         session->container->layout()->setContentsMargins(2, 2, 2, 2);
     }

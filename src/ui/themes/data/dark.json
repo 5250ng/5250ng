@@ -15,6 +15,10 @@
         "agent.assistant.label": "#50c878",
         "agent.error.text": "#ff6b6b",
         "agent.code.background": "#1a1a2e",
-        "agent.code.text": "#d4d4d4"
+        "agent.code.text": "#d4d4d4",
+        "mcp.tab.background": "#4a90d9",
+        "mcp.tab.text": "#ffffff",
+        "mcp.tab.activity": "#90caf9",
+        "mcp.border.color": "#4a90d9"
     }
 }

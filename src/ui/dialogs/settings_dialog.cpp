@@ -59,6 +59,8 @@ void SettingsDialog::setupUI() {
     m_categoryTree->addTopLevelItem(termThemeItem);
     QTreeWidgetItem *macrosItem = new QTreeWidgetItem(QStringList() << "Macros");
     m_categoryTree->addTopLevelItem(macrosItem);
+    QTreeWidgetItem *mcpItem = new QTreeWidgetItem(QStringList() << "MCP Server");
+    m_categoryTree->addTopLevelItem(mcpItem);
     QTreeWidgetItem *agentItem = new QTreeWidgetItem(QStringList() << "Agents");
     m_categoryTree->addTopLevelItem(agentItem);
 
@@ -92,11 +94,15 @@ void SettingsDialog::setupUI() {
     m_macrosPage = buildMacrosPage();
     m_pages->addWidget(m_macrosPage); // index 2: macros
 
+    // MCP Server page
+    m_mcpPage = buildMcpServerPage();
+    m_pages->addWidget(m_mcpPage); // index 3: MCP server
+
     // Agent page
     m_agentPage = buildAgentPage();
-    m_pages->addWidget(m_agentPage); // index 3: agent
+    m_pages->addWidget(m_agentPage); // index 4: agent
 
-    // Per-tool config pages (indices 4+)
+    // Per-tool config pages (indices 5+)
     for (const QString &toolName : toolNames) {
         QWidget *page = buildToolConfigPage(toolName);
         m_toolPages[toolName] = page;
@@ -339,32 +345,6 @@ QWidget *SettingsDialog::buildAgentPage() {
 
     layout->addWidget(dangerGroup);
 
-    // MCP Server section
-    QGroupBox *mcpGroup = new QGroupBox("MCP Server", page);
-    QVBoxLayout *mcpLayout = new QVBoxLayout(mcpGroup);
-
-    m_mcpEnabledCheck = new QCheckBox("Enable MCP server", mcpGroup);
-    m_mcpEnabledCheck->setChecked(cfg.mcpServerEnabled());
-    m_mcpEnabledCheck->setToolTip("Expose terminal tools over HTTP for external AI clients (e.g. Claude Desktop).");
-    mcpLayout->addWidget(m_mcpEnabledCheck);
-
-    QHBoxLayout *mcpPortRow = new QHBoxLayout();
-    mcpPortRow->addWidget(new QLabel("Port:", mcpGroup));
-    m_mcpPortSpin = new QSpinBox(mcpGroup);
-    m_mcpPortSpin->setRange(1024, 65535);
-    m_mcpPortSpin->setValue(cfg.mcpServerPort());
-    mcpPortRow->addWidget(m_mcpPortSpin);
-    mcpPortRow->addStretch();
-    mcpLayout->addLayout(mcpPortRow);
-
-    QLabel *mcpHint = new QLabel(mcpGroup);
-    mcpHint->setWordWrap(true);
-    mcpHint->setStyleSheet("color: gray; font-size: 11px;");
-    mcpHint->setText("MCP clients connect via HTTP POST to http://localhost:<port>/mcp");
-    mcpLayout->addWidget(mcpHint);
-
-    layout->addWidget(mcpGroup);
-
     layout->addStretch();
 
     // Populate from config
@@ -523,6 +503,59 @@ void SettingsDialog::onMacrosSaveClicked() {
     ui::widgets::StyledMessageBox::information(this, "Macros Settings", "Settings saved.");
 }
 
+QWidget *SettingsDialog::buildMcpServerPage() {
+    auto &cfg = agent::AgentConfig::instance();
+    cfg.load();
+
+    QWidget *page = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setSpacing(12);
+
+    // Auto-start section
+    QGroupBox *startupGroup = new QGroupBox("Startup", page);
+    QVBoxLayout *startupLayout = new QVBoxLayout(startupGroup);
+
+    m_mcpAutoStartCheck = new QCheckBox("Automatically start MCP server on launch", startupGroup);
+    m_mcpAutoStartCheck->setChecked(cfg.mcpAutoStart());
+    m_mcpAutoStartCheck->setToolTip("When enabled, the MCP server will start automatically each time the application launches.");
+    startupLayout->addWidget(m_mcpAutoStartCheck);
+
+    layout->addWidget(startupGroup);
+
+    // Network section
+    QGroupBox *networkGroup = new QGroupBox("Network", page);
+    QVBoxLayout *networkLayout = new QVBoxLayout(networkGroup);
+
+    QHBoxLayout *portRow = new QHBoxLayout();
+    portRow->addWidget(new QLabel("Port:", networkGroup));
+    m_mcpPortSpin = new QSpinBox(networkGroup);
+    m_mcpPortSpin->setRange(1024, 65535);
+    m_mcpPortSpin->setValue(cfg.mcpServerPort());
+    portRow->addWidget(m_mcpPortSpin);
+    portRow->addStretch();
+    networkLayout->addLayout(portRow);
+
+    QLabel *hint = new QLabel(networkGroup);
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color: gray; font-size: 11px;");
+    hint->setText("MCP clients connect via HTTP POST to http://localhost:<port>/mcp\n"
+                  "The server can also be started for a single session with the --enable-mcp-server flag.");
+    networkLayout->addWidget(hint);
+
+    layout->addWidget(networkGroup);
+
+    layout->addStretch();
+    return page;
+}
+
+void SettingsDialog::onMcpSaveClicked() {
+    auto &cfg = agent::AgentConfig::instance();
+    cfg.setMcpAutoStart(m_mcpAutoStartCheck->isChecked());
+    cfg.setMcpServerPort(static_cast<quint16>(m_mcpPortSpin->value()));
+    cfg.save();
+    ui::widgets::StyledMessageBox::information(this, "MCP Server Settings", "Settings saved.");
+}
+
 void SettingsDialog::onAgentProviderChanged(int index) {
     auto &cfg = agent::AgentConfig::instance();
     QString providerId = m_agentProviderCombo->itemData(index).toString();
@@ -664,10 +697,6 @@ void SettingsDialog::onAgentSaveClicked() {
     cfg.setAutoAcceptToolCalls(wantToolCalls);
     cfg.setAutoAcceptFileEdits(wantFileEdits);
 
-    // MCP server settings
-    cfg.setMcpServerEnabled(m_mcpEnabledCheck->isChecked());
-    cfg.setMcpServerPort(static_cast<quint16>(m_mcpPortSpin->value()));
-
     cfg.save();
     emit agentConfigChanged();
 
@@ -782,6 +811,8 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
         m_pages->setCurrentWidget(m_terminalThemePage);
     } else if (text == "Macros") {
         m_pages->setCurrentWidget(m_macrosPage);
+    } else if (text == "MCP Server") {
+        m_pages->setCurrentWidget(m_mcpPage);
     } else if (text == "Agents") {
         m_pages->setCurrentWidget(m_agentPage);
     } else if (m_toolPages.contains(text)) {
@@ -799,26 +830,21 @@ void SettingsDialog::onSaveClicked() {
         }
     }
 
-    int idx = m_pages->currentIndex();
-    switch (idx) {
-    case 0: { // Application Theme
+    if (currentPage == m_themePage) {
         const QString name = m_themeCombo->currentData().toString();
         if (!name.isEmpty()) {
             auto &mgr = ui::themes::ThemeManager::instance();
             if (mgr.hasTheme(name))
                 mgr.setCurrentTheme(name);
         }
-        break;
-    }
-    case 1: // 5250 Theme
+    } else if (currentPage == m_terminalThemePage) {
         m_terminalThemePage->onApplyToAll();
-        break;
-    case 2: // Macros
+    } else if (currentPage == m_macrosPage) {
         onMacrosSaveClicked();
-        break;
-    case 3: // Agent
+    } else if (currentPage == m_mcpPage) {
+        onMcpSaveClicked();
+    } else if (currentPage == m_agentPage) {
         onAgentSaveClicked();
-        break;
     }
 }
 

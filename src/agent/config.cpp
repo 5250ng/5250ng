@@ -96,7 +96,9 @@ void AgentConfig::load() {
 
     m_autoAcceptToolCalls = settings.value("autoAcceptToolCalls", false).toBool();
     m_autoAcceptFileEdits = settings.value("autoAcceptFileEdits", false).toBool();
-    m_mcpServerEnabled = settings.value("mcpServerEnabled", false).toBool();
+    // mcpServerEnabled is runtime-only — never persisted.
+    settings.remove("mcpServerEnabled"); // clean up stale key from older versions
+    m_mcpAutoStart = settings.value("mcpAutoStart", false).toBool();
     m_mcpServerPort = static_cast<quint16>(settings.value("mcpServerPort", 9250).toUInt());
 
     // Per-tool config
@@ -137,7 +139,7 @@ void AgentConfig::save() {
 
     settings.setValue("autoAcceptToolCalls", m_autoAcceptToolCalls);
     settings.setValue("autoAcceptFileEdits", m_autoAcceptFileEdits);
-    settings.setValue("mcpServerEnabled", m_mcpServerEnabled);
+    settings.setValue("mcpAutoStart", m_mcpAutoStart);
     settings.setValue("mcpServerPort", m_mcpServerPort);
 
     // Per-tool config

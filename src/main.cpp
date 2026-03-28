@@ -32,6 +32,9 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
+    // Register uint8_t for queued signal/slot connections (used by sendGDS)
+    qRegisterMetaType<uint8_t>("uint8_t");
+
     app.setApplicationName("5250ng");
     app.setApplicationVersion("0.5.0");
     app.setOrganizationName("5250ng");
@@ -173,7 +176,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Apply MCP server CLI overrides to config (before MainWindow reads it)
+    // Apply MCP server CLI overrides to in-memory config (before MainWindow reads it).
+    // These are session-only overrides — not persisted to disk, so the next launch
+    // without the flag will respect the saved config (default: disabled).
     if (parser.isSet(mcpEnableOption)) {
         auto &agentCfg = agent::AgentConfig::instance();
         agentCfg.load();
@@ -189,7 +194,6 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
-        agentCfg.save();
         logger::Logger::instance()->debug(
             QString("MCP server enabled via CLI (port %1)").arg(agentCfg.mcpServerPort()));
     }

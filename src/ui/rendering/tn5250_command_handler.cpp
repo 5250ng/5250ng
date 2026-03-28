@@ -166,21 +166,25 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
         return;
     }
 
-    logger::Logger::instance()->debug(
-        QString("CommandHandler: Handling raw screen data - %1 bytes")
-            .arg(data.size()));
-    std::vector<uint8_t> dumpBuf(reinterpret_cast<const uint8_t *>(data.constData()),
-                                  reinterpret_cast<const uint8_t *>(data.constData()) + data.size());
-    std::vector<std::string> hexLines = utils::hex::hexdump(dumpBuf);
-    for (const std::string &line : hexLines) {
-        logger::Logger::instance()->debug(QString::fromStdString(line));
-    }
+    if (!data.isEmpty()) {
+        logger::Logger::instance()->debug(
+            QString("CommandHandler: Handling raw screen data - %1 bytes")
+                .arg(data.size()));
+        std::vector<uint8_t> dumpBuf(reinterpret_cast<const uint8_t *>(data.constData()),
+                                      reinterpret_cast<const uint8_t *>(data.constData()) + data.size());
+        std::vector<std::string> hexLines = utils::hex::hexdump(dumpBuf);
+        for (const std::string &line : hexLines) {
+            logger::Logger::instance()->debug(QString::fromStdString(line));
+        }
 
-    if (m_renderer) {
-        m_renderer->render(data);
+        if (m_renderer) {
+            m_renderer->render(data);
+        }
     }
 
     // Process deferred CC2 now that display data has been rendered
+    // (or immediately if WTD had no display orders — the CC2 unlock
+    //  must still fire to avoid leaving the keyboard permanently locked)
     if (m_pendingCC2) {
         processDeferredCC2(m_pendingCC2);
         m_pendingCC2 = 0;
@@ -583,8 +587,10 @@ void TN5250CommandHandler::onWriteStructuredFieldReceived(const QByteArray &data
         uint8_t type = static_cast<uint8_t>(data[3]);
         if (clazz == 0xD9 && type == 0x70) {
             LOG_DEBUG("CommandHandler: Query (0xD9/0x70) received, sending query response");
-            if (m_sendToHost) {
-                m_sendToHost(buildQueryResponse());
+            if (m_sendGDS) {
+                // Query response uses GDS opcode 0x00 (NOP), not PUT_GET.
+                // Payload = cursor(0,0) + WSF AID (0x88) + structured field data.
+                m_sendGDS(0x00, 0x00, buildQueryResponse());
             }
             return;
         }
@@ -594,96 +600,73 @@ void TN5250CommandHandler::onWriteStructuredFieldReceived(const QByteArray &data
 }
 
 QByteArray TN5250CommandHandler::buildQueryResponse() {
-    // Build 5250 Query Response per SA21-9247-6 section 15.26.1
-    // Response mimics a 5251-011 device
+    // Build 5250 Query Response per SA21-9247-6 section 15.26.1.
+    // Total GDS payload is 64 bytes:
+    //   cursor_row(1) + cursor_col(1) + WSF_AID(1) + SF_data(61)
+    // Sent with GDS opcode 0x00 (NOP).
     QByteArray resp;
+    resp.resize(64, '\0');
 
-    // Structured field header
-    resp.append(static_cast<char>(0x00)); // Length high (filled later)
-    resp.append(static_cast<char>(0x00)); // Length low (filled later)
-    resp.append(static_cast<char>(0xD9)); // Class: 5250 Terminal
-    resp.append(static_cast<char>(0x70)); // Type: Query Response
-    resp.append(static_cast<char>(0x80)); // Flag: response to query
+    // Inbound WSF header (3 bytes)
+    resp[0] = 0x00;                           // Cursor row
+    resp[1] = 0x00;                           // Cursor col
+    resp[2] = static_cast<char>(0x88);        // Inbound WSF AID
 
-    // Controller hardware class (4 bytes)
-    resp.append(static_cast<char>(0x06)); // 0x06 = remote controller
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
+    // Structured field data (starts at offset 3, 61 bytes)
+    resp[3]  = 0x00;                          // SF length high
+    resp[4]  = 0x40;                          // SF length low (0x0040 = 64, covers offset 3..66 conceptually)
+    resp[5]  = static_cast<char>(0xD9);       // Class: 5250 Terminal
+    resp[6]  = 0x70;                          // Type: Query Response
+    resp[7]  = static_cast<char>(0x80);       // Flag: response to query
 
-    // Controller code level (4 bytes - version 1.1.0.0)
-    resp.append(static_cast<char>(0x01));
-    resp.append(static_cast<char>(0x01));
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
+    // Controller hardware class (1 byte)
+    resp[8]  = 0x06;                          // Remote controller
 
-    // Reserved (16 bytes)
-    for (int i = 0; i < 16; ++i)
-        resp.append(static_cast<char>(0x00));
+    // Controller code level (3 bytes)
+    resp[9]  = 0x00;
+    resp[10] = 0x01;
+    resp[11] = 0x01;
+
+    // Reserved (20 bytes: offsets 12-31) — already zeroed by resize
+
+    // Machine type qualifier
+    resp[30] = 0x01;
 
     // Device type (7 EBCDIC bytes: "5251011")
-    // EBCDIC: 5=0xF5, 2=0xF2, 1=0xF1, 0=0xF0
-    resp.append(static_cast<char>(0xF5)); // '5'
-    resp.append(static_cast<char>(0xF2)); // '2'
-    resp.append(static_cast<char>(0xF5)); // '5'
-    resp.append(static_cast<char>(0xF1)); // '1'
-    resp.append(static_cast<char>(0xF0)); // '0'
-    resp.append(static_cast<char>(0xF1)); // '1'
-    resp.append(static_cast<char>(0xF1)); // '1'
+    resp[31] = static_cast<char>(0xF5);       // '5'
+    resp[32] = static_cast<char>(0xF2);       // '2'
+    resp[33] = static_cast<char>(0xF5);       // '5'
+    resp[34] = static_cast<char>(0xF1);       // '1'
+    resp[35] = static_cast<char>(0xF0);       // '0'
+    resp[36] = static_cast<char>(0xF1);       // '1'
+    resp[37] = static_cast<char>(0xF1);       // '1'
 
-    // Device model (3 EBCDIC bytes: "   ")
-    resp.append(static_cast<char>(0x40));
-    resp.append(static_cast<char>(0x40));
-    resp.append(static_cast<char>(0x40));
+    // Keyboard ID
+    resp[38] = 0x02;                          // Standard keyboard
 
-    // Keyboard ID (1 byte)
-    resp.append(static_cast<char>(0x02)); // Standard keyboard
+    // Extended keyboard ID + reserved (offsets 39-41) — zeroed
 
-    // Extended keyboard ID (1 byte)
-    resp.append(static_cast<char>(0x00));
-
-    // Reserved (1 byte)
-    resp.append(static_cast<char>(0x00));
-
-    // Display serial number (4 bytes)
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
+    // Display serial number (2 bytes)
+    resp[42] = 0x24;
+    resp[43] = 0x24;
 
     // Maximum number of input fields (2 bytes)
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x80)); // 128 fields
+    resp[44] = 0x00;
+    resp[45] = 0x01;
 
-    // Reserved (3 bytes)
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
-    resp.append(static_cast<char>(0x00));
-
-    // Capabilities flags
-    // Row 1, Col 1: screen capability
-    int screenRows = 24, screenCols = 80;
-    if (m_displayWidget && m_displayWidget->screenBuffer()) {
-        screenRows = m_displayWidget->screenBuffer()->rows();
-        screenCols = m_displayWidget->screenBuffer()->cols();
-    }
-    resp.append(static_cast<char>(screenRows));  // Max rows
-    resp.append(static_cast<char>(screenCols));   // Max cols
+    // Device capabilities + reserved (offsets 45-49) — zeroed
 
     // Workstation capabilities (2 bytes)
-    // Bit flags: supports read screen, supports extended attributes
-    resp.append(static_cast<char>(0x01)); // Enhanced display
-    resp.append(static_cast<char>(0x00));
+    resp[50] = 0x01;                          // Read screen, extended attributes
+    resp[51] = 0x11;                          // GUI-like characters, SBA on read
 
-    // Fill to standard 64-byte response
-    while (resp.size() < 64) {
-        resp.append(static_cast<char>(0x00));
-    }
+    // Reserved (offsets 52-53) — zeroed
 
-    // Fix up length field (bytes 0-1, big-endian, includes length itself)
-    int len = resp.size();
-    resp[0] = static_cast<char>((len >> 8) & 0xFF);
-    resp[1] = static_cast<char>(len & 0xFF);
+    // Additional capability bytes (2 bytes)
+    resp[54] = 0x07;                          // DBCS, save/restore screen
+    resp[55] = 0x08;                          // Max transmission size indicator
+
+    // Remaining bytes (offsets 56-63) — zeroed by resize
 
     return resp;
 }

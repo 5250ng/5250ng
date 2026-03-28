@@ -37,7 +37,7 @@ bool Q5250ScreenWidget::event(QEvent *ev) {
     // QWidget::event() normally converts these into focus-next/focus-prev and
     // never calls keyPressEvent, so we must catch them here.
     if (ev->type() == QEvent::KeyPress) {
-        if (m_readOnly) return QWidget::event(ev);
+        if (m_readOnly && !m_mcpInjecting) return QWidget::event(ev);
         QKeyEvent *ke = static_cast<QKeyEvent *>(ev);
         if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
             keyPressEvent(ke);
@@ -75,8 +75,8 @@ void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {
 }
 
 void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
-    // In read-only mode, only allow copy
-    if (m_readOnly) {
+    // In read-only mode, only allow copy (MCP-injected input bypasses this)
+    if (m_readOnly && !m_mcpInjecting) {
         if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_C) {
             if (hasSelection()) {
                 copySelection();
@@ -260,6 +260,7 @@ void Q5250ScreenWidget::mousePressEvent(QMouseEvent *event) {
         QAction *copyAction = menu.addAction("Copy");
         copyAction->setEnabled(hasSelection());
         QAction *pasteAction = menu.addAction("Paste");
+        pasteAction->setEnabled(!m_readOnly);
         QAction *selectAllAction = menu.addAction("Select All");
         menu.addSeparator();
         QAction *clearSelAction = menu.addAction("Clear Selection");
@@ -319,24 +320,27 @@ void Q5250ScreenWidget::mouseMoveEvent(QMouseEvent *event) {
 void Q5250ScreenWidget::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         if (m_selectionEnabled && m_screenBuffer) {
-            // If no drag occurred (same cell), treat as simple click: move cursor
+            // If no drag occurred (same cell), treat as simple click
             if (m_selectionStart == m_selectionEnd &&
                 m_selectionStart.x() >= 0 && m_selectionStart.y() >= 0) {
-                // Check for hotspot click
-                if (m_hotspotDetector.isEnabled()) {
-                    const core::Hotspot *hs = core::HotspotDetector::hotspotAt(
-                        m_hotspots, m_selectionStart.y(), m_selectionStart.x());
-                    if (hs) {
-                        emit hotspotActivated(*hs);
-                        m_selectionStart = QPoint(-1, -1);
-                        m_selectionEnd = QPoint(-1, -1);
-                        m_selecting = false;
-                        update();
-                        event->accept();
-                        return;
+                if (!m_readOnly) {
+                    // Check for hotspot click
+                    if (m_hotspotDetector.isEnabled()) {
+                        const core::Hotspot *hs = core::HotspotDetector::hotspotAt(
+                            m_hotspots, m_selectionStart.y(), m_selectionStart.x());
+                        if (hs) {
+                            emit hotspotActivated(*hs);
+                            m_selectionStart = QPoint(-1, -1);
+                            m_selectionEnd = QPoint(-1, -1);
+                            m_selecting = false;
+                            update();
+                            event->accept();
+                            return;
+                        }
                     }
+                    // Move cursor on simple click
+                    m_screenBuffer->setCursorPosition(m_selectionStart.y(), m_selectionStart.x());
                 }
-                m_screenBuffer->setCursorPosition(m_selectionStart.y(), m_selectionStart.x());
                 // Clear selection on simple click
                 m_selectionStart = QPoint(-1, -1);
                 m_selectionEnd = QPoint(-1, -1);

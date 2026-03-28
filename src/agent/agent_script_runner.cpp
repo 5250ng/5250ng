@@ -61,16 +61,18 @@ void AgentScriptRunner::runScript(const QString &scriptText) {
     QPointer<ui::widgets::Q5250ScreenWidget> displayGuard = m_display;
     QPointer<core::scripting::ScriptExecutor> execGuard = m_executor;
 
-    // Key injection
+    // Key injection (bypasses read-only via mcpInjecting flag)
     m_connections.append(
         connect(m_executor, &core::scripting::ScriptExecutor::injectKeyPress, this,
             [displayGuard](int key, Qt::KeyboardModifiers mods, const QString &text) {
                 if (displayGuard.isNull()) return;
+                displayGuard->setMcpInjecting(true);
                 QKeyEvent ev(QEvent::KeyPress, key, mods, text);
                 QApplication::sendEvent(displayGuard.data(), &ev);
+                displayGuard->setMcpInjecting(false);
             }));
 
-    // AID key injection
+    // AID key injection (bypasses read-only via mcpInjecting flag)
     m_connections.append(
         connect(m_executor, &core::scripting::ScriptExecutor::injectAIDKey, this,
             [displayGuard](uint8_t aid) {
@@ -88,8 +90,10 @@ void AgentScriptRunner::runScript(const QString &scriptText) {
                 else if (aid == 0xF6) { qtKey = Qt::Key_Print; }
                 else if (aid == 0xBD) { qtKey = Qt::Key_Pause; mods = Qt::ControlModifier; }
                 else return;
+                displayGuard->setMcpInjecting(true);
                 QKeyEvent ev(QEvent::KeyPress, qtKey, mods, QString());
                 QApplication::sendEvent(displayGuard.data(), &ev);
+                displayGuard->setMcpInjecting(false);
             }));
 
     // Cursor movement

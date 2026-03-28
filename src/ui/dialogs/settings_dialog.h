@@ -64,6 +64,7 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QWidget *buildThemePage();
     QWidget *buildMacrosPage();
     QWidget *buildAgentPage();
+    QWidget *buildMcpServerPage();
     QWidget *buildToolConfigPage(const QString &toolName);
     void ensureThemesLoaded();
     void onToolSaveClicked(const QString &toolName);
@@ -75,6 +76,7 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     void onOAuthSignOutClicked();
     void updateOAuthStatus();
     void onMacrosSaveClicked();
+    void onMcpSaveClicked();
 
     QSplitter *m_splitter;
     QTreeWidget *m_categoryTree;
@@ -119,8 +121,9 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QCheckBox *m_autoAcceptToolCallsCheck;
     QCheckBox *m_autoAcceptFileEditsCheck;
 
-    // MCP server settings
-    QCheckBox *m_mcpEnabledCheck;
+    // MCP Server page widgets
+    QWidget *m_mcpPage;
+    QCheckBox *m_mcpAutoStartCheck;
     QSpinBox *m_mcpPortSpin;
 
     // Per-tool config pages
