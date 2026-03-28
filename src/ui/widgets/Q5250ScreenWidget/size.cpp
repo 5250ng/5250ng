@@ -96,10 +96,9 @@ void Q5250ScreenWidget::calculateCellSize() {
         int baseFontHeight = fm.height();
         if (baseFontHeight > 0 && baseFontHeight != m_cellSize.height()) {
             double scaleFactor = m_cellHeightF / baseFontHeight;
-            double newFontSize = m_baseFont.pointSizeF() * scaleFactor;
-            if (newFontSize < 1.0) newFontSize = 1.0;
+            int newPixelSize = qMax(1, qRound(m_baseFont.pixelSize() * scaleFactor));
             m_font = m_baseFont;
-            m_font.setPointSizeF(newFontSize);
+            m_font.setPixelSize(newPixelSize);
         } else {
             m_font = m_baseFont;
         }
@@ -133,10 +132,9 @@ void Q5250ScreenWidget::calculateCellSize() {
 
         if (baseFontHeight != targetFontHeight && baseFontHeight > 0) {
             double scaleFactor = static_cast<double>(targetFontHeight) / baseFontHeight;
-            double newFontSize = m_baseFont.pointSizeF() * scaleFactor;
-            if (newFontSize < 1.0) newFontSize = 1.0;
+            int newPixelSize = qMax(1, qRound(m_baseFont.pixelSize() * scaleFactor));
             m_font = m_baseFont;
-            m_font.setPointSizeF(newFontSize);
+            m_font.setPixelSize(newPixelSize);
         } else {
             m_font = m_baseFont;
         }

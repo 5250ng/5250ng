@@ -38,10 +38,13 @@ namespace ui::widgets {
  */
 Q5250ScreenWidget::Q5250ScreenWidget(QWidget *parent)
     : QWidget(parent), m_screenBuffer(new ScreenBuffer(24, 80, this)),
-      m_baseFont("Courier", 12), m_font("Courier", 12), m_cellSize(8, 16),
+      m_baseFont("Courier"), m_font("Courier"), m_cellSize(8, 16),
       m_bgColor(Qt::black), m_fgColor(Qt::green), m_cursorBlinkRate(250),
       m_cursorBlinkState(true), m_extendedMode(false), m_selecting(false),
       m_selectionStart(-1, -1), m_selectionEnd(-1, -1) {
+    m_baseFont.setPixelSize(12);
+    m_font.setPixelSize(12);
+
     setFocusPolicy(Qt::StrongFocus);
     setAttribute(Qt::WA_OpaquePaintEvent);
 
@@ -202,7 +205,8 @@ void Q5250ScreenWidget::applyTerminalTheme(const ui::themes::TerminalTheme &them
     m_fgColor = theme.adjustColor(theme.colorGreen);
 
     // Apply font
-    QFont newFont(theme.fontFamily, theme.fontSize);
+    QFont newFont(theme.fontFamily);
+    newFont.setPixelSize(theme.fontSize);
     m_baseFont = newFont;
     m_font = newFont;
 
