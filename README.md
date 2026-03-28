@@ -17,20 +17,35 @@
 ## Features
 
  - [x] Full TN5250 protocol ([RFC 1205](https://datatracker.ietf.org/doc/html/rfc1205)) with telnet option negotiation and TLS/SSL encryption
- - [x] Custom QPainter rendering with 24×80 and 27×132 modes and CRT scanline overlay
+ - [x] Custom QPainter rendering with 24×80 and 27×132 modes
+ - [x] CRT effects: scanline overlay, phosphor bloom, curvature vignette, and glow radius
  - [x] PF1-PF24 function keys, field navigation, and keyboard remapping
  - [x] Multi-tab sessions with persistent profiles (JSON), auto-connect, and per-session settings
  - [x] Scripting engine with `5250script` language:
     + [x] Record and playback macros with timing
+    + [x] Convert recorded macros to editable 5250script code
     + [x] Screen inspection with `EXPECT`, `EXTRACT`, and `IF`/`WHILE` control flow
     + [x] User input prompts with `INPUT` and variable interpolation
     + [x] Functions, error handlers, and `GOTO` labels
+ - [x] MCP server ([Model Context Protocol](https://modelcontextprotocol.io/)) exposing terminal tools over JSON-RPC 2.0:
+    + [x] Screen reading, keystroke sending, cursor/field inspection
+    + [x] Session management (create, list, close) and screenshot capture
+    + [x] 5250script execution and generation
+    + [x] Local file read/write/list operations
+ - [x] AI assistant integration with OpenAI and Anthropic providers:
+    + [x] API key and OAuth 2.0 authentication
+    + [x] Configurable models and system prompts
+    + [x] Natural language to 5250script generation
  - [x] IBM i IFS file transfer client:
-    + [x] Browse, upload, download
+    + [x] Browse, upload, download with chunked transfer and progress tracking
     + [x] `mkdir`, rename, delete
  - [x] 13 built-in terminal themes + user-defined themes with live preview
- - [x] Code page support: `CP037`, `CP273`, `CP277`, `CP278`, `CP280`, `CP284`, `CP285`, `CP297`, `CP500`
+ - [x] Background image support with layout modes (stretch, tile, center, fit) and opacity control
+ - [x] Screen overlays: cursor rules (crosshair), field protection, input field indicators, cell grid
+ - [x] Code page support: `CP037`, `CP273`, `CP277`, `CP278`, `CP280`, `CP284`, `CP285`, `CP297`, `CP500`, `CP870`, `CP420`, `CP424`, `CP838`
  - [x] Hotspot detection, screen history/scrollback, regex match & replace, session logging
+ - [x] Session logging with configurable verbosity (screens only, screens + keys, full protocol)
+ - [x] Screenshot capture to PNG
  - [x] Cross-platform: Linux, macOS, and Windows
 
 ## Installation
@@ -70,12 +85,16 @@ $ 5250ng -h
 5250ng [options]
 
 Options:
-  -H, --host <hostname>   Host to connect to (auto-connects at startup)
-  -p, --port <port>       Port number (default: 23)
-  --tls                   Use TLS/SSL encryption
-  -d, --debug             Enable debug output
-  -h, --help              Show help
-  -v, --version           Show version
+  -H, --host <hostname>            Host to connect to (auto-connects at startup)
+  -p, --port <port>                Port number (default: 23)
+  --tls                            Use TLS/SSL encryption
+  -s, --load-session-from-name     Load a saved session by name
+  -f, --load-session-from-file     Load a session from a JSON file
+  --enable-mcp-server              Enable the MCP server on startup
+  --mcp-server-port <port>         MCP server port (default: 9250)
+  -d, --debug                      Enable debug output
+  -h, --help                       Show help
+  -v, --version                    Show version
 ```
 
  + Auto-connect to a server:
@@ -88,6 +107,18 @@ Options:
 
     ```
     ./build/bin/5250ng --host as400.example.com --port 992 --tls
+    ```
+
+ + Load a saved session profile:
+
+    ```
+    ./build/bin/5250ng --load-session-from-name "Production AS400"
+    ```
+
+ + Start with the MCP server enabled:
+
+    ```
+    ./build/bin/5250ng --enable-mcp-server --mcp-server-port 9250
     ```
 
  + Launch the GUI and use the connect dialog:
@@ -148,6 +179,29 @@ Open multiple connections in tabs. Each session has its own settings, theme, and
 <summary><strong>Hotspot Detection</strong></summary>
 
 Automatically detects clickable elements on screen - function key labels (F3=Exit), menu options, and URLs - and makes them clickable.
+
+</details>
+
+<details>
+<summary><strong>MCP Server & AI Integration</strong></summary>
+
+5250ng includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that exposes terminal tools over JSON-RPC 2.0, enabling AI agents to interact with AS/400 sessions programmatically. Tools include screen reading, keystroke sending, session management, screenshot capture, and 5250script execution.
+
+The integrated AI assistant supports OpenAI and Anthropic providers with API key or OAuth 2.0 authentication. It can generate 5250script from natural language descriptions and execute it on the terminal.
+
+</details>
+
+<details>
+<summary><strong>CRT Effects</strong></summary>
+
+Recreate the look of vintage CRT monitors with configurable effects: scanline overlay, phosphor bloom (per-character glow), CRT curvature vignette, and adjustable glow radius. Effects can be tuned per-session or per-theme.
+
+</details>
+
+<details>
+<summary><strong>Screen Overlays</strong></summary>
+
+Toggle visual overlays for debugging and navigation: cursor rules (crosshair showing current row/column), field protection indicators, input field highlights, and cell grid lines.
 
 </details>
 
