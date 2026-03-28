@@ -36,9 +36,6 @@
     + [x] API key and OAuth 2.0 authentication
     + [x] Configurable models and system prompts
     + [x] Natural language to 5250script generation
- - [x] IBM i IFS file transfer client:
-    + [x] Browse, upload, download with chunked transfer and progress tracking
-    + [x] `mkdir`, rename, delete
  - [x] 13 built-in terminal themes + user-defined themes with live preview
  - [x] Background image support with layout modes (stretch, tile, center, fit) and opacity control
  - [x] Screen overlays: cursor rules (crosshair), field protection, input field indicators, cell grid
