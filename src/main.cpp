@@ -28,9 +28,13 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStyleFactory>
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+
+    // Force Fusion style for cross-platform visual consistency
+    app.setStyle(QStyleFactory::create("Fusion"));
 
     // Register uint8_t for queued signal/slot connections (used by sendGDS)
     qRegisterMetaType<uint8_t>("uint8_t");
