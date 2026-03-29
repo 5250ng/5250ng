@@ -34,7 +34,7 @@ QSize Q5250ScreenWidget::sizeHint() const {
     if (m_screenBuffer) {
         QFontMetrics fm(m_font);
         int cellWidth = fm.horizontalAdvance('M');
-        int cellHeight = fm.height();
+        int cellHeight = fm.ascent() + fm.descent();
         return QSize(cellWidth * m_screenBuffer->cols(),
                      cellHeight * m_screenBuffer->rows());
     }
@@ -66,7 +66,7 @@ void Q5250ScreenWidget::calculateCellSize() {
     if (widgetSize.width() <= 0 || widgetSize.height() <= 0) {
         // Widget not yet sized, use base font metrics
         QFontMetrics fm(m_baseFont);
-        m_cellSize = QSize(fm.horizontalAdvance('M'), fm.height());
+        m_cellSize = QSize(fm.horizontalAdvance('M'), fm.ascent() + fm.descent());
         m_font = m_baseFont;
         return;
     }
@@ -77,7 +77,7 @@ void Q5250ScreenWidget::calculateCellSize() {
     if (cols <= 0 || rows <= 0) {
         // Invalid screen size, use base font metrics
         QFontMetrics fm(m_baseFont);
-        m_cellSize = QSize(fm.horizontalAdvance('M'), fm.height());
+        m_cellSize = QSize(fm.horizontalAdvance('M'), fm.ascent() + fm.descent());
         m_font = m_baseFont;
         return;
     }
@@ -93,7 +93,7 @@ void Q5250ScreenWidget::calculateCellSize() {
 
         // Scale font to match cell height
         QFontMetrics fm(m_baseFont);
-        int baseFontHeight = fm.height();
+        int baseFontHeight = fm.ascent() + fm.descent();
         if (baseFontHeight > 0 && baseFontHeight != m_cellSize.height()) {
             double scaleFactor = m_cellHeightF / baseFontHeight;
             int newPixelSize = qMax(1, qRound(m_baseFont.pixelSize() * scaleFactor));
@@ -109,7 +109,7 @@ void Q5250ScreenWidget::calculateCellSize() {
 
         QFontMetrics fm(m_baseFont);
         double fontAspectRatio =
-            static_cast<double>(fm.horizontalAdvance('M')) / fm.height();
+            static_cast<double>(fm.horizontalAdvance('M')) / (fm.ascent() + fm.descent());
 
         double cellAspectRatio = idealCellWidth / idealCellHeight;
 
@@ -127,7 +127,7 @@ void Q5250ScreenWidget::calculateCellSize() {
         m_cellHeightF = finalCellHeight;
         m_cellSize = QSize(qRound(finalCellWidth), qRound(finalCellHeight));
 
-        int baseFontHeight = fm.height();
+        int baseFontHeight = fm.ascent() + fm.descent();
         int targetFontHeight = m_cellSize.height();
 
         if (baseFontHeight != targetFontHeight && baseFontHeight > 0) {
