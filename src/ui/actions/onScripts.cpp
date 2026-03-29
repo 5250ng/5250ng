@@ -33,6 +33,7 @@
 #include <QMap>
 #include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QUrl>
 #include <memory>
@@ -104,10 +105,11 @@ void MainWindow::onRecordScript() {
             // Convert to .5250script and save directly
             QString scriptText = core::macroToScript(macro);
             QString safeName = core::MacroRecorder::sanitizeFileName(name);
-            QString path = scriptsDir() + "/" + safeName + ".5250script";
+            QDir dir(scriptsDir());
+            QString path = dir.filePath(safeName + ".5250script");
             int suffix = 1;
             while (QFile::exists(path))
-                path = scriptsDir() + "/" + safeName + "_" + QString::number(suffix++) + ".5250script";
+                path = dir.filePath(safeName + "_" + QString::number(suffix++) + ".5250script");
             QFile file(path);
             if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 file.write(scriptText.toUtf8());
@@ -198,7 +200,7 @@ void MainWindow::rebuildScriptsSubmenu() {
         QString menuPath = meta.menuPath().isEmpty() ? displayName : meta.menuPath();
 
         // Split menu path and create nested submenus
-        QStringList parts = menuPath.split('/', Qt::SkipEmptyParts);
+        QStringList parts = menuPath.split(QRegularExpression(QStringLiteral("[/\\\\]")), Qt::SkipEmptyParts);
         if (parts.isEmpty())
             parts << displayName;
 
@@ -534,10 +536,11 @@ void MainWindow::onNewScript() {
     if (result != QDialog::Accepted || name.isEmpty()) return;
 
     QString safeName = core::MacroRecorder::sanitizeFileName(name);
-    QString path = scriptsDir() + "/" + safeName + ".5250script";
+    QDir dir(scriptsDir());
+    QString path = dir.filePath(safeName + ".5250script");
     int suffix = 1;
     while (QFile::exists(path))
-        path = scriptsDir() + "/" + safeName + "_" + QString::number(suffix++) + ".5250script";
+        path = dir.filePath(safeName + "_" + QString::number(suffix++) + ".5250script");
 
     // Write a starter template
     QFile file(path);
@@ -568,10 +571,11 @@ void MainWindow::onImportScript() {
     if (filePath.isEmpty()) return;
 
     QFileInfo fi(filePath);
-    QString destPath = scriptsDir() + "/" + fi.fileName();
+    QDir dir(scriptsDir());
+    QString destPath = dir.filePath(fi.fileName());
     int suffix = 1;
     while (QFile::exists(destPath)) {
-        destPath = scriptsDir() + "/" + fi.baseName() + "_" + QString::number(suffix++) + ".5250script";
+        destPath = dir.filePath(fi.baseName() + "_" + QString::number(suffix++) + ".5250script");
     }
 
     if (QFile::copy(filePath, destPath)) {
