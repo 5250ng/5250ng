@@ -363,14 +363,16 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     core::EBCDIC::setCodePage(config.codePage());
 
     // Ensure a unique device name per host so the AS/400 doesn't reject the
-    // session.  Collect device names already in use for the same host:port,
-    // then append a numeric suffix if there is a collision.
+    // session.  If the device name is empty, the server will auto-assign one,
+    // so no dedup is needed.  Otherwise, collect names already in use for the
+    // same host:port and append a numeric suffix on collision.
     QString deviceName = config.deviceName();
-    {
+    if (!deviceName.isEmpty()) {
         QSet<QString> usedNames;
         for (const Session *s : m_sessions) {
             if (s->config.hostname() == config.hostname()
-                && s->config.port() == config.port()) {
+                && s->config.port() == config.port()
+                && !s->config.deviceName().isEmpty()) {
                 usedNames.insert(s->config.deviceName().toUpper());
             }
         }
@@ -386,8 +388,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                 }
             }
         }
-        m_currentSession.setDeviceName(deviceName);
     }
+    m_currentSession.setDeviceName(deviceName);
 
     // Create a new session tab
     Session *session = new Session();
