@@ -47,6 +47,16 @@ void MainWindow::setupMenuBar() {
     m_mcpEnableAction = mcpMenu->addAction("&Enabled", this, &MainWindow::onMcpToggleEnabled);
     m_mcpEnableAction->setCheckable(true);
     m_mcpEnableAction->setChecked(false); // Updated in MainWindow constructor after config load
+    m_mcpReadOnlyAction = mcpMenu->addAction("&Read-Only Screen", this, [this]() {
+        if (m_displayWidget) {
+            bool readOnly = !m_displayWidget->isReadOnly();
+            m_displayWidget->setReadOnly(readOnly);
+            m_mcpReadOnlyAction->setChecked(readOnly);
+        }
+    });
+    m_mcpReadOnlyAction->setCheckable(true);
+    m_mcpReadOnlyAction->setChecked(false);
+    mcpMenu->addSeparator();
     mcpMenu->addAction("Show &Logs...", this, &MainWindow::onMcpShowLogs);
     fileMenu->addSeparator();
     m_exitAction = fileMenu->addAction("E&xit", this, &QWidget::close);
