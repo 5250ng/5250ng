@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
         autoConnectConfig.setHostname(hostname);
         autoConnectConfig.setPort(port);
         autoConnectConfig.setUseTLS(useTLS);
-        autoConnectConfig.setDeviceName("IBM-3179-2");
+        autoConnectConfig.setDeviceType("IBM-3179-2");
         autoConnectConfig.setScreenRows(24);
         autoConnectConfig.setScreenCols(80);
 

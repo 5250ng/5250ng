@@ -90,12 +90,18 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append(static_cast<uint8_t>(0x00)); // IS
 
     // DEVNAME - virtual device name (empty = server auto-assigns)
+    // If the server re-requests DEVNAME after we already sent it, the name is
+    // taken. Send empty to let the server auto-assign a unique name.
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("DEVNAME");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
-    if (!m_deviceName.isEmpty()) {
+    if (!m_deviceNameSent && !m_deviceName.isEmpty()) {
         negotiation.append(m_deviceName.toUtf8());
+    } else if (m_deviceNameSent) {
+        logger::Logger::instance()->debug(
+            "[TN5250->Client]: Server re-requested DEVNAME, sending empty (auto-assign)");
     }
+    m_deviceNameSent = true;
 
     // IBMRSEED + IBMSUBSPW: password encryption (RFC 4777)
     bool encrypted = false;

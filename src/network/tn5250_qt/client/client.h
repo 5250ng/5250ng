@@ -128,6 +128,7 @@ class TN5250Client : public QObject {
     QString m_hostname;
     quint16 m_port;
     QString m_deviceName;
+    bool m_deviceNameSent = false; // Track if we already sent DEVNAME
     QString m_terminalType = QStringLiteral("IBM-3179-2");
     QString m_username;
     QString m_password;
