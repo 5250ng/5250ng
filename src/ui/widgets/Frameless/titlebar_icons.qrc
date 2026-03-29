@@ -1,7 +1,0 @@
-<RCC>
-  <qresource prefix="/titlebar">
-    <file>icons/minimize.svg</file>
-    <file>icons/maximize.svg</file>
-    <file>icons/close.svg</file>
-  </qresource>
-</RCC>

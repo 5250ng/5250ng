@@ -1,11 +1,11 @@
-// 5250ng - A modern IBM TN5250 terminal emulator                                                                                                                                                            
-// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)                                                                                                                                                          
-//                                                                                                                                                                                                           
-// This program is free software: you can redistribute it and/or modify                                                                                                                                      
-// it under the terms of the GNU General Public License as published by                                                                                                                                      
+// 5250ng - A modern IBM TN5250 terminal emulator
+// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.                                                                                                                                                                       
-//                                                                                                                                                                                                           
+// (at your option) any later version.
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -18,8 +18,6 @@
 
 #include "ui/widgets/Frameless/TitleBar.h"
 #include <QMainWindow>
-#include <QPainter>
-#include <QPointer>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -39,7 +37,6 @@ class BaseFramelessWindow : public QMainWindow {
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
-    void paintEvent(QPaintEvent *event) override;
     void changeEvent(QEvent *event) override;
 
   private:
@@ -49,21 +46,10 @@ class BaseFramelessWindow : public QMainWindow {
     QVBoxLayout *m_rootLayout;
     QVBoxLayout *m_contentLayout;
 
-    // Drag
-    bool m_dragging = false;
-    QPoint m_dragOffset;
-
-    // Edge resize (right and bottom only)
-    enum Edge { None = 0, Right = 1, Bottom = 2 };
-    int m_resizeEdges = None;
-    bool m_resizing = false;
-    QPoint m_resizeOrigin;
-    QRect m_resizeGeom;
-    static constexpr int ResizeMargin = 0;
-    static constexpr int GripSize = 14; // triangular corner grip hit zone
-    int edgesAt(const QPoint &pos) const;
-    bool inCornerGrip(const QPoint &pos) const;
-    Qt::CursorShape cursorForEdges(int edges) const;
+    // Edge resize detection (all 4 edges + 4 corners)
+    static constexpr int ResizeMargin = 5;
+    Qt::Edges edgesAt(const QPoint &pos) const;
+    Qt::CursorShape cursorForEdges(Qt::Edges edges) const;
 
     void setupUi();
     void connectControls();
@@ -71,8 +57,6 @@ class BaseFramelessWindow : public QMainWindow {
 
   private slots:
     void onTitleMousePressed(const QPoint &globalPos);
-    void onTitleMouseMoved(const QPoint &globalPos);
-    void onTitleMouseReleased();
     void onTitleMouseDoubleClicked(const QPoint &globalPos);
     void onMinimize();
     void onMaximizeRestore();

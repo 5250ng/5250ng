@@ -211,7 +211,6 @@ set(UI_SOURCES
     src/ui/widgets/Frameless/BaseFramelessDialog.h
     src/ui/widgets/Frameless/TitleBar.cpp
     src/ui/widgets/Frameless/TitleBar.h
-    src/ui/widgets/Frameless/titlebar_icons.qrc
     src/ui/widgets/Frameless/StyledMessageBox.cpp
     src/ui/widgets/Frameless/StyledMessageBox.h
     src/ui/widgets/Frameless/StyledInputDialog.cpp
