@@ -1,11 +1,11 @@
-// 5250ng - A modern IBM TN5250 terminal emulator                                                                                                                                                            
-// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)                                                                                                                                                          
-//                                                                                                                                                                                                           
-// This program is free software: you can redistribute it and/or modify                                                                                                                                      
-// it under the terms of the GNU General Public License as published by                                                                                                                                      
+// 5250ng - A modern IBM TN5250 terminal emulator
+// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.                                                                                                                                                                       
-//                                                                                                                                                                                                           
+// (at your option) any later version.
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -36,14 +36,8 @@ class BaseFramelessDialog : public QDialog {
     TitleBar *m_titleBar;
     QVBoxLayout *m_contentLayout;
 
-    // Drag
-    bool m_dragging = false;
-    QPoint m_dragOffset;
-
   private slots:
     void onTitleMousePressed(const QPoint &globalPos);
-    void onTitleMouseMoved(const QPoint &globalPos);
-    void onTitleMouseReleased();
 };
 
 } // namespace ui::widgets

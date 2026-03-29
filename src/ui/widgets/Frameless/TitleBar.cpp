@@ -1,11 +1,11 @@
-// 5250ng - A modern IBM TN5250 terminal emulator                                                                                                                                                            
-// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)                                                                                                                                                          
-//                                                                                                                                                                                                           
-// This program is free software: you can redistribute it and/or modify                                                                                                                                      
-// it under the terms of the GNU General Public License as published by                                                                                                                                      
+// 5250ng - A modern IBM TN5250 terminal emulator
+// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.                                                                                                                                                                       
-//                                                                                                                                                                                                           
+// (at your option) any later version.
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -25,33 +25,64 @@
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QStyle>
-#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
 #include "ui/themes/manager.h"
 
 namespace ui::widgets {
 
-// macOS traffic-light colors
-static const char *kMinimizeBg   = "#febc2e";  // yellow/orange
-static const char *kMaximizeBg   = "#28c840";  // green
-static const char *kCloseBg      = "#ff5f57";  // red
-
-static const char *kMinimizeHover = "#e5a820";
-static const char *kMaximizeHover = "#1eaf32";
-static const char *kCloseHover    = "#e5453b";
-
-static QString buttonStyle(const char *bg, const char *hover) {
+// Theme-aware button style: transparent background, subtle hover, themed close hover
+static QString windowButtonStyle(const QString &hoverBg) {
     return QString(
         "QPushButton {"
-        "  background-color: %1;"
+        "  background-color: transparent;"
         "  border: none;"
-        "  border-radius: 0px;"
-        "  qproperty-iconSize: 8px 8px;"
-        "  padding: 0px;"
+        "  border-radius: 3px;"
+        "  padding: 0px 4px;"
         "}"
         "QPushButton:hover {"
-        "  background-color: %2;"
+        "  background-color: %1;"
         "}"
-    ).arg(bg, hover);
+    ).arg(hoverBg);
+}
+
+// Generate window button icons with a specific color
+static QIcon makeMinimizeIcon(const QColor &color, int size) {
+    QPixmap pix(size, size);
+    pix.fill(Qt::transparent);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing);
+    QPen pen(color, 1.2, Qt::SolidLine, Qt::RoundCap);
+    p.setPen(pen);
+    int m = size / 5; // margin
+    p.drawLine(m, size / 2, size - m, size / 2);
+    return QIcon(pix);
+}
+
+static QIcon makeMaximizeIcon(const QColor &color, int size) {
+    QPixmap pix(size, size);
+    pix.fill(Qt::transparent);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing);
+    QPen pen(color, 1.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    p.setPen(pen);
+    p.setBrush(Qt::NoBrush);
+    int m = size / 5;
+    p.drawRoundedRect(m, m, size - 2 * m, size - 2 * m, 0.5, 0.5);
+    return QIcon(pix);
+}
+
+static QIcon makeCloseIcon(const QColor &color, int size) {
+    QPixmap pix(size, size);
+    pix.fill(Qt::transparent);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing);
+    QPen pen(color, 1.2, Qt::SolidLine, Qt::RoundCap);
+    p.setPen(pen);
+    int m = size / 4;
+    p.drawLine(m, m, size - m, size - m);
+    p.drawLine(size - m, m, m, size - m);
+    return QIcon(pix);
 }
 
 TitleBar::TitleBar(QWidget *parent)
@@ -61,10 +92,11 @@ TitleBar::TitleBar(QWidget *parent)
       m_maxButton(new QPushButton(this)),
       m_closeButton(new QPushButton(this)),
       m_layout(new QHBoxLayout(this)) {
-    m_layout->setContentsMargins(8, 4, 8, 4);
-    m_layout->setSpacing(6);
+    m_layout->setContentsMargins(8, 2, 8, 2);
+    m_layout->setSpacing(4);
     m_menuBar->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
     m_layout->addWidget(m_menuBar, 0);
+
     // Centered bold title label (overlay, not part of layout)
     m_titleLabel = new QLabel("5250ng", this);
     QFont f = m_titleLabel->font();
@@ -75,23 +107,18 @@ TitleBar::TitleBar(QWidget *parent)
     m_titleLabel->raise();
     m_layout->addStretch(1);
 
-    // Configure traffic-light buttons (right side: minimize, maximize, close)
-    const int btnSize = 14;
-    const int iconSize = 8;
+    // Window control buttons (right side)
+    const int btnW = 28;
+    const int btnH = 18;
+    const int iconSz = 10;
     for (auto *btn : {m_minButton, m_maxButton, m_closeButton}) {
-        btn->setFixedSize(btnSize, btnSize);
+        btn->setFixedSize(btnW, btnH);
         btn->setFlat(true);
-        btn->setIconSize(QSize(iconSize, iconSize));
+        btn->setIconSize(QSize(iconSz, iconSz));
         btn->setCursor(Qt::ArrowCursor);
     }
 
-    m_minButton->setIcon(QIcon(":/titlebar/icons/minimize.svg"));
-    m_maxButton->setIcon(QIcon(":/titlebar/icons/maximize.svg"));
-    m_closeButton->setIcon(QIcon(":/titlebar/icons/close.svg"));
-
-    m_minButton->setStyleSheet(buttonStyle(kMinimizeBg, kMinimizeHover));
-    m_maxButton->setStyleSheet(buttonStyle(kMaximizeBg, kMaximizeHover));
-    m_closeButton->setStyleSheet(buttonStyle(kCloseBg, kCloseHover));
+    // Icons are set in applyTheme() to match the current text color
 
     m_layout->addWidget(m_minButton, 0, Qt::AlignRight | Qt::AlignVCenter);
     m_layout->addWidget(m_maxButton, 0, Qt::AlignRight | Qt::AlignVCenter);
@@ -102,7 +129,7 @@ TitleBar::TitleBar(QWidget *parent)
     connect(m_maxButton, &QPushButton::clicked, this, &TitleBar::maximizeRestoreRequested);
     connect(m_closeButton, &QPushButton::clicked, this, &TitleBar::closeRequested);
 
-    // Install event filter on the menubar to allow drag on empty areas
+    // Install event filter on the menubar to detect press/dblclick on empty areas
     m_menuBar->installEventFilter(this);
 
     // Bottom hairline across entire title bar
@@ -131,37 +158,18 @@ void TitleBar::setMinMaxVisible(bool visible) {
 bool TitleBar::eventFilter(QObject *obj, QEvent *event) {
     if (obj == m_menuBar) {
         if (event->type() == QEvent::MouseButtonPress) {
-            QMouseEvent *me = static_cast<QMouseEvent *>(event);
+            auto *me = static_cast<QMouseEvent *>(event);
             if (me->button() == Qt::LeftButton) {
                 // Only start drag if no menu action under cursor
-                QAction *act = m_menuBar->actionAt(me->position().toPoint());
-                if (act != nullptr) {
+                if (m_menuBar->actionAt(me->position().toPoint()) != nullptr)
                     return QWidget::eventFilter(obj, event);
-                }
-                m_menuBarDragging = true;
                 emit mousePressed(me->globalPosition().toPoint());
                 return true;
             }
-        } else if (event->type() == QEvent::MouseMove) {
-            // Only intercept moves when we initiated a drag from empty menu bar area
-            if (m_menuBarDragging) {
-                QMouseEvent *me = static_cast<QMouseEvent *>(event);
-                emit mouseMoved(me->globalPosition().toPoint());
-                return true;
-            }
-        } else if (event->type() == QEvent::MouseButtonRelease) {
-            if (m_menuBarDragging) {
-                m_menuBarDragging = false;
-                emit mouseReleased();
-                return true;
-            }
         } else if (event->type() == QEvent::MouseButtonDblClick) {
-            QMouseEvent *me = static_cast<QMouseEvent *>(event);
-            // Ignore dblclick over actions
-            QAction *act = m_menuBar->actionAt(me->position().toPoint());
-            if (act != nullptr) {
+            auto *me = static_cast<QMouseEvent *>(event);
+            if (m_menuBar->actionAt(me->position().toPoint()) != nullptr)
                 return QWidget::eventFilter(obj, event);
-            }
             emit mouseDoubleClicked(me->globalPosition().toPoint());
             return true;
         }
@@ -186,16 +194,6 @@ void TitleBar::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
 }
 
-void TitleBar::mouseMoveEvent(QMouseEvent *event) {
-    emit mouseMoved(event->globalPosition().toPoint());
-    QWidget::mouseMoveEvent(event);
-}
-
-void TitleBar::mouseReleaseEvent(QMouseEvent *event) {
-    emit mouseReleased();
-    QWidget::mouseReleaseEvent(event);
-}
-
 void TitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
     emit mouseDoubleClicked(event->globalPosition().toPoint());
     QWidget::mouseDoubleClickEvent(event);
@@ -209,7 +207,6 @@ void TitleBar::applyTheme() {
     if (!bg.isEmpty()) {
         QPalette pal = palette();
         pal.setColor(QPalette::Window, QColor(bg));
-        // Ensure text color is inherited from the application palette
         const QString textColor = mgr.color("mainwindow.text");
         if (!textColor.isEmpty()) {
             QColor tc(textColor);
@@ -222,6 +219,23 @@ void TitleBar::applyTheme() {
     } else {
         setAutoFillBackground(false);
     }
+
+    // Button styling: theme-aware hover, reddish close hover
+    QString btnHover = mgr.color("mainwindow.titlebar.button.hover");
+    if (btnHover.isEmpty()) btnHover = QStringLiteral("rgba(255,255,255,40)");
+    QString closeHover = mgr.color("mainwindow.titlebar.close.hover");
+    if (closeHover.isEmpty()) closeHover = QStringLiteral("rgba(232,17,35,200)");
+
+    m_minButton->setStyleSheet(windowButtonStyle(btnHover));
+    m_maxButton->setStyleSheet(windowButtonStyle(btnHover));
+    m_closeButton->setStyleSheet(windowButtonStyle(closeHover));
+
+    // Regenerate button icons using the current text color
+    QColor iconColor = palette().color(QPalette::ButtonText);
+    int iconSz = m_minButton->iconSize().width();
+    m_minButton->setIcon(makeMinimizeIcon(iconColor, iconSz));
+    m_maxButton->setIcon(makeMaximizeIcon(iconColor, iconSz));
+    m_closeButton->setIcon(makeCloseIcon(iconColor, iconSz));
 
     // Bottom separator line
     if (m_bottomLine) {

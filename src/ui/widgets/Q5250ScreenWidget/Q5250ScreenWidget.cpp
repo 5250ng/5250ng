@@ -497,7 +497,6 @@ QPoint Q5250ScreenWidget::screenOffset() const {
 
     // Use floating-point cell dimensions for precise centering
     int screenWidth = qRound(m_cellWidthF * m_screenBuffer->cols());
-    int screenHeight = qRound(m_cellHeightF * m_screenBuffer->rows());
 
     QSize widgetSize = size();
     int offsetX = (widgetSize.width() - screenWidth) / 2;
