@@ -145,9 +145,9 @@ void TestScreenBuffer::testWriteOperations() {
 
     // Test writeString
     QByteArray data;
-    data.append(0xC1);
-    data.append(0xC2);
-    data.append(0xC3);
+    data.append(static_cast<char>(0xC1));
+    data.append(static_cast<char>(0xC2));
+    data.append(static_cast<char>(0xC3));
     m_buffer->writeString(1, 0, data);
 
     QCOMPARE(m_buffer->character(1, 0), static_cast<uint8_t>(0xC1));

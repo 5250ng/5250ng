@@ -143,7 +143,6 @@ void OAuthFlow::onNewConnection() {
 }
 
 void OAuthFlow::exchangeCode(const QString &code) {
-    quint16 port = m_server.serverPort();
     // Server may already be closed, but we stored the port from the redirect_uri
     // Reconstruct the redirect_uri used during authorization
     // Note: we need the same redirect_uri that was used in the authorization request

@@ -54,9 +54,9 @@ void TestEBCDIC::testCharToEBCDIC() {
 
 void TestEBCDIC::testEBCDICToString() {
     QByteArray ebcdic;
-    ebcdic.append(0xC1); // 'A'
-    ebcdic.append(0xC2); // 'B'
-    ebcdic.append(0xC3); // 'C'
+    ebcdic.append(static_cast<char>(0xC1)); // 'A'
+    ebcdic.append(static_cast<char>(0xC2)); // 'B'
+    ebcdic.append(static_cast<char>(0xC3)); // 'C'
 
     QString result = EBCDIC::ebcdicToString(ebcdic);
     QCOMPARE(result, QString("ABC"));
