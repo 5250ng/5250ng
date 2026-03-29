@@ -48,8 +48,14 @@ class SessionConfig : public QObject {
     bool useTLS() const { return m_useTLS; }
     void setUseTLS(bool useTLS) { m_useTLS = useTLS; }
 
+    // Device type is the terminal model (e.g. IBM-3179-2) sent via TERMINAL_TYPE
+    QString deviceType() const { return m_deviceType; }
+    void setDeviceType(const QString &type) { m_deviceType = type; }
+
+    // Device name is the workstation identifier (e.g. MYTERM01) sent via DEVNAME.
+    // Empty = server auto-assigns (recommended).
     QString deviceName() const { return m_deviceName; }
-    void setDeviceName(const QString &deviceName) { m_deviceName = deviceName; }
+    void setDeviceName(const QString &name) { m_deviceName = name; }
 
     // Display settings
     int screenRows() const { return m_screenRows; }
@@ -99,6 +105,7 @@ class SessionConfig : public QObject {
     QString m_hostname;
     quint16 m_port;
     bool m_useTLS;
+    QString m_deviceType;
     QString m_deviceName;
     int m_screenRows;
     int m_screenCols;

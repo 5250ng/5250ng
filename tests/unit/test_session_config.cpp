@@ -47,7 +47,8 @@ void TestSessionConfig::testInitialization() {
     QCOMPARE(m_config->name(), QString("New Session"));
     QCOMPARE(m_config->port(), static_cast<quint16>(23));
     QCOMPARE(m_config->useTLS(), false);
-    QCOMPARE(m_config->deviceName(), QString("IBM-3179-2"));
+    QCOMPARE(m_config->deviceType(), QString("IBM-3179-2"));
+    QCOMPARE(m_config->deviceName(), QString(""));
     QCOMPARE(m_config->screenRows(), 24);
     QCOMPARE(m_config->screenCols(), 80);
 }
@@ -129,7 +130,8 @@ void TestSessionConfig::testDeserialization() {
     json["hostname"] = "test.example.com";
     json["port"] = 992;
     json["useTLS"] = true;
-    json["deviceName"] = "LOADED5250";
+    json["deviceType"] = "IBM-3477-FC";
+    json["deviceName"] = "MYTERM01";
     json["screenRows"] = 27;
     json["screenCols"] = 132;
 
@@ -140,7 +142,8 @@ void TestSessionConfig::testDeserialization() {
     QCOMPARE(loaded.hostname(), QString("test.example.com"));
     QCOMPARE(loaded.port(), static_cast<quint16>(992));
     QCOMPARE(loaded.useTLS(), true);
-    QCOMPARE(loaded.deviceName(), QString("LOADED5250"));
+    QCOMPARE(loaded.deviceType(), QString("IBM-3477-FC"));
+    QCOMPARE(loaded.deviceName(), QString("MYTERM01"));
     QCOMPARE(loaded.screenRows(), 27);
     QCOMPARE(loaded.screenCols(), 132);
 }

@@ -107,13 +107,20 @@ void ConnectDialog::setupUI() {
     m_deviceCombo->addItem("Custom device");
     connect(m_deviceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ConnectDialog::onDeviceComboChanged);
     formLayout->addRow("Emulated Device:", m_deviceCombo);
-    // Device name field (always present; enabled only for Custom)
+    // Custom device type field (enabled only when "Custom device" is selected)
     m_customDeviceEdit = new QLineEdit(this);
-    m_customDeviceEdit->setPlaceholderText(
-        "Custom device name (e.g., IBM-3179-2)"
-    );
+    m_customDeviceEdit->setPlaceholderText("e.g., IBM-3179-2");
     m_customDeviceEdit->setEnabled(false);
-    formLayout->addRow("Device name:", m_customDeviceEdit);
+    m_customDeviceLabel = new QLabel("Device Type:");
+    formLayout->addRow(m_customDeviceLabel, m_customDeviceEdit);
+    m_customDeviceLabel->setVisible(false);
+    m_customDeviceEdit->setVisible(false);
+
+    // Device name (workstation identifier sent as DEVNAME; empty = auto-assigned)
+    m_deviceNameEdit = new QLineEdit(this);
+    m_deviceNameEdit->setPlaceholderText("(auto-assigned by server)");
+    m_deviceNameEdit->setMaxLength(10); // IBM i device names max 10 chars
+    formLayout->addRow("Device Name:", m_deviceNameEdit);
 
     connectionGroup->setLayout(formLayout);
     mainLayout->addWidget(connectionGroup);
@@ -228,29 +235,35 @@ void ConnectDialog::updateUI() {
     m_tlsCheck->setChecked(m_currentConfig.useTLS());
     m_usernameEdit->setText(m_currentConfig.username());
     m_passwordEdit->setText(m_currentConfig.password());
-    // Select device in combo if supported
-    int idx = m_deviceCombo->findText(m_currentConfig.deviceName());
+    // Select device type in combo if supported
+    int idx = m_deviceCombo->findText(m_currentConfig.deviceType());
     if (idx >= 0) {
         m_deviceCombo->setCurrentIndex(idx);
-        // Ensure display reflects the supported device
         const auto *dev =
-            tn5250::devices::findSupportedDevice(m_currentConfig.deviceName());
+            tn5250::devices::findSupportedDevice(m_currentConfig.deviceType());
         if (dev) {
             m_rowsSpin->setValue(dev->lines);
             m_colsSpin->setValue(dev->columns);
         }
-        m_customDeviceEdit->setText(m_currentConfig.deviceName());
+        m_customDeviceEdit->setText(m_currentConfig.deviceType());
         m_customDeviceEdit->setEnabled(false);
+        m_customDeviceLabel->setVisible(false);
+        m_customDeviceEdit->setVisible(false);
         m_displayGroup->setEnabled(false);
     } else {
-        // Custom device
+        // Custom device type
         m_deviceCombo->setCurrentIndex(m_customDeviceIndex);
-        m_customDeviceEdit->setText(m_currentConfig.deviceName());
+        m_customDeviceEdit->setText(m_currentConfig.deviceType());
         m_customDeviceEdit->setEnabled(true);
+        m_customDeviceLabel->setVisible(true);
+        m_customDeviceEdit->setVisible(true);
         m_rowsSpin->setValue(m_currentConfig.screenRows());
         m_colsSpin->setValue(m_currentConfig.screenCols());
         m_displayGroup->setEnabled(true);
     }
+
+    // Device name (workstation identifier)
+    m_deviceNameEdit->setText(m_currentConfig.deviceName());
 
     // Code page
     int cpIdx = m_codePageCombo->findData(static_cast<int>(m_currentConfig.codePage()));
@@ -282,10 +295,11 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setPort(static_cast<quint16>(m_portSpin->value()));
     config.setUseTLS(m_tlsCheck->isChecked());
     if (m_deviceCombo->currentIndex() == m_customDeviceIndex) {
-        config.setDeviceName(m_customDeviceEdit->text());
+        config.setDeviceType(m_customDeviceEdit->text());
     } else {
-        config.setDeviceName(m_deviceCombo->currentText());
+        config.setDeviceType(m_deviceCombo->currentText());
     }
+    config.setDeviceName(m_deviceNameEdit->text().trimmed());
     config.setScreenRows(m_rowsSpin->value());
     config.setScreenCols(m_colsSpin->value());
     config.setUsername(m_usernameEdit->text());
@@ -397,20 +411,21 @@ void ConnectDialog::onSessionComboChanged(const QString &sessionName) {
 
 void ConnectDialog::onDeviceComboChanged(int index) {
     if (index == m_customDeviceIndex) {
-        // Enable custom entry and display settings
+        // Show and enable custom device type field
+        m_customDeviceLabel->setVisible(true);
+        m_customDeviceEdit->setVisible(true);
         m_customDeviceEdit->setEnabled(true);
         m_displayGroup->setEnabled(true);
-        // Keep current rows/cols
         m_customDeviceEdit->clear();
     } else if (index >= 0 && index < m_customDeviceIndex) {
-        // Predefined device selected
+        // Hide custom device type field for predefined devices
+        m_customDeviceLabel->setVisible(false);
+        m_customDeviceEdit->setVisible(false);
         m_customDeviceEdit->setEnabled(false);
         m_displayGroup->setEnabled(false);
         const auto &dev = m_supported[index];
-        // Update display settings to match selected device
         m_rowsSpin->setValue(dev.lines);
         m_colsSpin->setValue(dev.columns);
-        // Reflect device name in the field
         m_customDeviceEdit->setText(dev.model);
     }
 }

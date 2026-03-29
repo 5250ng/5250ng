@@ -76,7 +76,9 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     QLineEdit *m_usernameEdit;
     QLineEdit *m_passwordEdit;
     QComboBox *m_deviceCombo;
-    QLineEdit *m_customDeviceEdit;
+    QLineEdit *m_customDeviceEdit;   // Device type (only for "Custom device")
+    QLabel *m_customDeviceLabel;     // Label for custom device type row
+    QLineEdit *m_deviceNameEdit;     // Workstation name (DEVNAME)
     QSpinBox *m_rowsSpin;
     QSpinBox *m_colsSpin;
     QComboBox *m_sessionCombo;
