@@ -1030,6 +1030,7 @@ void MainWindow::setActiveSession(int index) {
     // Sync global bottom-bar status from active session
     m_globalConnectionStatus->setState(state);
     m_globalConnectionStatus->setStatusText(s->connectionStatus->statusText());
+    m_mcpReadOnlyAction->setChecked(m_displayWidget->isReadOnly());
     updateCursorCoordinatesFont();
     updateCursorCoordinates();
 }

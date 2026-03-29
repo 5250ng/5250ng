@@ -197,6 +197,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_showCellGridAction;
     QAction *m_agentPanelAction;
     QAction *m_mcpEnableAction;
+    QAction *m_mcpReadOnlyAction;
     QAction *m_matchReplaceEnableAction;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
     ui::widgets::QConnectionStatusWidget *m_globalConnectionStatus; // Global bottom-bar status
