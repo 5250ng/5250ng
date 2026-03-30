@@ -24,9 +24,16 @@
 #include "agent/providers/anthropic_provider.h"
 #include "agent/providers/openai_provider.h"
 #include <QApplication>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFormLayout>
+#include <QStandardPaths>
+#include <QUrl>
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonObject>
 
 SettingsDialog::SettingsDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
     setupUI();
@@ -53,30 +60,37 @@ void SettingsDialog::setupUI() {
     // Left: category tree
     m_categoryTree = new QTreeWidget(this);
     m_categoryTree->setHeaderHidden(true);
-    QTreeWidgetItem *themeItem = new QTreeWidgetItem(QStringList() << "Application Theme");
-    m_categoryTree->addTopLevelItem(themeItem);
-    QTreeWidgetItem *termThemeItem = new QTreeWidgetItem(QStringList() << "5250 Theme");
-    m_categoryTree->addTopLevelItem(termThemeItem);
-    QTreeWidgetItem *macrosItem = new QTreeWidgetItem(QStringList() << "Macros");
-    m_categoryTree->addTopLevelItem(macrosItem);
-    QTreeWidgetItem *mcpItem = new QTreeWidgetItem(QStringList() << "MCP Server");
-    m_categoryTree->addTopLevelItem(mcpItem);
-    QTreeWidgetItem *agentItem = new QTreeWidgetItem(QStringList() << "Agents");
-    m_categoryTree->addTopLevelItem(agentItem);
+    QTreeWidgetItem *themesCategory = new QTreeWidgetItem(QStringList() << "Themes");
+    m_categoryTree->addTopLevelItem(themesCategory);
+    QTreeWidgetItem *themeItem = new QTreeWidgetItem(themesCategory, QStringList() << "Application Theme");
+    QTreeWidgetItem *termThemeItem = new QTreeWidgetItem(themesCategory, QStringList() << "5250 Theme");
+    themesCategory->setExpanded(true);
+    // Scripts category: General + Recording
+    QTreeWidgetItem *scriptsCategory = new QTreeWidgetItem(QStringList() << "Scripts");
+    m_categoryTree->addTopLevelItem(scriptsCategory);
+    new QTreeWidgetItem(scriptsCategory, QStringList() << "General");
+    new QTreeWidgetItem(scriptsCategory, QStringList() << "Recording");
+    scriptsCategory->setExpanded(true);
 
-    // Per-tool items under Agents (alphabetically sorted)
-    QStringList toolNames = {
+    // AI category: Agent Panel + MCP Server
+    QTreeWidgetItem *aiCategory = new QTreeWidgetItem(QStringList() << "AI");
+    m_categoryTree->addTopLevelItem(aiCategory);
+    new QTreeWidgetItem(aiCategory, QStringList() << "Agent Panel");
+    QTreeWidgetItem *mcpItem = new QTreeWidgetItem(aiCategory, QStringList() << "MCP Server");
+    new QTreeWidgetItem(mcpItem, QStringList() << "General");
+    new QTreeWidgetItem(mcpItem, QStringList() << "Tools");
+    aiCategory->setExpanded(true);
+    mcpItem->setExpanded(true);
+    m_categoryTree->setCurrentItem(themeItem);
+
+    m_toolNames = {
         agent::kToolConnect, agent::kToolGenerateScript,
         agent::kToolGetCursorPosition, agent::kToolGetFieldAt,
         agent::kToolListFiles, agent::kToolLogin,
         agent::kToolReadFile, agent::kToolReadScreen,
         agent::kToolRunScript, agent::kToolSendKeys,
         agent::kToolWriteFile};
-    toolNames.sort();
-    for (const QString &toolName : toolNames)
-        new QTreeWidgetItem(agentItem, QStringList() << toolName);
-    agentItem->setExpanded(true);
-    m_categoryTree->setCurrentItem(themeItem);
+    m_toolNames.sort();
 
     // Right: pages wrapped in a frame to match the category tree style
     m_pages = new QStackedWidget(this);
@@ -90,9 +104,13 @@ void SettingsDialog::setupUI() {
     m_terminalThemePage->setEmbeddedMode(true);
     m_pages->addWidget(m_terminalThemePage); // index 1: 5250 theme
 
-    // Macros page
+    // Scripts General page
+    m_scriptsGeneralPage = buildScriptsGeneralPage();
+    m_pages->addWidget(m_scriptsGeneralPage); // index 2: scripts general
+
+    // Scripts Recording page (formerly Macros)
     m_macrosPage = buildMacrosPage();
-    m_pages->addWidget(m_macrosPage); // index 2: macros
+    m_pages->addWidget(m_macrosPage); // index 3: recording
 
     // MCP Server page
     m_mcpPage = buildMcpServerPage();
@@ -102,12 +120,9 @@ void SettingsDialog::setupUI() {
     m_agentPage = buildAgentPage();
     m_pages->addWidget(m_agentPage); // index 4: agent
 
-    // Per-tool config pages (indices 5+)
-    for (const QString &toolName : toolNames) {
-        QWidget *page = buildToolConfigPage(toolName);
-        m_toolPages[toolName] = page;
-        m_pages->addWidget(page);
-    }
+    // Tools page (unified table view)
+    m_toolsPage = buildToolsPage();
+    m_pages->addWidget(m_toolsPage); // index 5: tools
 
     // Forward the embedded editor's signals
     connect(m_terminalThemePage, &SessionSettingsDialog::applyRequested,
@@ -394,71 +409,246 @@ static QJsonObject schemaForTool(const QString &name) {
     return {};
 }
 
-QWidget *SettingsDialog::buildToolConfigPage(const QString &toolName) {
+QWidget *SettingsDialog::buildToolsPage() {
     auto &cfg = agent::AgentConfig::instance();
-    agent::ToolConfig tc = cfg.toolConfig(toolName);
 
+    QWidget *page = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setSpacing(8);
+
+    // Toolbar
+    QHBoxLayout *toolbar = new QHBoxLayout();
+    QPushButton *enableAllBtn = new QPushButton("Enable All", page);
+    QPushButton *disableAllBtn = new QPushButton("Disable All", page);
+    toolbar->addWidget(enableAllBtn);
+    toolbar->addWidget(disableAllBtn);
+    toolbar->addStretch();
+    layout->addLayout(toolbar);
+
+    connect(enableAllBtn, &QPushButton::clicked, this, [this]() {
+        for (int r = 0; r < m_toolsTable->rowCount(); ++r)
+            m_toolsTable->item(r, 0)->setCheckState(Qt::Checked);
+    });
+    connect(disableAllBtn, &QPushButton::clicked, this, [this]() {
+        for (int r = 0; r < m_toolsTable->rowCount(); ++r)
+            m_toolsTable->item(r, 0)->setCheckState(Qt::Unchecked);
+    });
+
+    // Table
+    m_toolsTable = new QTableWidget(m_toolNames.size(), 4, page);
+    m_toolsTable->setHorizontalHeaderLabels({"", "Tool", "Description", "Parameters"});
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_toolsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_toolsTable->verticalHeader()->setVisible(false);
+    m_toolsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_toolsTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_toolsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    for (int i = 0; i < m_toolNames.size(); ++i) {
+        const QString &name = m_toolNames[i];
+        agent::ToolConfig tc = cfg.toolConfig(name);
+        QString defaultDesc = defaultDescriptionForTool(name);
+        QString displayDesc = tc.customDescription.isEmpty() ? defaultDesc : tc.customDescription;
+
+        // Enabled checkbox item
+        auto *checkItem = new QTableWidgetItem();
+        checkItem->setCheckState(tc.enabled ? Qt::Checked : Qt::Unchecked);
+        m_toolsTable->setItem(i, 0, checkItem);
+
+        // Tool name (bold)
+        auto *nameItem = new QTableWidgetItem(name);
+        QFont boldFont = nameItem->font();
+        boldFont.setBold(true);
+        nameItem->setFont(boldFont);
+        m_toolsTable->setItem(i, 1, nameItem);
+
+        // Description (truncated, gray italic if default)
+        auto *descItem = new QTableWidgetItem(displayDesc);
+        if (tc.customDescription.isEmpty()) {
+            QFont italicFont = descItem->font();
+            italicFont.setItalic(true);
+            descItem->setFont(italicFont);
+            descItem->setForeground(QColor(128, 128, 128));
+        }
+        descItem->setToolTip(displayDesc);
+        m_toolsTable->setItem(i, 2, descItem);
+
+        // Parameters summary
+        QJsonObject schema = schemaForTool(name);
+        QJsonObject props = schema["properties"].toObject();
+        QJsonArray required = schema["required"].toArray();
+        QStringList paramList;
+        for (auto it = props.begin(); it != props.end(); ++it) {
+            QString p = it.key();
+            if (required.contains(p)) p += "*";
+            paramList << p;
+        }
+        auto *paramsItem = new QTableWidgetItem(
+            paramList.isEmpty() ? "(none)" : paramList.join(", "));
+        if (paramList.isEmpty())
+            paramsItem->setForeground(QColor(128, 128, 128));
+        m_toolsTable->setItem(i, 3, paramsItem);
+    }
+
+    layout->addWidget(m_toolsTable, 1);
+
+    // Detail panel
+    QGroupBox *detailGroup = new QGroupBox("Tool Details", page);
+    QVBoxLayout *detailLayout = new QVBoxLayout(detailGroup);
+
+    m_toolDetailDefaultDesc = new QLabel(page);
+    m_toolDetailDefaultDesc->setWordWrap(true);
+    m_toolDetailDefaultDesc->setStyleSheet("color: gray;");
+    detailLayout->addWidget(new QLabel("<b>Default Description:</b>", page));
+    detailLayout->addWidget(m_toolDetailDefaultDesc);
+
+    detailLayout->addWidget(new QLabel("<b>Custom Description</b> (overrides default when set):", page));
+    m_toolDetailCustomDesc = new QTextEdit(page);
+    m_toolDetailCustomDesc->setMaximumHeight(80);
+    m_toolDetailCustomDesc->setPlaceholderText("Leave empty to use default description");
+    detailLayout->addWidget(m_toolDetailCustomDesc);
+
+    m_toolDetailParams = new QLabel(page);
+    m_toolDetailParams->setWordWrap(true);
+    m_toolDetailParams->setTextFormat(Qt::RichText);
+    detailLayout->addWidget(new QLabel("<b>Parameters:</b>", page));
+    detailLayout->addWidget(m_toolDetailParams);
+
+    layout->addWidget(detailGroup);
+
+    connect(m_toolsTable, &QTableWidget::currentCellChanged,
+            this, [this](int, int, int, int) { onToolsTableSelectionChanged(); });
+
+    // Select first row
+    if (m_toolsTable->rowCount() > 0)
+        m_toolsTable->selectRow(0);
+    onToolsTableSelectionChanged();
+
+    return page;
+}
+
+void SettingsDialog::onToolsTableSelectionChanged() {
+    int row = m_toolsTable->currentRow();
+    if (row < 0 || row >= m_toolNames.size()) {
+        m_toolDetailDefaultDesc->clear();
+        m_toolDetailCustomDesc->clear();
+        m_toolDetailParams->clear();
+        return;
+    }
+
+    const QString &name = m_toolNames[row];
+    auto &cfg = agent::AgentConfig::instance();
+    agent::ToolConfig tc = cfg.toolConfig(name);
+
+    m_toolDetailDefaultDesc->setText(defaultDescriptionForTool(name));
+    m_toolDetailCustomDesc->setPlainText(tc.customDescription);
+    m_toolDetailCustomDesc->setPlaceholderText(defaultDescriptionForTool(name));
+
+    // Build parameters detail
+    QJsonObject schema = schemaForTool(name);
+    QJsonObject props = schema["properties"].toObject();
+    QJsonArray required = schema["required"].toArray();
+    if (props.isEmpty()) {
+        m_toolDetailParams->setText("<i>No parameters</i>");
+    } else {
+        QStringList lines;
+        for (auto it = props.begin(); it != props.end(); ++it) {
+            QJsonObject prop = it.value().toObject();
+            bool isReq = required.contains(it.key());
+            lines << QString("<b>%1</b> (%2)%3 — %4")
+                .arg(it.key(), prop["type"].toString(),
+                     isReq ? " <i>required</i>" : "",
+                     prop["description"].toString());
+        }
+        m_toolDetailParams->setText(lines.join("<br>"));
+    }
+}
+
+QWidget *SettingsDialog::buildScriptsGeneralPage() {
     QWidget *page = new QWidget(this);
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setSpacing(12);
 
-    // Tool name header
-    QLabel *nameLabel = new QLabel(toolName, page);
-    nameLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
-    layout->addWidget(nameLabel);
+    // Scripts directory (read-only display)
+    QGroupBox *dirGroup = new QGroupBox("Scripts Directory", page);
+    QHBoxLayout *dirLayout = new QHBoxLayout(dirGroup);
+    m_scriptsDirEdit = new QLineEdit(dirGroup);
+    QString scriptsPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                          + "/scripts";
+    m_scriptsDirEdit->setText(QDir::toNativeSeparators(scriptsPath));
+    m_scriptsDirEdit->setReadOnly(true);
+    m_scriptsDirEdit->setToolTip("Scripts are stored in this directory.\n"
+                                  "Use Scripts > Open Scripts Folder to browse.");
+    dirLayout->addWidget(m_scriptsDirEdit, 1);
+    QPushButton *openDirBtn = new QPushButton("Open", dirGroup);
+    connect(openDirBtn, &QPushButton::clicked, this, [scriptsPath]() {
+        QDir().mkpath(scriptsPath);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(scriptsPath));
+    });
+    dirLayout->addWidget(openDirBtn);
+    layout->addWidget(dirGroup);
 
-    // Enabled checkbox
-    QCheckBox *enabledCheck = new QCheckBox("Enabled", page);
-    enabledCheck->setChecked(tc.enabled);
-    enabledCheck->setToolTip("When disabled, this tool will not be available to the agent.");
-    layout->addWidget(enabledCheck);
-    m_toolEnabledChecks[toolName] = enabledCheck;
+    // Default execution settings
+    QGroupBox *execGroup = new QGroupBox("Default Execution Settings", page);
+    QFormLayout *execLayout = new QFormLayout(execGroup);
 
-    // Default description (read-only)
-    QGroupBox *defaultGroup = new QGroupBox("Default Description", page);
-    QVBoxLayout *defaultLayout = new QVBoxLayout(defaultGroup);
-    QLabel *defaultDesc = new QLabel(defaultDescriptionForTool(toolName), page);
-    defaultDesc->setWordWrap(true);
-    defaultDesc->setStyleSheet("color: gray;");
-    defaultLayout->addWidget(defaultDesc);
-    layout->addWidget(defaultGroup);
+    m_defaultTimeoutSpin = new QSpinBox(execGroup);
+    m_defaultTimeoutSpin->setRange(1000, 120000);
+    m_defaultTimeoutSpin->setSingleStep(1000);
+    m_defaultTimeoutSpin->setSuffix(" ms");
+    m_defaultTimeoutSpin->setValue(30000);
+    m_defaultTimeoutSpin->setToolTip(
+        "Default timeout for EXPECT commands.\n"
+        "Scripts can override this with GLOBAL EXPECT_TIMEOUT.");
+    execLayout->addRow("EXPECT timeout:", m_defaultTimeoutSpin);
 
-    // Custom description
-    QGroupBox *customGroup = new QGroupBox("Custom Description (overrides default when set)", page);
-    QVBoxLayout *customLayout = new QVBoxLayout(customGroup);
-    QTextEdit *customDesc = new QTextEdit(page);
-    customDesc->setMaximumHeight(120);
-    customDesc->setPlainText(tc.customDescription);
-    customDesc->setPlaceholderText(defaultDescriptionForTool(toolName));
-    customLayout->addWidget(customDesc);
-    layout->addWidget(customGroup);
-    m_toolDescriptionEdits[toolName] = customDesc;
+    m_defaultDelaySpin = new QSpinBox(execGroup);
+    m_defaultDelaySpin->setRange(0, 5000);
+    m_defaultDelaySpin->setSingleStep(50);
+    m_defaultDelaySpin->setSuffix(" ms");
+    m_defaultDelaySpin->setValue(0);
+    m_defaultDelaySpin->setToolTip(
+        "Fixed delay between script actions.\n"
+        "Scripts can override this with GLOBAL DELAY.");
+    execLayout->addRow("Action delay:", m_defaultDelaySpin);
 
-    // Parameters section (read-only)
-    QJsonObject schema = schemaForTool(toolName);
-    QJsonObject props = schema["properties"].toObject();
-    QJsonArray required = schema["required"].toArray();
-    if (!props.isEmpty()) {
-        QGroupBox *paramsGroup = new QGroupBox("Parameters", page);
-        QVBoxLayout *paramsLayout = new QVBoxLayout(paramsGroup);
-        for (auto it = props.begin(); it != props.end(); ++it) {
-            QJsonObject prop = it.value().toObject();
-            bool isRequired = required.contains(it.key());
-            QString text = QString("<b>%1</b> (%2)%3 — %4")
-                .arg(it.key(),
-                     prop["type"].toString(),
-                     isRequired ? " <i>required</i>" : "",
-                     prop["description"].toString());
-            QLabel *paramLabel = new QLabel(text, page);
-            paramLabel->setWordWrap(true);
-            paramLabel->setTextFormat(Qt::RichText);
-            paramsLayout->addWidget(paramLabel);
-        }
-        layout->addWidget(paramsGroup);
-    }
+    QHBoxLayout *jitterRow = new QHBoxLayout();
+    m_defaultJitterMinSpin = new QSpinBox(execGroup);
+    m_defaultJitterMinSpin->setRange(0, 5000);
+    m_defaultJitterMinSpin->setSingleStep(50);
+    m_defaultJitterMinSpin->setSuffix(" ms");
+    m_defaultJitterMinSpin->setValue(0);
+    m_defaultJitterMaxSpin = new QSpinBox(execGroup);
+    m_defaultJitterMaxSpin->setRange(0, 5000);
+    m_defaultJitterMaxSpin->setSingleStep(50);
+    m_defaultJitterMaxSpin->setSuffix(" ms");
+    m_defaultJitterMaxSpin->setValue(0);
+    jitterRow->addWidget(m_defaultJitterMinSpin);
+    jitterRow->addWidget(new QLabel("to", execGroup));
+    jitterRow->addWidget(m_defaultJitterMaxSpin);
+    jitterRow->addStretch();
+    execLayout->addRow("Jitter range:", jitterRow);
+
+    QLabel *execHint = new QLabel(execGroup);
+    execHint->setWordWrap(true);
+    execHint->setStyleSheet("color: gray; font-size: 11px;");
+    execHint->setText("These defaults apply to all scripts. Individual scripts can override "
+                      "them with GLOBAL EXPECT_TIMEOUT, GLOBAL DELAY, and GLOBAL JITTER commands.");
+    execLayout->addRow(execHint);
+
+    layout->addWidget(execGroup);
+
+    // Behavior
+    QGroupBox *behaviorGroup = new QGroupBox("Behavior", page);
+    QVBoxLayout *behaviorLayout = new QVBoxLayout(behaviorGroup);
+    m_confirmDeleteCheck = new QCheckBox("Confirm before deleting scripts", behaviorGroup);
+    m_confirmDeleteCheck->setChecked(true);
+    behaviorLayout->addWidget(m_confirmDeleteCheck);
+    layout->addWidget(behaviorGroup);
 
     layout->addStretch();
-
     return page;
 }
 
@@ -805,29 +995,50 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
     if (!current)
         return;
     QString text = current->text(0);
-    if (text == "Application Theme") {
+    if (text == "Themes" || text == "Application Theme") {
         m_pages->setCurrentWidget(m_themePage);
     } else if (text == "5250 Theme") {
         m_pages->setCurrentWidget(m_terminalThemePage);
-    } else if (text == "Macros") {
+    } else if (text == "Scripts" || text == "General") {
+        // "General" could be Scripts > General or MCP Server > General
+        // Check parent to disambiguate
+        if (current->parent() && current->parent()->text(0) == "MCP Server")
+            m_pages->setCurrentWidget(m_mcpPage);
+        else
+            m_pages->setCurrentWidget(m_scriptsGeneralPage);
+    } else if (text == "Recording") {
         m_pages->setCurrentWidget(m_macrosPage);
+    } else if (text == "AI" || text == "Agent Panel") {
+        m_pages->setCurrentWidget(m_agentPage);
     } else if (text == "MCP Server") {
         m_pages->setCurrentWidget(m_mcpPage);
-    } else if (text == "Agents") {
-        m_pages->setCurrentWidget(m_agentPage);
-    } else if (m_toolPages.contains(text)) {
-        m_pages->setCurrentWidget(m_toolPages[text]);
+    } else if (text == "Tools") {
+        m_pages->setCurrentWidget(m_toolsPage);
     }
 }
 
 void SettingsDialog::onSaveClicked() {
-    // Check if the current page is a tool config page
     QWidget *currentPage = m_pages->currentWidget();
-    for (auto it = m_toolPages.constBegin(); it != m_toolPages.constEnd(); ++it) {
-        if (it.value() == currentPage) {
-            onToolSaveClicked(it.key());
-            return;
+
+    if (currentPage == m_toolsPage) {
+        // Save all tools from the table + detail panel
+        auto &cfg = agent::AgentConfig::instance();
+        int selectedRow = m_toolsTable->currentRow();
+        for (int i = 0; i < m_toolNames.size(); ++i) {
+            agent::ToolConfig tc;
+            tc.enabled = (m_toolsTable->item(i, 0)->checkState() == Qt::Checked);
+            // If this row is selected, read custom desc from the detail editor
+            if (i == selectedRow) {
+                tc.customDescription = m_toolDetailCustomDesc->toPlainText().trimmed();
+            } else {
+                tc.customDescription = cfg.toolConfig(m_toolNames[i]).customDescription;
+            }
+            cfg.setToolConfig(m_toolNames[i], tc);
         }
+        cfg.save();
+        emit agentConfigChanged();
+        ui::widgets::StyledMessageBox::information(this, "Tools", "Tool settings saved.");
+        return;
     }
 
     if (currentPage == m_themePage) {
@@ -848,16 +1059,6 @@ void SettingsDialog::onSaveClicked() {
     }
 }
 
-void SettingsDialog::onToolSaveClicked(const QString &toolName) {
-    auto &cfg = agent::AgentConfig::instance();
-    agent::ToolConfig tc;
-    tc.enabled = m_toolEnabledChecks[toolName]->isChecked();
-    tc.customDescription = m_toolDescriptionEdits[toolName]->toPlainText().trimmed();
-    cfg.setToolConfig(toolName, tc);
-    cfg.save();
-    emit agentConfigChanged();
-    ui::widgets::StyledMessageBox::information(this, "Tool Settings",
-        QString("Settings for \"%1\" saved.").arg(toolName));
-}
+// onToolSaveClicked removed — tools are saved in bulk from the unified table
 
 void SettingsDialog::onCloseClicked() { accept(); }
