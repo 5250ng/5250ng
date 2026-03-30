@@ -18,12 +18,8 @@
 
 #include "network/tn5250_qt/client/client.h"
 #include "session/config.h"
-#include "logger/logger.h"
 #include <QByteArray>
-#include <QMutex>
-#include <QMutexLocker>
 #include <QObject>
-#include <QStringList>
 
 namespace tn5250::session {
 
@@ -49,23 +45,12 @@ class Worker : public QObject {
     void errorOccurred(const QString &error);
     void stateChanged(tn5250::client::TN5250Client::ConnectionState state);
     void appData(const QByteArray &data);
-    void sessionLogAppended(const QString &line);
 
   private:
     ::session::SessionConfig m_config;
     tn5250::client::TN5250Client *m_client;
-    QStringList m_logs;
-    mutable QMutex m_logsMutex;
 
     void onClientData(const QByteArray &data);
-    void onGlobalLogMessage(logger::LogLevel level, const QString &message);
-
-  public:
-    // Access a snapshot of current logs
-    QStringList logs() const {
-        QMutexLocker locker(&m_logsMutex);
-        return m_logs;
-    }
 };
 
 } // namespace tn5250::session

@@ -56,8 +56,6 @@ void Worker::start() {
     connect(m_client, &tn5250::client::TN5250Client::errorOccurred, this, &Worker::errorOccurred);
     connect(m_client, &tn5250::client::TN5250Client::stateChanged, this, &Worker::stateChanged);
     connect(m_client, &tn5250::client::TN5250Client::dataReceived, this, &Worker::onClientData, Qt::QueuedConnection);
-    // Capture session logs from this thread only (DirectConnection executes in emitter's thread)
-    connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &Worker::onGlobalLogMessage, Qt::DirectConnection);
 
     logger::Logger::instance()->debug(
         QString("Session worker connecting to %1:%2 (TLS=%3)")
@@ -124,21 +122,6 @@ void Worker::onClientData(const QByteArray &data) {
     }
 
     emit appData(data);
-}
-
-void Worker::onGlobalLogMessage(logger::LogLevel /*level*/, const QString &message) {
-    // Only accept messages emitted from this worker's thread
-    if (QThread::currentThread() != this->thread()) {
-        return;
-    }
-    QMutexLocker locker(&m_logsMutex);
-    m_logs.append(message);
-    // Cap memory (keep last 5000 lines)
-    const int maxLines = 5000;
-    if (m_logs.size() > maxLines) {
-        m_logs.erase(m_logs.begin(), m_logs.end() - maxLines);
-    }
-    emit sessionLogAppended(message);
 }
 
 } // namespace tn5250::session

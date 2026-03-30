@@ -1,11 +1,11 @@
-// 5250ng - A modern IBM TN5250 terminal emulator                                                                                                                                                            
-// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)                                                                                                                                                          
-//                                                                                                                                                                                                           
-// This program is free software: you can redistribute it and/or modify                                                                                                                                      
-// it under the terms of the GNU General Public License as published by                                                                                                                                      
+// 5250ng - A modern IBM TN5250 terminal emulator
+// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.                                                                                                                                                                       
-//                                                                                                                                                                                                           
+// (at your option) any later version.
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -16,10 +16,7 @@
 
 #include "log_viewer.h"
 #include "logger/logger.h"
-#include "session/worker.h"
-#include <QFile>
 #include <QKeySequence>
-#include <QTextStream>
 
 LogViewerDialog::LogViewerDialog(QWidget *parent)
     : ui::widgets::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)) {
@@ -27,6 +24,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     resize(800, 600);
     QVBoxLayout *content = contentLayout();
     content->setContentsMargins(8, 8, 8, 8);
+
     // Find bar (hidden by default)
     m_findBar = new QWidget(this);
     QHBoxLayout *findLayout = new QHBoxLayout(m_findBar);
@@ -41,6 +39,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     findLayout->addWidget(m_nextBtn, 0);
     m_findBar->setVisible(false);
     content->addWidget(m_findBar, 0);
+
     m_text->setReadOnly(true);
     m_text->setStyleSheet("QPlainTextEdit { background-color: #000000; color: #ffffff; }");
     content->addWidget(m_text, 1);
@@ -52,78 +51,20 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     connect(m_nextBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindNext);
     connect(m_prevBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindPrev);
 
-    loadExisting();
-    connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &LogViewerDialog::onLogMessage);
-}
-
-LogViewerDialog::LogViewerDialog(tn5250::session::Worker *worker, QWidget *parent)
-    : ui::widgets::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)), m_worker(worker) {
-    setWindowTitle("Session Logs");
-    resize(800, 600);
-    QVBoxLayout *content = contentLayout();
-    content->setContentsMargins(8, 8, 8, 8);
-    // Find bar (hidden by default)
-    m_findBar = new QWidget(this);
-    QHBoxLayout *findLayout = new QHBoxLayout(m_findBar);
-    findLayout->setContentsMargins(0, 0, 0, 0);
-    findLayout->setSpacing(6);
-    m_findEdit = new QLineEdit(m_findBar);
-    m_findEdit->setPlaceholderText("Find...");
-    m_prevBtn = new QPushButton("Prev", m_findBar);
-    m_nextBtn = new QPushButton("Next", m_findBar);
-    findLayout->addWidget(m_findEdit, 1);
-    findLayout->addWidget(m_prevBtn, 0);
-    findLayout->addWidget(m_nextBtn, 0);
-    m_findBar->setVisible(false);
-    content->addWidget(m_findBar, 0);
-    m_text->setReadOnly(true);
-    m_text->setStyleSheet("QPlainTextEdit { background-color: #000000; color: #ffffff; }");
-    content->addWidget(m_text, 1);
-
-    m_shortcutFind = new QShortcut(QKeySequence::Find, this);
-    connect(m_shortcutFind, &QShortcut::activated, this, &LogViewerDialog::onFindToggle);
-    connect(m_findEdit, &QLineEdit::returnPressed, this, &LogViewerDialog::onFindReturnPressed);
-    connect(m_nextBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindNext);
-    connect(m_prevBtn, &QPushButton::clicked, this, &LogViewerDialog::onFindPrev);
-
-    if (m_worker) {
-        // Load logs from memory
-        const QStringList lines = m_worker->logs();
-        for (const QString &l : lines) {
-            m_text->appendPlainText(l);
-        }
-        m_text->moveCursor(QTextCursor::End);
-        // Subscribe to live session logs
-        connect(m_worker, &tn5250::session::Worker::sessionLogAppended, this, &LogViewerDialog::onSessionLogAppended);
-    } else {
-        loadExisting();
-        connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &LogViewerDialog::onLogMessage);
-    }
-}
-
-void LogViewerDialog::loadExisting() {
-    const QString path = logger::Logger::instance()->logFilePath();
-    if (path.isEmpty()) {
-        return;
-    }
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return;
-    }
-    QTextStream in(&f);
-    while (!in.atEnd()) {
-        m_text->appendPlainText(in.readLine());
+    // Load existing logs from the in-memory ring buffer
+    const QStringList logs = logger::Logger::instance()->recentLogs();
+    for (const QString &line : logs) {
+        m_text->appendPlainText(line);
     }
     m_text->moveCursor(QTextCursor::End);
+
+    // Subscribe to live updates
+    connect(logger::Logger::instance(), &logger::Logger::logMessage,
+            this, &LogViewerDialog::onLogMessage);
 }
 
 void LogViewerDialog::onLogMessage(logger::LogLevel /*level*/, const QString &message) {
     m_text->appendPlainText(message);
-    m_text->moveCursor(QTextCursor::End);
-}
-
-void LogViewerDialog::onSessionLogAppended(const QString &line) {
-    m_text->appendPlainText(line);
     m_text->moveCursor(QTextCursor::End);
 }
 
@@ -144,10 +85,7 @@ void LogViewerDialog::onFindReturnPressed() {
 
 void LogViewerDialog::onFindNext() {
     const QString needle = m_findEdit->text();
-    if (needle.isEmpty()) {
-        return;
-    }
-    // Try find from current cursor; if not found, wrap to start
+    if (needle.isEmpty()) return;
     if (!m_text->find(needle)) {
         QTextCursor cur = m_text->textCursor();
         cur.movePosition(QTextCursor::Start);
@@ -158,10 +96,7 @@ void LogViewerDialog::onFindNext() {
 
 void LogViewerDialog::onFindPrev() {
     const QString needle = m_findEdit->text();
-    if (needle.isEmpty()) {
-        return;
-    }
-    // Try find backwards from current; if not found, wrap to end
+    if (needle.isEmpty()) return;
     if (!m_text->find(needle, QTextDocument::FindBackward)) {
         QTextCursor cur = m_text->textCursor();
         cur.movePosition(QTextCursor::End);

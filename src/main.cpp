@@ -25,9 +25,11 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStandardPaths>
 #include <QStyleFactory>
 
 #ifdef Q_OS_WIN
@@ -103,6 +105,10 @@ int main(int argc, char *argv[]) {
     if (parser.isSet(debugOption)) {
         attachWindowsConsole();
         logger::Logger::instance()->setLogLevel(logger::LogLevel::Debug);
+        // Enable file logging in debug mode
+        QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir().mkpath(appDataDir);
+        logger::Logger::instance()->setLogFile(appDataDir + "/tn5250.log");
         logger::Logger::instance()->debug("Debug mode enabled");
     }
 

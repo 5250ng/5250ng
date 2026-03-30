@@ -318,12 +318,7 @@ void MainWindow::onMcpShowLogs() {
 }
 
 void MainWindow::onViewSessionLogs() {
-    tn5250::session::Worker *worker = nullptr;
-    if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
-        Session *s = m_sessions[m_activeIndex];
-        worker = s ? s->worker : nullptr;
-    }
-    LogViewerDialog *dlg = worker ? new LogViewerDialog(worker, this) : new LogViewerDialog(this);
+    auto *dlg = new LogViewerDialog(this);
     dlg->setAttribute(Qt::WA_DeleteOnClose, true);
     dlg->show();
 }

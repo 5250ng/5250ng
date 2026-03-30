@@ -31,13 +31,8 @@ namespace logger {
 Logger::Logger(QObject *parent)
     : QObject(parent), m_logFile(nullptr), m_logStream(nullptr),
       m_logLevel(LogLevel::Info), m_consoleOutput(true) {
-    // Set default log file
-    QString appDataDir =
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir dir;
-    dir.mkpath(appDataDir);
-    QString logPath = appDataDir + "/tn5250.log";
-    setLogFile(logPath);
+    // File logging is off by default (use --debug to enable).
+    // Logs are always kept in the in-memory ring buffer.
 }
 
 /**
@@ -244,6 +239,17 @@ void Logger::writeLog(LogLevel level, const QString &message) {
         *m_logStream << logLine << Qt::endl;
         m_logStream->flush();
     }
+
+    // In-memory ring buffer (always active)
+    m_buffer.append(logLine);
+    if (m_buffer.size() > MAX_BUFFER) {
+        m_buffer.erase(m_buffer.begin(), m_buffer.end() - MAX_BUFFER);
+    }
+}
+
+QStringList Logger::recentLogs() const {
+    QMutexLocker locker(&m_mutex);
+    return m_buffer;
 }
 
 } // namespace logger

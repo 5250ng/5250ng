@@ -155,6 +155,12 @@ class Logger : public QObject {
      */
     QString logFilePath() const { return m_logFile ? m_logFile->fileName() : QString(); }
 
+    /**
+     * Return a copy of the in-memory log buffer (most recent MAX_BUFFER lines).
+     * Thread-safe.
+     */
+    QStringList recentLogs() const;
+
   signals:
     /**
      * Emitted whenever a message is logged (and passes the minimum level filter).
@@ -189,9 +195,11 @@ class Logger : public QObject {
 
     QFile *m_logFile;
     QTextStream *m_logStream;
-    QMutex m_mutex;
+    mutable QMutex m_mutex;
     LogLevel m_logLevel;
     bool m_consoleOutput;
+    QStringList m_buffer;
+    static constexpr int MAX_BUFFER = 10000;
 };
 
 // Convenience macros

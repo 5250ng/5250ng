@@ -1,11 +1,11 @@
-// 5250ng - A modern IBM TN5250 terminal emulator                                                                                                                                                            
-// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)                                                                                                                                                          
-//                                                                                                                                                                                                           
-// This program is free software: you can redistribute it and/or modify                                                                                                                                      
-// it under the terms of the GNU General Public License as published by                                                                                                                                      
+// 5250ng - A modern IBM TN5250 terminal emulator
+// Copyright (C) 2025-2026 Remi GASCOU (Podalirius)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.                                                                                                                                                                       
-//                                                                                                                                                                                                           
+// (at your option) any later version.
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -17,7 +17,6 @@
 #pragma once
 
 #include "logger/logger.h"
-#include "session/worker.h"
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
 #include <QHBoxLayout>
 #include <QLineEdit>
@@ -30,12 +29,10 @@ class LogViewerDialog : public ui::widgets::BaseFramelessWindow {
     Q_OBJECT
   public:
     explicit LogViewerDialog(QWidget *parent = nullptr);
-    explicit LogViewerDialog(tn5250::session::Worker *worker, QWidget *parent = nullptr);
     ~LogViewerDialog() override = default;
 
   private slots:
     void onLogMessage(logger::LogLevel level, const QString &message);
-    void onSessionLogAppended(const QString &line);
     void onFindToggle();
     void onFindReturnPressed();
     void onFindNext();
@@ -48,6 +45,4 @@ class LogViewerDialog : public ui::widgets::BaseFramelessWindow {
     QPushButton *m_prevBtn;
     QShortcut *m_shortcutFind;
     QPlainTextEdit *m_text;
-    void loadExisting();
-    tn5250::session::Worker *m_worker = nullptr;
 };
