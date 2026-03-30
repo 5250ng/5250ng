@@ -100,6 +100,12 @@ void MainWindow::onRecordScript() {
         QString name = nameEdit->text().trimmed();
         delete dlg;
 
+        // Session may have been closed while the dialog was open
+        if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()
+            || m_sessions[m_activeIndex] != s) {
+            return;
+        }
+
         if (result == QDialog::Accepted && !name.isEmpty()) {
             core::Macro macro = s->macroRecorder->finishRecording(name);
             // Convert to .5250script and save directly

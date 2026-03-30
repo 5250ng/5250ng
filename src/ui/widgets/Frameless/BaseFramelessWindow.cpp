@@ -94,6 +94,12 @@ void BaseFramelessWindow::mousePressEvent(QMouseEvent *event) {
 }
 
 void BaseFramelessWindow::mouseMoveEvent(QMouseEvent *event) {
+    // Fallback drag handling
+    if (m_fallbackDragging) {
+        move(event->globalPosition().toPoint() - m_fallbackDragOffset);
+        event->accept();
+        return;
+    }
     // Update cursor shape when hovering near edges
     if (!isMaximized() && !isFullScreen()) {
         Qt::Edges edges = edgesAt(event->pos());
@@ -109,15 +115,18 @@ void BaseFramelessWindow::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void BaseFramelessWindow::mouseReleaseEvent(QMouseEvent *event) {
+    m_fallbackDragging = false;
     unsetCursor();
     QMainWindow::mouseReleaseEvent(event);
 }
 
 // --- Title bar interactions ---
 
-void BaseFramelessWindow::onTitleMousePressed(const QPoint &) {
-    if (windowHandle()) {
-        windowHandle()->startSystemMove();
+void BaseFramelessWindow::onTitleMousePressed(const QPoint &globalPos) {
+    if (windowHandle() && !windowHandle()->startSystemMove()) {
+        // Fallback for platforms that don't support system move (e.g. some Wayland compositors)
+        m_fallbackDragging = true;
+        m_fallbackDragOffset = globalPos - frameGeometry().topLeft();
     }
 }
 

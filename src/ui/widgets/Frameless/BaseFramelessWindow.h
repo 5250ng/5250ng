@@ -55,6 +55,10 @@ class BaseFramelessWindow : public QMainWindow {
     void connectControls();
     void updateResizeBorder();
 
+    // Fallback drag for platforms without startSystemMove()
+    bool m_fallbackDragging = false;
+    QPoint m_fallbackDragOffset;
+
   private slots:
     void onTitleMousePressed(const QPoint &globalPos);
     void onTitleMouseDoubleClicked(const QPoint &globalPos);

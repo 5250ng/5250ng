@@ -32,9 +32,15 @@ class BaseFramelessDialog : public QDialog {
     TitleBar *titleBar() const { return m_titleBar; }
     QVBoxLayout *contentLayout() const { return m_contentLayout; }
 
+  protected:
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+
   private:
     TitleBar *m_titleBar;
     QVBoxLayout *m_contentLayout;
+    bool m_fallbackDragging = false;
+    QPoint m_fallbackDragOffset;
 
   private slots:
     void onTitleMousePressed(const QPoint &globalPos);

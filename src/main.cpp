@@ -30,6 +30,24 @@
 #include <QJsonObject>
 #include <QStyleFactory>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <cstdio>
+#endif
+
+// On Windows GUI apps (WinMain), stdout/stderr are not connected to any
+// console.  If launched from cmd.exe or PowerShell, attach to the parent
+// console so qDebug/qInfo output is visible.  Otherwise allocate a new one.
+static void attachWindowsConsole() {
+#ifdef Q_OS_WIN
+    if (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole()) {
+        FILE *f = nullptr;
+        freopen_s(&f, "CONOUT$", "w", stdout);
+        freopen_s(&f, "CONOUT$", "w", stderr);
+    }
+#endif
+}
+
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
@@ -83,6 +101,7 @@ int main(int argc, char *argv[]) {
 
     // Set debug level if requested
     if (parser.isSet(debugOption)) {
+        attachWindowsConsole();
         logger::Logger::instance()->setLogLevel(logger::LogLevel::Debug);
         logger::Logger::instance()->debug("Debug mode enabled");
     }

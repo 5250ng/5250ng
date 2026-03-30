@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "BaseFramelessDialog.h"
+#include <QMouseEvent>
 #include <QWindow>
 
 namespace ui::widgets {
@@ -54,10 +55,26 @@ void BaseFramelessDialog::setWindowTitle(const QString &title) {
     m_titleBar->setTitle(title);
 }
 
-void BaseFramelessDialog::onTitleMousePressed(const QPoint &) {
-    if (windowHandle()) {
-        windowHandle()->startSystemMove();
+void BaseFramelessDialog::onTitleMousePressed(const QPoint &globalPos) {
+    if (windowHandle() && !windowHandle()->startSystemMove()) {
+        // Fallback for platforms without startSystemMove()
+        m_fallbackDragging = true;
+        m_fallbackDragOffset = globalPos - frameGeometry().topLeft();
     }
+}
+
+void BaseFramelessDialog::mouseMoveEvent(QMouseEvent *event) {
+    if (m_fallbackDragging) {
+        move(event->globalPosition().toPoint() - m_fallbackDragOffset);
+        event->accept();
+        return;
+    }
+    QDialog::mouseMoveEvent(event);
+}
+
+void BaseFramelessDialog::mouseReleaseEvent(QMouseEvent *event) {
+    m_fallbackDragging = false;
+    QDialog::mouseReleaseEvent(event);
 }
 
 } // namespace ui::widgets

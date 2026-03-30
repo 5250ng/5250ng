@@ -43,7 +43,15 @@ void MainWindow::onEditMatchReplacePatterns() {
     }
 
     ui::dialogs::MatchReplaceDialog dialog(s->matchReplace->rules(), this);
-    if (dialog.exec() == QDialog::Accepted) {
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    // Session may have been closed while the dialog was open
+    if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()
+        || m_sessions[m_activeIndex] != s) {
+        return;
+    }
+
+    {
         s->matchReplace->setRules(dialog.rules());
         s->displayWidget->setMatchReplaceEngine(s->matchReplace);
         // Rebuild overlay immediately so the current screen reflects the new rules

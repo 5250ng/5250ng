@@ -49,7 +49,7 @@ void Q5250ScreenWidget::setCursorBlinkRate(int msec) {
 void Q5250ScreenWidget::setCursorEnabled(bool enabled) {
     m_cursorEnabled = enabled;
     if (m_cursorWidget) {
-        m_cursorWidget->setVisible(false);
+        m_cursorWidget->setVisible(enabled);
     }
     update();
 }
