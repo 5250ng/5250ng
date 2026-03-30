@@ -86,6 +86,9 @@ void MainWindow::setupMenuBar() {
     m_quickThemeMenu = sessionMenu->addMenu("Theme");
     connect(m_quickThemeMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickThemeMenu);
     connect(m_quickThemeMenu, &QMenu::triggered, this, &MainWindow::onQuickThemeChosen);
+    sessionMenu->addSeparator();
+    m_sessionLogsAction = sessionMenu->addAction("View Session &Logs", this, &MainWindow::onViewSessionLogs);
+    m_sessionLogsAction->setEnabled(false);
 
     // View menu
     QMenu *viewMenu = bar->addMenu("&View");
@@ -140,8 +143,6 @@ void MainWindow::setupMenuBar() {
 
     // Help menu
     QMenu *helpMenu = bar->addMenu("&Help");
-    QMenu *debugMenu = helpMenu->addMenu("&Debug");
-    debugMenu->addAction("&View session logs", this, &MainWindow::onViewSessionLogs);
     helpMenu->addSeparator();
     helpMenu->addAction("&About", this, &MainWindow::onAbout);
 }

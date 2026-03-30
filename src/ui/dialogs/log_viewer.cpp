@@ -42,6 +42,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     m_findBar->setVisible(false);
     content->addWidget(m_findBar, 0);
     m_text->setReadOnly(true);
+    m_text->setStyleSheet("QPlainTextEdit { background-color: #000000; color: #ffffff; }");
     content->addWidget(m_text, 1);
 
     // Shortcuts and find connections
@@ -76,6 +77,7 @@ LogViewerDialog::LogViewerDialog(tn5250::session::Worker *worker, QWidget *paren
     m_findBar->setVisible(false);
     content->addWidget(m_findBar, 0);
     m_text->setReadOnly(true);
+    m_text->setStyleSheet("QPlainTextEdit { background-color: #000000; color: #ffffff; }");
     content->addWidget(m_text, 1);
 
     m_shortcutFind = new QShortcut(QKeySequence::Find, this);

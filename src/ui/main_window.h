@@ -185,6 +185,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_exitAction;
     QAction *m_reconnectAction;
     QAction *m_duplicateAction;
+    QAction *m_sessionLogsAction;
     QAction *m_fullscreenAction;
     QAction *m_hotspotsAction;
     QAction *m_scriptRecordAction;

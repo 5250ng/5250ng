@@ -347,13 +347,8 @@ static QString generateWidgetStylesheet(const QMap<QString, QString> &colors) {
         "  border: 1px solid %3;"
         "  border-radius: 2px;"
         "}"
-        "QMenu::right-arrow {"
-        "  width: 0; height: 0;"
-        "  border-top: 4px solid transparent;"
-        "  border-bottom: 4px solid transparent;"
-        "  border-left: 5px solid %2;"
-        "  margin-right: 8px;"
-        "}"
+        // QMenu::right-arrow: let Fusion style draw its native arrow
+        // using QPalette::Text for the color.
     ).arg(base,       // %1
           text,       // %2
           mid,        // %3

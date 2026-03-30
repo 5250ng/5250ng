@@ -1007,6 +1007,7 @@ void MainWindow::setActiveSession(int index) {
         m_disconnectAction->setEnabled(false);
         m_reconnectAction->setEnabled(false);
         m_duplicateAction->setEnabled(false);
+        m_sessionLogsAction->setEnabled(false);
         // Reset global status to disconnected when no session is active
         m_globalConnectionStatus->setState(tn5250::client::TN5250Client::ConnectionState::Disconnected);
         m_globalConnectionStatus->setStatusText("Not connected");
@@ -1027,6 +1028,7 @@ void MainWindow::setActiveSession(int index) {
     m_disconnectAction->setEnabled(connected);
     m_reconnectAction->setEnabled(true);
     m_duplicateAction->setEnabled(true);
+    m_sessionLogsAction->setEnabled(true);
     // Sync global bottom-bar status from active session
     m_globalConnectionStatus->setState(state);
     m_globalConnectionStatus->setStatusText(s->connectionStatus->statusText());
