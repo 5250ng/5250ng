@@ -28,10 +28,10 @@
 
 namespace ui::widgets {
 
-// Fixed cell aspect ratio: height is 30% more than width.
+// Fixed cell aspect ratio
 // This gives identical cell proportions on all platforms regardless of
 // font metric differences between Windows and Linux rasterizers.
-static constexpr double kCellAspectRatio = 1.0 / 2.0; // width / height
+static constexpr double kCellAspectRatio = 1.0 / 1.9; // width / height
 
 QSize Q5250ScreenWidget::sizeHint() const {
     if (m_screenBuffer) {

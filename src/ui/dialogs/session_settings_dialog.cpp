@@ -261,6 +261,9 @@ QWidget *SessionSettingsDialog::buildBackgroundSection() {
 
     connect(m_bgColorRadio, &QRadioButton::toggled, this, &SessionSettingsDialog::onBackgroundModeChanged);
     connect(m_bgBrowseBtn, &QPushButton::clicked, this, &SessionSettingsDialog::onBrowseBackgroundImage);
+    connect(m_bgImagePath, &QLineEdit::textChanged, this, &SessionSettingsDialog::onThemePropertyChanged);
+    connect(m_bgLayoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SessionSettingsDialog::onThemePropertyChanged);
     connect(m_bgOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
         m_bgOpacityLabel->setText(QString::number(val / 100.0, 'f', 2));
         onThemePropertyChanged();
@@ -664,7 +667,9 @@ void SessionSettingsDialog::onThemeDropdownChanged(int index) {
     ui::themes::TerminalTheme theme = mgr.resolvedTheme(id);
     if (theme.id.isEmpty()) return;
     m_currentThemeId = id;
+    m_loading = true;
     loadThemeToUI(theme);
+    m_loading = false;
     updatePreview();
 
     // Disable delete/save for builtin themes
@@ -699,7 +704,9 @@ void SessionSettingsDialog::setTheme(const ui::themes::TerminalTheme &theme) {
     if (idx >= 0) {
         m_themeCombo->setCurrentIndex(idx);
     }
+    m_loading = true;
     loadThemeToUI(theme);
+    m_loading = false;
     updatePreview();
 }
 
@@ -920,6 +927,7 @@ void SessionSettingsDialog::onBrowseBackgroundImage() {
 }
 
 void SessionSettingsDialog::onThemePropertyChanged() {
+    if (m_loading) return;
     updatePreview();
     updateContrastLabels();
 }
@@ -991,7 +999,9 @@ void SessionSettingsDialog::onResetTheme() {
     if (result != ui::widgets::StyledMessageBox::Yes) return;
 
     ui::themes::TerminalTheme theme = mgr.resolvedTheme(m_currentThemeId);
+    m_loading = true;
     loadThemeToUI(theme);
+    m_loading = false;
     updatePreview();
 }
 

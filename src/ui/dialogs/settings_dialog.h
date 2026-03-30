@@ -30,6 +30,7 @@
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QTableWidget>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -62,12 +63,13 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
   private:
     void setupUI();
     QWidget *buildThemePage();
+    QWidget *buildScriptsGeneralPage();
     QWidget *buildMacrosPage();
     QWidget *buildAgentPage();
     QWidget *buildMcpServerPage();
-    QWidget *buildToolConfigPage(const QString &toolName);
+    QWidget *buildToolsPage();
+    void onToolsTableSelectionChanged();
     void ensureThemesLoaded();
-    void onToolSaveClicked(const QString &toolName);
     void onAgentProviderChanged(int index);
     void onAgentAuthTypeChanged(int index);
     void onAgentTestClicked();
@@ -92,7 +94,16 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     // Bottom bar
     QPushButton *m_saveBtn;
 
-    // Macros page widgets
+    // Scripts General page widgets
+    QWidget *m_scriptsGeneralPage;
+    QLineEdit *m_scriptsDirEdit;
+    QSpinBox *m_defaultTimeoutSpin;
+    QSpinBox *m_defaultDelaySpin;
+    QSpinBox *m_defaultJitterMinSpin;
+    QSpinBox *m_defaultJitterMaxSpin;
+    QCheckBox *m_confirmDeleteCheck;
+
+    // Scripts Recording page widgets (formerly Macros)
     QWidget *m_macrosPage;
     QCheckBox *m_recordTimingsCheck;
 
@@ -126,10 +137,13 @@ class SettingsDialog : public ui::widgets::BaseFramelessDialog {
     QCheckBox *m_mcpAutoStartCheck;
     QSpinBox *m_mcpPortSpin;
 
-    // Per-tool config pages
-    QMap<QString, QWidget*> m_toolPages;
-    QMap<QString, QCheckBox*> m_toolEnabledChecks;
-    QMap<QString, QTextEdit*> m_toolDescriptionEdits;
+    // Tools page (unified)
+    QWidget *m_toolsPage;
+    QTableWidget *m_toolsTable;
+    QLabel *m_toolDetailDefaultDesc;
+    QTextEdit *m_toolDetailCustomDesc;
+    QLabel *m_toolDetailParams;
+    QStringList m_toolNames;
 
     agent::OAuthAuth *m_activeOAuth = nullptr;
 };

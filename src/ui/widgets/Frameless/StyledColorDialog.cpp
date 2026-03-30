@@ -29,12 +29,15 @@ StyledColorDialog::StyledColorDialog(QWidget *parent, const QColor &initial,
     content->setContentsMargins(0, 0, 0, 0);
     content->setSpacing(0);
 
-    m_colorDialog = new QColorDialog(initial, this);
+    m_colorDialog = new QColorDialog(this);
     m_colorDialog->setWindowFlags(Qt::Widget);
     m_colorDialog->setOptions(QColorDialog::DontUseNativeDialog
                               | QColorDialog::NoButtons
                               | (showAlpha ? QColorDialog::ShowAlphaChannel
                                            : QColorDialog::ColorDialogOptions()));
+    // Set initial color AFTER options — DontUseNativeDialog resets internal
+    // state, so passing it via constructor may lose it on some platforms.
+    m_colorDialog->setCurrentColor(initial);
     content->addWidget(m_colorDialog);
 
     // Add our own buttons

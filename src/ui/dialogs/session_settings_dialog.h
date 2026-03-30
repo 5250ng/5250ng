@@ -208,4 +208,5 @@ class SessionSettingsDialog : public QDialog {
 
     // Current state
     QString m_currentThemeId;
+    bool m_loading = false;
 };
