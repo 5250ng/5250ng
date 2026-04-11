@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include "version.h"
 #include "agent/config.h"
 #include "logger/logger.h"
 #include "session/config.h"
@@ -27,6 +28,7 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
@@ -60,8 +62,9 @@ int main(int argc, char *argv[]) {
     qRegisterMetaType<uint8_t>("uint8_t");
 
     app.setApplicationName("5250ng");
-    app.setApplicationVersion("0.5.0");
+    app.setApplicationVersion(APP_VERSION);
     app.setOrganizationName("5250ng");
+    app.setWindowIcon(QIcon(":/icons/5250ng.png"));
 
     // Parse command line arguments
     QCommandLineParser parser;

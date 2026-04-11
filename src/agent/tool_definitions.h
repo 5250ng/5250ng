@@ -205,6 +205,25 @@ inline QJsonObject toolSendKeysSchema() {
 }
 
 // ---------------------------------------------------------------------------
+// clear_inputs — clear all input fields on the screen
+// ---------------------------------------------------------------------------
+
+inline const QString kToolClearInputs = QStringLiteral("clear_inputs");
+
+inline const QString kToolClearInputsDescription = QStringLiteral(
+    "Clear all input fields on the current terminal screen. "
+    "Resets every non-protected field to its original empty state, "
+    "clears all Modified Data Tags (MDT), and moves the cursor back "
+    "to the initial cursor position. Equivalent to the Erase Input key.");
+
+inline QJsonObject toolClearInputsSchema() {
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = QJsonObject();
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
 // get_cursor_position — get the current cursor position
 // ---------------------------------------------------------------------------
 
@@ -417,6 +436,300 @@ inline QJsonObject toolScreenshotSchema() {
     schema["type"] = "object";
     schema["properties"] = properties;
     schema["required"] = QJsonArray{"session_id", "path"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// press_key — press a single key on the terminal
+// ---------------------------------------------------------------------------
+
+inline const QString kToolPressKey = QStringLiteral("press_key");
+
+inline const QString kToolPressKeyDescription = QStringLiteral(
+    "Press a single key on the terminal session. "
+    "Accepts one key name. "
+    "Supported keys: ENTER, F1-F24, TAB, BACKTAB, BACKSPACE, DELETE, "
+    "INSERT, HOME, END, ESCAPE, PAGEUP, PAGEDOWN, "
+    "FIELDPLUS, FIELDMINUS, FIELDEXIT, DUP, "
+    "ERASEINPUT, ERASEFIELD, ERASEEOF, "
+    "ATTN, SYSREQ, HELP, CLEAR, PRINT, "
+    "UP, DOWN, LEFT, RIGHT.");
+
+inline QJsonObject toolPressKeySchema() {
+    QJsonObject keyProp;
+    keyProp["type"] = "string";
+    keyProp["description"] =
+        "The key name to press, e.g. 'ENTER' or 'F5'";
+
+    QJsonObject properties;
+    properties["key"] = keyProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"key"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// type_text — type a string at the current cursor position
+// ---------------------------------------------------------------------------
+
+inline const QString kToolTypeText = QStringLiteral("type_text");
+
+inline const QString kToolTypeTextDescription = QStringLiteral(
+    "Type a text string at the current cursor position on the terminal. "
+    "The text is entered character by character into the current field. "
+    "Does not press Enter or any other key after typing.");
+
+inline QJsonObject toolTypeTextSchema() {
+    QJsonObject textProp;
+    textProp["type"] = "string";
+    textProp["description"] = "The text string to type at the current cursor position";
+
+    QJsonObject properties;
+    properties["text"] = textProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"text"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// press_keys — press a sequence of keys on the terminal
+// ---------------------------------------------------------------------------
+
+inline const QString kToolPressKeys = QStringLiteral("press_keys");
+
+inline const QString kToolPressKeysDescription = QStringLiteral(
+    "Press a sequence of keys on the terminal session. "
+    "Accepts an ordered array of key names, executed one after another. "
+    "Supported keys: ENTER, F1-F24, TAB, BACKTAB, BACKSPACE, DELETE, "
+    "INSERT, HOME, END, ESCAPE, PAGEUP, PAGEDOWN, "
+    "FIELDPLUS, FIELDMINUS, FIELDEXIT, DUP, "
+    "ERASEINPUT, ERASEFIELD, ERASEEOF, "
+    "ATTN, SYSREQ, HELP, CLEAR, PRINT, "
+    "UP, DOWN, LEFT, RIGHT.");
+
+inline QJsonObject toolPressKeysSchema() {
+    QJsonObject keyItem;
+    keyItem["type"] = "string";
+
+    QJsonObject keysProp;
+    keysProp["type"] = "array";
+    keysProp["items"] = keyItem;
+    keysProp["description"] =
+        "Ordered list of key names to press, e.g. [\"F5\", \"ENTER\"]";
+
+    QJsonObject properties;
+    properties["keys"] = keysProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"keys"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// set_cursor_position — move cursor to an absolute screen position
+// ---------------------------------------------------------------------------
+
+inline const QString kToolSetCursorPosition = QStringLiteral("set_cursor_position");
+
+inline const QString kToolSetCursorPositionDescription = QStringLiteral(
+    "Move the cursor to an absolute position on the terminal screen. "
+    "Row and column are 0-based.");
+
+inline QJsonObject toolSetCursorPositionSchema() {
+    QJsonObject rowProp;
+    rowProp["type"] = "integer";
+    rowProp["description"] = "Target row on the screen (0-based)";
+
+    QJsonObject colProp;
+    colProp["type"] = "integer";
+    colProp["description"] = "Target column on the screen (0-based)";
+
+    QJsonObject properties;
+    properties["row"] = rowProp;
+    properties["col"] = colProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"row", "col"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// move_cursor — move cursor relative to current position
+// ---------------------------------------------------------------------------
+
+inline const QString kToolMoveCursor = QStringLiteral("move_cursor");
+
+inline const QString kToolMoveCursorDescription = QStringLiteral(
+    "Move the cursor relative to its current position. "
+    "Positive rows move down, negative move up. "
+    "Positive cols move right, negative move left. "
+    "Either parameter can be omitted to move in only one direction.");
+
+inline QJsonObject toolMoveCursorSchema() {
+    QJsonObject rowsProp;
+    rowsProp["type"] = "integer";
+    rowsProp["description"] = "Number of rows to move (positive=down, negative=up, default 0)";
+
+    QJsonObject colsProp;
+    colsProp["type"] = "integer";
+    colsProp["description"] = "Number of columns to move (positive=right, negative=left, default 0)";
+
+    QJsonObject properties;
+    properties["rows"] = rowsProp;
+    properties["cols"] = colsProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// get_screen_size — return screen dimensions
+// ---------------------------------------------------------------------------
+
+inline const QString kToolGetScreenSize = QStringLiteral("get_screen_size");
+
+inline const QString kToolGetScreenSizeDescription = QStringLiteral(
+    "Get the dimensions of the terminal screen. "
+    "Returns the number of rows and columns.");
+
+inline QJsonObject toolGetScreenSizeSchema() {
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = QJsonObject();
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// find_text — find text position on screen
+// ---------------------------------------------------------------------------
+
+inline const QString kToolFindText = QStringLiteral("find_text");
+
+inline const QString kToolFindTextDescription = QStringLiteral(
+    "Find the position of a text string on the terminal screen. "
+    "Searches the entire screen and returns the row and column (0-based) "
+    "of the first occurrence. Returns all occurrences if multiple are found.");
+
+inline QJsonObject toolFindTextSchema() {
+    QJsonObject textProp;
+    textProp["type"] = "string";
+    textProp["description"] = "The text string to search for on the screen";
+
+    QJsonObject properties;
+    properties["text"] = textProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"text"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// wait_for_text — wait until text appears on screen
+// ---------------------------------------------------------------------------
+
+inline const QString kToolWaitForText = QStringLiteral("wait_for_text");
+
+inline const QString kToolWaitForTextDescription = QStringLiteral(
+    "Wait until a specific text string appears on the terminal screen. "
+    "Blocks until the text is found or the timeout expires. "
+    "Default timeout is 30 seconds.");
+
+inline QJsonObject toolWaitForTextSchema() {
+    QJsonObject textProp;
+    textProp["type"] = "string";
+    textProp["description"] = "The text string to wait for on the screen";
+
+    QJsonObject timeoutProp;
+    timeoutProp["type"] = "integer";
+    timeoutProp["description"] = "Timeout in milliseconds (default 30000)";
+
+    QJsonObject properties;
+    properties["text"] = textProp;
+    properties["timeout"] = timeoutProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"text"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// read_line — read a single line from the screen
+// ---------------------------------------------------------------------------
+
+inline const QString kToolReadLine = QStringLiteral("read_line");
+
+inline const QString kToolReadLineDescription = QStringLiteral(
+    "Read a single line of text from the terminal screen at the given row. "
+    "Row is 0-based. Returns the full text content of that row.");
+
+inline QJsonObject toolReadLineSchema() {
+    QJsonObject rowProp;
+    rowProp["type"] = "integer";
+    rowProp["description"] = "Row number to read (0-based)";
+
+    QJsonObject properties;
+    properties["row"] = rowProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"row"};
+    return schema;
+}
+
+// ---------------------------------------------------------------------------
+// read_region — read a rectangular region of the screen
+// ---------------------------------------------------------------------------
+
+inline const QString kToolReadRegion = QStringLiteral("read_region");
+
+inline const QString kToolReadRegionDescription = QStringLiteral(
+    "Read a rectangular region of text from the terminal screen. "
+    "All coordinates are 0-based. Returns the text content of the region.");
+
+inline QJsonObject toolReadRegionSchema() {
+    QJsonObject rowProp;
+    rowProp["type"] = "integer";
+    rowProp["description"] = "Starting row (0-based)";
+
+    QJsonObject colProp;
+    colProp["type"] = "integer";
+    colProp["description"] = "Starting column (0-based)";
+
+    QJsonObject numRowsProp;
+    numRowsProp["type"] = "integer";
+    numRowsProp["description"] = "Number of rows to read";
+
+    QJsonObject numColsProp;
+    numColsProp["type"] = "integer";
+    numColsProp["description"] = "Number of columns to read";
+
+    QJsonObject properties;
+    properties["row"] = rowProp;
+    properties["col"] = colProp;
+    properties["numRows"] = numRowsProp;
+    properties["numCols"] = numColsProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"row", "col", "numRows", "numCols"};
     return schema;
 }
 

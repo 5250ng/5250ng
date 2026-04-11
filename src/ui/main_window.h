@@ -110,6 +110,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onMcpToggleEnabled();
     void onMcpShowLogs();
     void onViewSessionLogs();
+    void onCopySessionGuid();
     void onToggleMatchReplace();
     void onEditMatchReplacePatterns();
     void rebuildQuickThemeMenu();
@@ -126,6 +127,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void openContextMenuForTab(const QPoint &pos);
 
     struct Session {
+        QString guid;              // Unique identifier for this session
         QWidget *container;
         QWidget *terminalContainer = nullptr;
         QSplitter *splitter = nullptr;
@@ -185,6 +187,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_exitAction;
     QAction *m_reconnectAction;
     QAction *m_duplicateAction;
+    QAction *m_copyGuidAction;
     QAction *m_sessionLogsAction;
     QAction *m_fullscreenAction;
     QAction *m_hotspotsAction;

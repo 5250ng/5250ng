@@ -79,6 +79,10 @@ jobs:
         if: matrix.os == 'windows'
         run: vcpkg install openssl:x64-windows
 
+      - name: Install Inno Setup (Windows)
+        if: matrix.os == 'windows'
+        run: choco install innosetup --yes --no-progress
+
       - name: Configure CMake (Windows)
         if: matrix.os == 'windows'
         run: >
@@ -110,10 +114,25 @@ jobs:
         if: matrix.os == 'windows'
         shell: pwsh
         run: |
-          mkdir release
-          copy build\bin\Release\5250ng.exe release\
-          windeployqt release\5250ng.exe
-          Compress-Archive -Path release\* -DestinationPath 5250ng-windows-${{ matrix.arch }}.zip
+          # Create deployment directory
+          mkdir deploy\5250ng
+          copy build\bin\Release\5250ng.exe deploy\5250ng\
+          windeployqt --release deploy\5250ng\5250ng.exe
+
+          # Copy OpenSSL DLLs from vcpkg
+          $vcpkgBin = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
+          if (Test-Path "$vcpkgBin\libcrypto-3-x64.dll") {
+            copy "$vcpkgBin\libcrypto-3-x64.dll" deploy\5250ng\
+            copy "$vcpkgBin\libssl-3-x64.dll" deploy\5250ng\
+          }
+
+          # Create portable ZIP
+          Compress-Archive -Path deploy\5250ng\* -DestinationPath 5250ng-windows-${{ matrix.arch }}.zip
+
+          # Build installer with Inno Setup
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'VERSION\s+(\d+\.\d+\.\d+)').Matches.Groups[1].Value
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version installer\5250ng.iss
+          copy installer\Output\5250ng-setup-x64.exe 5250ng-windows-${{ matrix.arch }}-setup.exe
 
       # ── Upload ──
       - name: Upload Release Asset

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(5250ng VERSION 0.1.0 LANGUAGES CXX)
+project(5250ng VERSION 0.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,13 @@ find_package(Qt6 REQUIRED COMPONENTS
 )
 
 find_package(OpenSSL REQUIRED)
+
+# Generate version header from project version
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/version.h
+    @ONLY
+)
 
 # Protocol library (standalone, Qt-free)
 set(TN5250_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -262,6 +269,7 @@ set(UI_SOURCES
     src/ui/actions/onTakeScreenshot.cpp
     src/ui/actions/onReconnect.cpp
     src/ui/actions/onDuplicateSession.cpp
+    src/ui/actions/onCopySessionGuid.cpp
     src/ui/actions/onToggleFullscreen.cpp
     src/ui/actions/onEditActions.cpp
     src/ui/actions/onHotspots.cpp
@@ -276,9 +284,26 @@ set(UI_SOURCES
     src/ui/setup/setupStatusBar.cpp
 )
 
+# Windows resource file (icon, version info, manifest)
+if(WIN32)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/5250ng.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/5250ng.rc
+        @ONLY
+    )
+    # Copy icon and manifest next to the generated .rc so the resource compiler finds them
+    file(COPY
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/5250ng.ico
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/5250ng.manifest
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+    )
+    set(WIN32_RESOURCES ${CMAKE_CURRENT_BINARY_DIR}/5250ng.rc)
+endif()
+
 # Main executable
 add_executable(5250ng
     src/main.cpp
+    resources/resources.qrc
     ${UI_SOURCES}
     ${TELNET_SOURCES}
     ${TN5250_ADAPTER_SOURCES}
@@ -289,6 +314,7 @@ add_executable(5250ng
     ${LOGGER_SOURCES}
     ${UTILS_SOURCES}
     ${AGENT_SOURCES}
+    ${WIN32_RESOURCES}
 )
 
 target_link_libraries(5250ng
@@ -309,6 +335,7 @@ endif()
 # Include directories
 target_include_directories(5250ng PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 # Set output directory

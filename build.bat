@@ -10,6 +10,7 @@ setlocal enabledelayedexpansion
 ::     release     - Build in Release mode (default is Debug)
 ::     test        - Run tests after building
 ::     package     - Create deployment package
+::     installer   - Build Inno Setup installer (implies package)
 ::     help        - Show this help message
 :: ============================================================================
 
@@ -17,6 +18,7 @@ set BUILD_TYPE=Debug
 set RUN_TESTS=0
 set CLEAN_BUILD=0
 set CREATE_PACKAGE=0
+set CREATE_INSTALLER=0
 set BUILD_DIR=build
 
 :: Parse command line arguments
@@ -26,6 +28,11 @@ if /i "%~1"=="clean" set CLEAN_BUILD=1
 if /i "%~1"=="release" set BUILD_TYPE=Release
 if /i "%~1"=="test" set RUN_TESTS=1
 if /i "%~1"=="package" (
+    set CREATE_PACKAGE=1
+    set BUILD_TYPE=Release
+)
+if /i "%~1"=="installer" (
+    set CREATE_INSTALLER=1
     set CREATE_PACKAGE=1
     set BUILD_TYPE=Release
 )
@@ -377,6 +384,43 @@ if %CREATE_PACKAGE%==1 (
     echo [SUCCESS] Deployment package created at: !DEPLOY_DIR!
 )
 
+:: ----------------------------------------------------------------
+:: Build installer if requested
+:: ----------------------------------------------------------------
+if %CREATE_INSTALLER%==1 (
+    echo.
+    echo [INFO] Building installer with Inno Setup...
+
+    set "ISCC="
+    for %%I in (
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+        "C:\Program Files\Inno Setup 6\ISCC.exe"
+    ) do (
+        if exist "%%~I" set "ISCC=%%~I"
+    )
+
+    if not defined ISCC (
+        where iscc >nul 2>&1
+        if !errorlevel!==0 (
+            for /f "delims=" %%P in ('where iscc') do set "ISCC=%%P"
+        )
+    )
+
+    if defined ISCC (
+        echo [INFO] Using Inno Setup: !ISCC!
+        "!ISCC!" /DMyAppVersion=0.5.0 installer\5250ng.iss
+        if !errorlevel!==0 (
+            echo [SUCCESS] Installer created at: installer\Output\5250ng-setup-x64.exe
+        ) else (
+            echo [ERROR] Inno Setup compilation failed
+        )
+    ) else (
+        echo [ERROR] Inno Setup not found
+        echo         Install from https://jrsoftware.org/isinfo.php
+        echo         Or: choco install innosetup
+    )
+)
+
 echo.
 echo ============================================================
 echo  Build Complete
@@ -394,6 +438,7 @@ echo   clean       Clean build directory before building
 echo   release     Build in Release mode (default is Debug)
 echo   test        Run tests after building
 echo   package     Create deployment package (implies release)
+echo   installer   Build Inno Setup installer (implies package)
 echo   help        Show this help message
 echo.
 echo Examples:
@@ -402,6 +447,7 @@ echo   build.bat release            Build Release version
 echo   build.bat clean release      Clean and build Release
 echo   build.bat release test       Build Release and run tests
 echo   build.bat package            Create distributable package
+echo   build.bat installer          Create installer and package
 echo.
 echo Environment Variables:
 echo   QT_ROOT          Path to Qt6 kit (auto-detected)
@@ -416,5 +462,6 @@ echo Requirements:
 echo   - Qt6 (Core, Widgets, Network) with MinGW or MSVC kit
 echo   - OpenSSL (optional, for TLS support)
 echo   - CMake 3.16+ and Ninja (bundled with Qt, or install separately)
+echo   - Inno Setup 6 (optional, for installer builds)
 echo.
 goto :eof

@@ -87,6 +87,8 @@ void MainWindow::setupMenuBar() {
     connect(m_quickThemeMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildQuickThemeMenu);
     connect(m_quickThemeMenu, &QMenu::triggered, this, &MainWindow::onQuickThemeChosen);
     sessionMenu->addSeparator();
+    m_copyGuidAction = sessionMenu->addAction("Copy Session &GUID", this, &MainWindow::onCopySessionGuid);
+    m_copyGuidAction->setEnabled(false);
     m_sessionLogsAction = sessionMenu->addAction("View Session &Logs", this, &MainWindow::onViewSessionLogs);
     m_sessionLogsAction->setEnabled(false);
 

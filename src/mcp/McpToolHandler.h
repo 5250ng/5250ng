@@ -19,6 +19,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
+#include <QSet>
 
 namespace ui::widgets { class Q5250ScreenWidget; }
 
@@ -61,14 +62,25 @@ class McpToolHandler : public QObject {
 
     // Screen tools (session-aware)
     QJsonObject handleReadScreen(const QJsonObject &args);
+    QJsonObject handleReadLine(const QJsonObject &args);
+    QJsonObject handleReadRegion(const QJsonObject &args);
     QJsonObject handleGetCursorPosition(const QJsonObject &args);
+    QJsonObject handleGetScreenSize(const QJsonObject &args);
     QJsonObject handleGetFieldAt(const QJsonObject &args);
+    QJsonObject handleFindText(const QJsonObject &args);
     QJsonObject handleScreenshot(const QJsonObject &args);
 
     // Script tools (session-aware)
     QJsonObject handleSendKeys(const QJsonObject &args);
+    QJsonObject handlePressKey(const QJsonObject &args);
+    QJsonObject handlePressKeys(const QJsonObject &args);
+    QJsonObject handleTypeText(const QJsonObject &args);
+    QJsonObject handleSetCursorPosition(const QJsonObject &args);
+    QJsonObject handleMoveCursor(const QJsonObject &args);
+    QJsonObject handleWaitForText(const QJsonObject &args);
     QJsonObject handleRunScript(const QJsonObject &args);
     QJsonObject handleLogin(const QJsonObject &args);
+    QJsonObject handleClearInputs(const QJsonObject &args);
 
     // Filesystem tools (session-independent)
     QJsonObject handleListFiles(const QJsonObject &args);
@@ -84,9 +96,11 @@ class McpToolHandler : public QObject {
     QString m_pendingSessionId;
     bool m_sessionCreated = false;
 
-    // Guard against reentrant tool calls during nested event loops
-    // (e.g. a new MCP request arriving while handleRunScript is waiting)
-    bool m_busy = false;
+    // Per-session busy guard: tracks which sessions are inside a nested
+    // event loop (e.g. handleRunScript, handleCreateSession).  Tool calls
+    // targeting a different session, or session-independent tools, proceed
+    // without blocking.
+    QSet<QString> m_busySessions;
 };
 
 } // namespace mcp

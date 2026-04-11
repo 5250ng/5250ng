@@ -103,10 +103,12 @@ void AgentConfig::load() {
 
     // Per-tool config
     const QStringList toolNames = {
-        kToolConnect, kToolGenerateScript, kToolGetCursorPosition,
-        kToolGetFieldAt, kToolListFiles, kToolLogin,
-        kToolReadFile, kToolReadScreen,
-        kToolRunScript, kToolSendKeys, kToolWriteFile};
+        kToolConnect, kToolFindText, kToolGenerateScript,
+        kToolGetCursorPosition, kToolGetFieldAt, kToolGetScreenSize,
+        kToolListFiles, kToolLogin, kToolMoveCursor,
+        kToolReadFile, kToolReadLine, kToolReadRegion, kToolReadScreen,
+        kToolRunScript, kToolSendKeys, kToolSetCursorPosition,
+        kToolTypeText, kToolWaitForText, kToolWriteFile};
     settings.beginGroup("tools");
     for (const QString &name : toolNames) {
         settings.beginGroup(name);
