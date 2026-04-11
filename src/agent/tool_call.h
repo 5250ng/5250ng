@@ -52,6 +52,12 @@ struct ToolCall {
         return obj.value("content").toString();
     }
 
+    /// Parse the arguments JSON and return the "text" field.
+    QString typeText() const {
+        QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();
+        return obj.value("text").toString();
+    }
+
     /// Parse the arguments JSON and return the "keys" field.
     QString keysText() const {
         QJsonObject obj = QJsonDocument::fromJson(arguments.toUtf8()).object();

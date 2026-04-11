@@ -79,8 +79,16 @@ class QAgentPanelWidget : public QWidget {
     void onReadScreenToolCall(const agent::ToolCall &call);
     void onListFilesToolCall(const agent::ToolCall &call);
     void onSendKeysToolCall(const agent::ToolCall &call);
+    void onTypeTextToolCall(const agent::ToolCall &call);
+    void onSetCursorPositionToolCall(const agent::ToolCall &call);
+    void onMoveCursorToolCall(const agent::ToolCall &call);
+    void onWaitForTextToolCall(const agent::ToolCall &call);
     void onGetCursorPositionToolCall(const agent::ToolCall &call);
+    void onGetScreenSizeToolCall(const agent::ToolCall &call);
     void onGetFieldAtToolCall(const agent::ToolCall &call);
+    void onFindTextToolCall(const agent::ToolCall &call);
+    void onReadLineToolCall(const agent::ToolCall &call);
+    void onReadRegionToolCall(const agent::ToolCall &call);
 
     QLabel *m_headerLabel;
     QPushButton *m_clearButton;

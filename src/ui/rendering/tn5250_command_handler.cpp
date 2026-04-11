@@ -329,6 +329,8 @@ void TN5250CommandHandler::processDeferredCC2(uint8_t cc2) {
     }
     // 0x08: Unlock keyboard
     if (cc2 & 0x08) {
+        // Restore cursor visibility after host processing
+        screen->setCursorVisible(true);
         m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
         int icRow = m_displayWidget->icRow();
         int icCol = m_displayWidget->icCol();
@@ -349,11 +351,11 @@ void TN5250CommandHandler::processDeferredCC2(uint8_t cc2) {
         if (m_displayWidget->isVisible())
             m_displayWidget->setFocus();
     }
-    // 0x10: Turn on cursor blink
+    // 0x10: Turn on cursor blink (cursor visible and blinking)
     if (cc2 & 0x10) {
         m_displayWidget->setCursorBlinkRate(250);
     }
-    // 0x20: Turn off cursor blink
+    // 0x20: Turn off cursor blink (cursor visible but fixed/non-blinking)
     if (cc2 & 0x20) {
         m_displayWidget->setCursorBlinkRate(0);
     }

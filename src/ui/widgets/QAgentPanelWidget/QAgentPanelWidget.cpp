@@ -533,6 +533,46 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
         return;
     }
 
+    if (call.name == agent::kToolTypeText) {
+        onTypeTextToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolSetCursorPosition) {
+        onSetCursorPositionToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolMoveCursor) {
+        onMoveCursorToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolWaitForText) {
+        onWaitForTextToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolGetScreenSize) {
+        onGetScreenSizeToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolFindText) {
+        onFindTextToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolReadLine) {
+        onReadLineToolCall(call);
+        return;
+    }
+
+    if (call.name == agent::kToolReadRegion) {
+        onReadRegionToolCall(call);
+        return;
+    }
+
     if (call.name == agent::kToolGetCursorPosition) {
         onGetCursorPositionToolCall(call);
         return;
@@ -1037,6 +1077,77 @@ void QAgentPanelWidget::onSendKeysToolCall(const agent::ToolCall &call) {
     m_toolCallBar->setVisible(true);
 }
 
+void QAgentPanelWidget::onTypeTextToolCall(const agent::ToolCall &call) {
+    QString text = call.typeText();
+    if (text.isEmpty()) {
+        appendError("Agent requested type_text but no text was provided.");
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No text provided.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    if (!m_displayWidget) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No terminal session available.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    // Escape double quotes for the 5250script TYPE command
+    QString safeText = text;
+    safeText.replace('"', "\\\"");
+    QString script = QString("TYPE \"%1\"").arg(safeText);
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString labelColor = tm.color("agent.assistant.label", "#50c878");
+    appendHtml(m_chatHistory,
+        QStringLiteral("<span style='color:%1;'><b>Typing:</b> %2</span>")
+            .arg(labelColor, text.toHtmlEscaped()));
+
+    // Store as pending and run through the script runner (same flow as run_5250script)
+    agent::ToolCall scriptCall;
+    scriptCall.id = call.id;
+    scriptCall.name = agent::kToolRunScript;
+    QJsonObject args;
+    args["script"] = script;
+    scriptCall.arguments = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+
+    appendScriptBlock(script);
+
+    m_pendingToolCall = PendingToolCall{scriptCall};
+
+    // Respect auto-accept setting
+    if (agent::AgentConfig::instance().autoAcceptToolCalls()) {
+        onRunScriptClicked();
+        return;
+    }
+
+    // Show Run/Cancel buttons for user confirmation
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Type Text");
+    m_cancelButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
 void QAgentPanelWidget::onGetCursorPositionToolCall(const agent::ToolCall &call) {
     agent::ToolResult result;
     result.toolCallId = call.id;
@@ -1093,6 +1204,385 @@ void QAgentPanelWidget::onGetFieldAtToolCall(const agent::ToolCall &call) {
                 .arg(field.protected_field ? "true" : "false")
                 .arg(field.modified ? "true" : "false")
                 .arg(fieldText.trimmed());
+        }
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onSetCursorPositionToolCall(const agent::ToolCall &call) {
+    int row = call.row();
+    int col = call.col();
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No terminal session available.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    auto *buf = m_displayWidget->screenBuffer();
+    if (row < 0 || row >= buf->rows() || col < 0 || col >= buf->cols()) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = QString("Position (%1, %2) out of bounds (screen is %3x%4).")
+                .arg(row).arg(col).arg(buf->rows()).arg(buf->cols());
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    // MOVE CURSOR AT uses 1-based coordinates in 5250script
+    QString script = QString("MOVE CURSOR AT (%1,%2)").arg(row + 1).arg(col + 1);
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString labelColor = tm.color("agent.assistant.label", "#50c878");
+    appendHtml(m_chatHistory,
+        QStringLiteral("<span style='color:%1;'><b>Moving cursor to:</b> row=%2, col=%3</span>")
+            .arg(labelColor).arg(row).arg(col));
+
+    agent::ToolCall scriptCall;
+    scriptCall.id = call.id;
+    scriptCall.name = agent::kToolRunScript;
+    QJsonObject args;
+    args["script"] = script;
+    scriptCall.arguments = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+
+    appendScriptBlock(script);
+    m_pendingToolCall = PendingToolCall{scriptCall};
+
+    if (agent::AgentConfig::instance().autoAcceptToolCalls()) {
+        onRunScriptClicked();
+        return;
+    }
+
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Move Cursor");
+    m_cancelButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
+void QAgentPanelWidget::onMoveCursorToolCall(const agent::ToolCall &call) {
+    QJsonObject obj = QJsonDocument::fromJson(call.arguments.toUtf8()).object();
+    int rows = obj.value("rows").toInt(0);
+    int cols = obj.value("cols").toInt(0);
+
+    if (!m_displayWidget) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No terminal session available.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    if (rows == 0 && cols == 0) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No movement specified.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    QStringList scriptLines;
+    if (rows > 0) {
+        for (int i = 0; i < rows; ++i)
+            scriptLines << "MOVE CURSOR DOWN";
+    } else if (rows < 0) {
+        for (int i = 0; i < -rows; ++i)
+            scriptLines << "MOVE CURSOR UP";
+    }
+    if (cols > 0) {
+        for (int i = 0; i < cols; ++i)
+            scriptLines << "MOVE CURSOR RIGHT";
+    } else if (cols < 0) {
+        for (int i = 0; i < -cols; ++i)
+            scriptLines << "MOVE CURSOR LEFT";
+    }
+
+    QString script = scriptLines.join('\n');
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString labelColor = tm.color("agent.assistant.label", "#50c878");
+    appendHtml(m_chatHistory,
+        QStringLiteral("<span style='color:%1;'><b>Moving cursor:</b> rows=%2, cols=%3</span>")
+            .arg(labelColor).arg(rows).arg(cols));
+
+    agent::ToolCall scriptCall;
+    scriptCall.id = call.id;
+    scriptCall.name = agent::kToolRunScript;
+    QJsonObject args;
+    args["script"] = script;
+    scriptCall.arguments = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+
+    appendScriptBlock(script);
+    m_pendingToolCall = PendingToolCall{scriptCall};
+
+    if (agent::AgentConfig::instance().autoAcceptToolCalls()) {
+        onRunScriptClicked();
+        return;
+    }
+
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Move Cursor");
+    m_cancelButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
+void QAgentPanelWidget::onWaitForTextToolCall(const agent::ToolCall &call) {
+    QString text = call.typeText(); // reuse "text" field accessor
+    QJsonObject obj = QJsonDocument::fromJson(call.arguments.toUtf8()).object();
+    if (text.isEmpty())
+        text = obj.value("text").toString();
+    int timeout = obj.value("timeout").toInt(30000);
+
+    if (text.isEmpty()) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No text provided.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    if (!m_displayWidget) {
+        if (m_provider) {
+            agent::ToolResult result;
+            result.toolCallId = call.id;
+            result.success = false;
+            result.output = "No terminal session available.";
+            showThinkingIndicator();
+            m_provider->sendToolResult(result);
+        } else {
+            setInputEnabled(true);
+        }
+        return;
+    }
+
+    QString safeText = text;
+    safeText.replace('"', "\\\"");
+    QString script = QString(
+        "GLOBAL EXPECT_TIMEOUT %1\n"
+        "EXPECT TEXT \"%2\"\n"
+        "IF $EXPECT_RESULT == \"TIMEOUT\" THEN\n"
+        "    ABORT \"Timed out waiting for text: %2\"\n"
+        "ENDIF\n"
+    ).arg(timeout).arg(safeText);
+
+    auto &tm = ui::themes::ThemeManager::instance();
+    QString labelColor = tm.color("agent.assistant.label", "#50c878");
+    appendHtml(m_chatHistory,
+        QStringLiteral("<span style='color:%1;'><b>Waiting for text:</b> \"%2\" (timeout: %3ms)</span>")
+            .arg(labelColor, text.toHtmlEscaped()).arg(timeout));
+
+    agent::ToolCall scriptCall;
+    scriptCall.id = call.id;
+    scriptCall.name = agent::kToolRunScript;
+    QJsonObject args;
+    args["script"] = script;
+    scriptCall.arguments = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+
+    appendScriptBlock(script);
+    m_pendingToolCall = PendingToolCall{scriptCall};
+
+    if (agent::AgentConfig::instance().autoAcceptToolCalls()) {
+        onRunScriptClicked();
+        return;
+    }
+
+    m_acceptButton->disconnect();
+    m_cancelButton->disconnect();
+    connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
+    connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
+    m_acceptButton->setEnabled(true);
+    m_acceptButton->setText("Wait for Text");
+    m_cancelButton->setEnabled(true);
+    m_toolCallBar->setVisible(true);
+}
+
+void QAgentPanelWidget::onGetScreenSizeToolCall(const agent::ToolCall &call) {
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        result.success = false;
+        result.output = "No terminal session available.";
+    } else {
+        auto *buf = m_displayWidget->screenBuffer();
+        result.success = true;
+        result.output = QString("rows: %1, cols: %2").arg(buf->rows()).arg(buf->cols());
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onFindTextToolCall(const agent::ToolCall &call) {
+    QString text = call.typeText(); // reuse "text" field accessor
+    if (text.isEmpty()) {
+        QJsonObject obj = QJsonDocument::fromJson(call.arguments.toUtf8()).object();
+        text = obj.value("text").toString();
+    }
+
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        result.success = false;
+        result.output = "No terminal session available.";
+    } else if (text.isEmpty()) {
+        result.success = false;
+        result.output = "No text provided.";
+    } else {
+        auto *buf = m_displayWidget->screenBuffer();
+        QStringList matches;
+        for (int r = 0; r < buf->rows(); ++r) {
+            QString line;
+            for (int c = 0; c < buf->cols(); ++c) {
+                uint8_t ch = buf->character(r, c);
+                line += core::EBCDIC::ebcdicToChar(ch);
+            }
+            int col = 0;
+            while ((col = line.indexOf(text, col, Qt::CaseInsensitive)) != -1) {
+                matches << QString("row: %1, col: %2").arg(r).arg(col);
+                col += text.length();
+            }
+        }
+        if (matches.isEmpty()) {
+            result.success = false;
+            result.output = "Text not found: " + text;
+        } else {
+            result.success = true;
+            result.output = matches.join('\n');
+        }
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onReadLineToolCall(const agent::ToolCall &call) {
+    int row = call.row();
+
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        result.success = false;
+        result.output = "No terminal session available.";
+    } else {
+        auto *buf = m_displayWidget->screenBuffer();
+        if (row < 0 || row >= buf->rows()) {
+            result.success = false;
+            result.output = QString("Row %1 out of bounds (screen has %2 rows).")
+                .arg(row).arg(buf->rows());
+        } else {
+            QString line;
+            for (int c = 0; c < buf->cols(); ++c) {
+                uint8_t ch = buf->character(row, c);
+                line += core::EBCDIC::ebcdicToChar(ch);
+            }
+            while (line.endsWith(' '))
+                line.chop(1);
+            result.success = true;
+            result.output = line;
+        }
+    }
+
+    if (m_provider) {
+        showThinkingIndicator();
+        m_provider->sendToolResult(result);
+    } else {
+        setInputEnabled(true);
+    }
+}
+
+void QAgentPanelWidget::onReadRegionToolCall(const agent::ToolCall &call) {
+    QJsonObject obj = QJsonDocument::fromJson(call.arguments.toUtf8()).object();
+    int row = obj.value("row").toInt(-1);
+    int col = obj.value("col").toInt(-1);
+    int numRows = obj.value("numRows").toInt(-1);
+    int numCols = obj.value("numCols").toInt(-1);
+
+    agent::ToolResult result;
+    result.toolCallId = call.id;
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        result.success = false;
+        result.output = "No terminal session available.";
+    } else {
+        auto *buf = m_displayWidget->screenBuffer();
+        if (row < 0 || col < 0 || numRows <= 0 || numCols <= 0) {
+            result.success = false;
+            result.output = "Invalid region parameters.";
+        } else if (row + numRows > buf->rows() || col + numCols > buf->cols()) {
+            result.success = false;
+            result.output = QString("Region (%1,%2)+(%3,%4) exceeds screen bounds (%5x%6).")
+                .arg(row).arg(col).arg(numRows).arg(numCols)
+                .arg(buf->rows()).arg(buf->cols());
+        } else {
+            QString text;
+            for (int r = row; r < row + numRows; ++r) {
+                QString line;
+                for (int c = col; c < col + numCols; ++c) {
+                    uint8_t ch = buf->character(r, c);
+                    line += core::EBCDIC::ebcdicToChar(ch);
+                }
+                while (line.endsWith(' '))
+                    line.chop(1);
+                text += line + '\n';
+            }
+            result.success = true;
+            result.output = text;
         }
     }
 

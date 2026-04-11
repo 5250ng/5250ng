@@ -19,6 +19,7 @@
 #include "logger/logger.h"
 #include <QDateTime>
 #include <QJsonDocument>
+#include <QPointer>
 #include <QTcpSocket>
 #include <QUuid>
 
@@ -125,7 +126,7 @@ void McpServer::onNewConnection() {
 }
 
 void McpServer::onClientData() {
-    auto *socket = qobject_cast<QTcpSocket *>(sender());
+    QPointer<QTcpSocket> socket = qobject_cast<QTcpSocket *>(sender());
     if (!socket) return;
 
     // Store parser as a property on the socket
@@ -143,11 +144,21 @@ void McpServer::onClientData() {
 
     if (httpParser->feed(socket->readAll())) {
         handleHttpRequest(socket);
-        httpParser->reset();
+        // The socket (and its httpParser) may have been destroyed during
+        // handleHttpRequest if a nested event loop ran and the client
+        // disconnected.  Only reset the parser if the socket is still alive.
+        if (!socket.isNull())
+            httpParser->reset();
     }
 }
 
-void McpServer::handleHttpRequest(QTcpSocket *socket) {
+void McpServer::handleHttpRequest(QTcpSocket *sock) {
+    // Guard with QPointer: tool calls (e.g. run_script) enter a nested
+    // QEventLoop, during which the client may disconnect and the socket
+    // gets destroyed via deleteLater.  Without this guard, writing the
+    // response after the tool call returns would be a use-after-free.
+    QPointer<QTcpSocket> socket = sock;
+
     auto *wrapper = socket->findChild<QObject *>("_mcp_parser");
     auto *parser = reinterpret_cast<McpHttpParser *>(wrapper->property("ptr").value<quintptr>());
     HttpRequest req = parser->request();
@@ -217,6 +228,13 @@ void McpServer::handleHttpRequest(QTcpSocket *socket) {
 
     QJsonObject rpcRequest = doc.object();
     QJsonObject rpcResponse = handleJsonRpc(rpcRequest);
+
+    // The client may have disconnected while a tool call was running
+    // inside a nested event loop (e.g. run_script, create_session).
+    if (socket.isNull()) {
+        MCP_LOG("Client disconnected before response could be sent");
+        return;
+    }
 
     HttpResponse resp;
     resp.statusCode = 200;

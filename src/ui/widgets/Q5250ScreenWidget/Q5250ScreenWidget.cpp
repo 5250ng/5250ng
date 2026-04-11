@@ -123,6 +123,10 @@ void Q5250ScreenWidget::setKeyboardState(KeyboardState state) {
         // Exiting insert mode when keyboard locks (per spec)
         if (state == KeyboardState::Locked || state == KeyboardState::ErrorLocked) {
             m_insertMode = false;
+            // Hide cursor during host processing (per 5250 spec)
+            if (m_screenBuffer)
+                m_screenBuffer->setCursorVisible(false);
+            updateCursorWidget();
         }
         emit terminalStateChanged();
         update();

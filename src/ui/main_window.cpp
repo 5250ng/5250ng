@@ -47,7 +47,9 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QClipboard>
 #include <QSet>
+#include <QUuid>
 #include <QTabBar>
 #include <QTimer>
 #include <QWidgetAction>
@@ -388,6 +390,10 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
 
     // Create a new session tab
     Session *session = new Session();
+    // MCP sessions reuse the MCP-assigned ID; others get a fresh GUID.
+    session->guid = mcpSessionId.isEmpty()
+        ? QUuid::createUuid().toString(QUuid::WithoutBraces)
+        : mcpSessionId;
     session->container = new QWidget(this);
     QHBoxLayout *containerLayout = new QHBoxLayout(session->container);
     containerLayout->setContentsMargins(0, 0, 0, 0);
@@ -1002,6 +1008,7 @@ void MainWindow::setActiveSession(int index) {
         m_disconnectAction->setEnabled(false);
         m_reconnectAction->setEnabled(false);
         m_duplicateAction->setEnabled(false);
+        m_copyGuidAction->setEnabled(false);
         m_sessionLogsAction->setEnabled(false);
         // Reset global status to disconnected when no session is active
         m_globalConnectionStatus->setState(tn5250::client::TN5250Client::ConnectionState::Disconnected);
@@ -1023,6 +1030,7 @@ void MainWindow::setActiveSession(int index) {
     m_disconnectAction->setEnabled(connected);
     m_reconnectAction->setEnabled(true);
     m_duplicateAction->setEnabled(true);
+    m_copyGuidAction->setEnabled(true);
     m_sessionLogsAction->setEnabled(true);
     // Sync global bottom-bar status from active session
     m_globalConnectionStatus->setState(state);

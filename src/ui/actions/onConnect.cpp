@@ -24,4 +24,9 @@ void MainWindow::onConnect() {
         session::SessionConfig config = dialog.getSessionConfig();
         connectToServer(config);
     }
+
+    // Refresh the empty-state dropdown in case sessions were saved or deleted
+    if (m_emptyOpenCombo) {
+        fillSessionsCombo(m_emptyOpenCombo, "(Open saved session)");
+    }
 }

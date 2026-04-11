@@ -27,15 +27,23 @@ struct ToolDef {
 
 static const ToolDef kAllTools[] = {
     {kToolConnect, kToolConnectDescription, toolConnectSchema},
+    {kToolFindText, kToolFindTextDescription, toolFindTextSchema},
     {kToolGenerateScript, kToolGenerateScriptDescription, toolGenerateScriptSchema},
     {kToolGetCursorPosition, kToolGetCursorPositionDescription, toolGetCursorPositionSchema},
     {kToolGetFieldAt, kToolGetFieldAtDescription, toolGetFieldAtSchema},
+    {kToolGetScreenSize, kToolGetScreenSizeDescription, toolGetScreenSizeSchema},
     {kToolListFiles, kToolListFilesDescription, toolListFilesSchema},
     {kToolLogin, kToolLoginDescription, toolLoginSchema},
+    {kToolMoveCursor, kToolMoveCursorDescription, toolMoveCursorSchema},
     {kToolReadFile, kToolReadFileDescription, toolReadFileSchema},
+    {kToolReadLine, kToolReadLineDescription, toolReadLineSchema},
+    {kToolReadRegion, kToolReadRegionDescription, toolReadRegionSchema},
     {kToolReadScreen, kToolReadScreenDescription, toolReadScreenSchema},
     {kToolRunScript, kToolRunScriptDescription, toolRunScriptSchema},
     {kToolSendKeys, kToolSendKeysDescription, toolSendKeysSchema},
+    {kToolSetCursorPosition, kToolSetCursorPositionDescription, toolSetCursorPositionSchema},
+    {kToolTypeText, kToolTypeTextDescription, toolTypeTextSchema},
+    {kToolWaitForText, kToolWaitForTextDescription, toolWaitForTextSchema},
     {kToolWriteFile, kToolWriteFileDescription, toolWriteFileSchema},
 };
 

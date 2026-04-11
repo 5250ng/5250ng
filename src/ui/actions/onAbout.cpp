@@ -37,7 +37,7 @@ void MainWindow::onAbout() {
     title->setAlignment(Qt::AlignCenter);
     content->addWidget(title);
 
-    QLabel *version = new QLabel("Version 0.5.0", &dlg);
+    QLabel *version = new QLabel("Version " + qApp->applicationVersion(), &dlg);
     version->setAlignment(Qt::AlignCenter);
     content->addWidget(version);
 
