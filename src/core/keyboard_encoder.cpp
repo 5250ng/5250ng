@@ -27,6 +27,12 @@ QByteArray KeyboardEncoder::encodeKeyEvent(QKeyEvent *event, bool shiftPressed, 
     int key = event->key();
     QString text = event->text();
 
+    // Shift+F1..F12 → F13..F24 (for keyboards without physical F13-F24)
+    if (shiftPressed && key >= Qt::Key_F1 && key <= Qt::Key_F12) {
+        int pfNumber = (key - Qt::Key_F1) + 13;
+        return encodePFKey(pfNumber);
+    }
+
     // Check for PF keys
     if (isPFKey(key)) {
         int pfNumber = getPFKeyNumber(key);
