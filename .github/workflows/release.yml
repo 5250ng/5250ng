@@ -21,10 +21,12 @@ jobs:
             runner: ubuntu-24.04-arm
           - os: macos
             arch: x64
-            runner: macos-13
+            runner: macos-latest
+            macos_cmake_arch: x86_64
           - os: macos
             arch: arm64
             runner: macos-latest
+            macos_cmake_arch: arm64
           - os: windows
             arch: x64
             runner: windows-latest
@@ -56,16 +58,45 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       # ── macOS ──
-      - name: Install dependencies (macOS)
+      - name: Install Qt (macOS)
         if: matrix.os == 'macos'
-        run: brew install qt@6 openssl cmake
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.5.3'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          cache: true
+
+      - name: Install build tools (macOS)
+        if: matrix.os == 'macos'
+        run: brew install cmake
+
+      - name: Build OpenSSL for target arch (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          set -e
+          OPENSSL_VERSION=3.3.2
+          curl -fsSLO "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
+          tar xf "openssl-${OPENSSL_VERSION}.tar.gz"
+          cd "openssl-${OPENSSL_VERSION}"
+          if [ "${{ matrix.macos_cmake_arch }}" = "x86_64" ]; then
+            OSSL_TARGET=darwin64-x86_64-cc
+          else
+            OSSL_TARGET=darwin64-arm64-cc
+          fi
+          ./Configure "$OSSL_TARGET" --prefix="$GITHUB_WORKSPACE/openssl-install" no-shared no-tests
+          make -j"$(sysctl -n hw.ncpu)"
+          make install_sw
+          echo "OPENSSL_ROOT_DIR=$GITHUB_WORKSPACE/openssl-install" >> "$GITHUB_ENV"
 
       - name: Configure CMake (macOS)
         if: matrix.os == 'macos'
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6);$(brew --prefix openssl)"
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.macos_cmake_arch }} \
+            -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR"
 
       # ── Windows ──
       - name: Install Qt (Windows)
