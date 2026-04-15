@@ -65,7 +65,7 @@ class TN5250CommandHandler : public QObject {
     void onSohReceived(uint8_t errorRow, uint8_t ckm1, uint8_t ckm2, uint8_t ckm3);
     void onRollRequested(uint8_t topRow, uint8_t botRow, uint8_t lines, bool up);
     void onWriteErrorCode(const QByteArray &errorCode);
-    void onSaveScreenRequested(ui::widgets::ScreenBuffer::SavedState &savedScreen);
+    void onSaveScreenRequested();
     void onClearScreenAlternateRequested();
     void onClearFormatTableRequested();
     void onInviteReceived();
@@ -80,6 +80,7 @@ class TN5250CommandHandler : public QObject {
     QByteArray buildFieldResponse(uint8_t aidByte);
     QByteArray buildReadScreenResponse(bool includeAttributes);
     QByteArray buildQueryResponse();
+    QByteArray buildSaveScreenResponse();
 
   private:
     ui::widgets::Q5250ScreenWidget *m_displayWidget = nullptr;

@@ -30,7 +30,8 @@ namespace ui::widgets {
 
 /**
  * Draw a border around the current selection rectangle, if any.
- * The border is a yellow 2px rectangle around the union of selected cells.
+ * The border is a 2px rectangle in the theme's selection-border color
+ * around the union of selected cells.
  */
 void Q5250ScreenWidget::renderSelectionBorder(QPainter &painter) {
     if (!hasSelection() || !m_screenBuffer) {
@@ -51,8 +52,8 @@ void Q5250ScreenWidget::renderSelectionBorder(QPainter &painter) {
     QRect selectionRect =
         QRect(topLeftCell.topLeft(), bottomRightCell.bottomRight());
 
-    // Draw yellow border around the entire selection
-    QPen borderPen(QColor(255, 255, 0), 2); // Yellow border, 2px width
+    // Draw themed border around the entire selection
+    QPen borderPen(m_selectionBorderColor, 2);
     painter.setPen(borderPen);
     painter.setBrush(Qt::NoBrush);
     painter.drawRect(selectionRect.adjusted(1, 1, -1, -1)); // Slightly inset

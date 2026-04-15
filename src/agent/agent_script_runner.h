@@ -17,6 +17,7 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
 #include <QStringList>
 
 namespace core::scripting {
@@ -53,7 +54,9 @@ class AgentScriptRunner : public QObject {
   private:
     void cleanup();
 
-    ui::widgets::Q5250ScreenWidget *m_display;
+    // QPointer: the widget may be destroyed by the tab closing while a
+    // script has been queued but has not yet started (or between two runs).
+    QPointer<ui::widgets::Q5250ScreenWidget> m_display;
     core::scripting::ScriptExecutor *m_executor = nullptr;
     core::scripting::ScreenBufferAdapter *m_screenAdapter = nullptr;
     QStringList m_logMessages;

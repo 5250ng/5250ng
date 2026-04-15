@@ -165,14 +165,39 @@ void ThemePreviewWidget::paintEvent(QPaintEvent *event) {
             }
         }
 
-        // Draw selection highlight on "S1051PC3" (row 2, cols 23-30) to show selection colors
+        // Draw selection highlight on "S1051PC3" (row 2, cols 23-30) to show selection colors.
+        // Matches the real 5250 screen: translucent BG overlay, FG text override, themed border.
         {
+            const int selRow = 2;
+            const int selColStart = 23;
+            const int selColEnd = qMin(30, kPreviewCols - 1); // inclusive
             QColor selBg = m_theme.adjustColor(m_theme.selectionBackground.isValid()
                                ? m_theme.selectionBackground : QColor(255, 255, 0, 64));
-            for (int c = 23; c < 31 && c < kPreviewCols; ++c) {
-                QRect selRect(offsetX + c * cellW, offsetY + 2 * cellH, cellW, cellH);
+            QColor selFg = m_theme.adjustColor(m_theme.selectionForeground.isValid()
+                               ? m_theme.selectionForeground : QColor(255, 255, 255));
+            QColor selBorder = m_theme.adjustColor(m_theme.selectionBorder.isValid()
+                               ? m_theme.selectionBorder : QColor(255, 255, 0));
+
+            // Overlay fill + redraw text with selection FG (when FG is visible)
+            for (int c = selColStart; c <= selColEnd; ++c) {
+                QRect selRect(offsetX + c * cellW, offsetY + selRow * cellH, cellW, cellH);
                 op.fillRect(selRect, selBg);
+                if (selFg.alpha() > 0) {
+                    const PreviewCell &cell = m_previewScreen[selRow][c];
+                    op.setPen(selFg);
+                    op.drawText(selRect, Qt::AlignCenter, cell.ch);
+                }
             }
+
+            // Themed 2px border around the selection rectangle
+            QRect borderRect(offsetX + selColStart * cellW,
+                             offsetY + selRow * cellH,
+                             (selColEnd - selColStart + 1) * cellW,
+                             cellH);
+            QPen borderPen(selBorder, 2);
+            op.setPen(borderPen);
+            op.setBrush(Qt::NoBrush);
+            op.drawRect(borderRect.adjusted(1, 1, -1, -1));
         }
 
         // Draw cursor at the User input field position

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <5250script/screen_interface.h>
+#include <QPointer>
 
 namespace ui::widgets {
 class Q5250ScreenWidget;
@@ -27,6 +28,11 @@ namespace core::scripting {
 // Adapter that bridges ScreenInterface to Q5250ScreenWidget + ScreenBuffer.
 // Handles EBCDIC-to-Unicode conversion so the scripting library
 // does not depend on the terminal widget or EBCDIC utilities.
+//
+// The widget pointer is stored as a QPointer so that if the widget is
+// destroyed while this adapter is still live (e.g. an MCP-driven script
+// is running in a nested event loop when the user closes the tab), every
+// access safely returns a default instead of dereferencing dangling memory.
 class ScreenBufferAdapter : public ScreenInterface {
   public:
     explicit ScreenBufferAdapter(ui::widgets::Q5250ScreenWidget *widget);
@@ -41,7 +47,7 @@ class ScreenBufferAdapter : public ScreenInterface {
     bool messageWaiting() const override;
 
   private:
-    ui::widgets::Q5250ScreenWidget *m_widget;
+    QPointer<ui::widgets::Q5250ScreenWidget> m_widget;
 };
 
 } // namespace core::scripting

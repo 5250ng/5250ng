@@ -184,6 +184,7 @@ class Q5250ScreenWidget : public QWidget {
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
     QSize sizeHint() const override;
@@ -213,6 +214,7 @@ class Q5250ScreenWidget : public QWidget {
     void overrideCellWidth(qreal w);
     void overrideCellHeight(qreal h);
     QFont scaledFont() const { return m_font; }
+    QFont baseFont() const { return m_baseFont; }
   private:
     QPoint cellPosition(int row, int col) const;
     QRect cellRect(int row, int col) const;
@@ -264,6 +266,7 @@ class Q5250ScreenWidget : public QWidget {
     // Selection & indicator colors (from theme)
     QColor m_selectionBgColor = QColor(255, 255, 0, 64);
     QColor m_selectionFgColor = QColor(255, 255, 255);
+    QColor m_selectionBorderColor = QColor(255, 255, 0);
     QColor m_fieldIndicatorColor = QColor(0, 128, 255, 64);
 
     // Column separator (from theme)

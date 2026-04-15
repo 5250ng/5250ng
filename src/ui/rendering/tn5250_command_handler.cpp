@@ -64,6 +64,8 @@ void TN5250CommandHandler::connectDecoder(tn5250::client::DecoderAdapter *parser
             this, &TN5250CommandHandler::onClearScreenAlternateRequested);
     connect(parser, &tn5250::client::DecoderAdapter::clearFormatTableRequested,
             this, &TN5250CommandHandler::onClearFormatTableRequested);
+    connect(parser, &tn5250::client::DecoderAdapter::saveScreenRequested,
+            this, &TN5250CommandHandler::onSaveScreenRequested);
     connect(parser, &tn5250::client::DecoderAdapter::inviteReceived,
             this, &TN5250CommandHandler::onInviteReceived);
     connect(parser, &tn5250::client::DecoderAdapter::cancelInviteReceived,
@@ -434,12 +436,129 @@ void TN5250CommandHandler::onWriteErrorCode(const QByteArray &errorData) {
     logger::Logger::instance()->debug("CommandHandler: Write Error Code received");
 }
 
-void TN5250CommandHandler::onSaveScreenRequested(ui::widgets::ScreenBuffer::SavedState &savedScreen) {
+void TN5250CommandHandler::onSaveScreenRequested() {
     if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
         return;
     }
-    savedScreen = m_displayWidget->screenBuffer()->saveState();
-    logger::Logger::instance()->debug("CommandHandler: Screen saved");
+    if (!m_sendGDS) {
+        logger::Logger::instance()->warning(
+            "CommandHandler: Save Screen requested but no sendGDS callback set - keyboard will stay locked");
+        return;
+    }
+    // Per RFC 2877 / IBM 5250: the host's Save Screen operation requires the
+    // client to send back a data stream that, when replayed by the host as a
+    // Restore Screen payload, reproduces the current screen. Without this
+    // response the host never unlocks the keyboard.
+    QByteArray payload = buildSaveScreenResponse();
+    m_sendGDS(0x00, tn5250::protocol::GDS_OPCODE_SAVE_SCREEN, payload);
+    LOG_DEBUG(QString("CommandHandler: Save Screen response sent (%1 bytes)").arg(payload.size()));
+}
+
+QByteArray TN5250CommandHandler::buildSaveScreenResponse() {
+    QByteArray out;
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        return out;
+    }
+    using namespace tn5250::protocol;
+    auto *screen = m_displayWidget->screenBuffer();
+    const int rows = screen->rows();
+    const int cols = screen->cols();
+
+    // 1) Clear Unit (or Clear Unit Alternate for 27x132 mode).
+    out.append(static_cast<char>(ESC));
+    out.append(static_cast<char>((rows == 27 && cols == 132) ? CC_CLEAR_UNIT_ALTERNATE
+                                                             : CC_CLEAR_UNIT));
+
+    // 2) Clear format table — SF orders below will rebuild it.
+    out.append(static_cast<char>(ESC));
+    out.append(static_cast<char>(CC_CLEAR_FORMAT_TABLE));
+
+    // 3) Write To Display. CC1=0, CC2=0x08 unlocks the keyboard when the
+    //    host later replays this stream via Restore Screen.
+    out.append(static_cast<char>(ESC));
+    out.append(static_cast<char>(CC_WRITE_TO_DISPLAY));
+    out.append(static_cast<char>(0x00));  // CC1
+    out.append(static_cast<char>(0x08));  // CC2: unlock keyboard
+
+    // Track which cells belong to field attribute markers so we skip them
+    // when dumping cell content (they are recreated by the SF orders).
+    QVector<bool> isAttrMarker(rows * cols, false);
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            const auto &cell = screen->cell(r, c);
+            if (cell.attributes.nonDisplay && cell.attributes.protected_field) {
+                isAttrMarker[r * cols + c] = true;
+            }
+        }
+    }
+
+    // 4) Emit an SF order for every known field.
+    //    Attribute byte sits one cell before the field data (with wrap).
+    for (const auto &f : screen->fields()) {
+        int attrAddr = f.startRow * cols + f.startCol - 1;
+        if (attrAddr < 0) attrAddr = 0;
+        const int attrRow = attrAddr / cols;
+        const int attrCol = attrAddr % cols;
+
+        out.append(static_cast<char>(ORDER_SBA));
+        out.append(static_cast<char>(attrRow + 1));
+        out.append(static_cast<char>(attrCol + 1));
+
+        // Reconstruct a reasonable attribute byte from the stored cell.
+        // Field attribute bytes are 0x20-0x3F; low nibble carries display bits.
+        uint8_t attrByte = 0x20;
+        if (attrRow < rows && attrCol < cols) {
+            const auto &attrCell = screen->cell(attrRow, attrCol);
+            attrByte = 0x20 | (attrCell.attributes.color & 0x0F);
+        }
+
+        out.append(static_cast<char>(ORDER_SF));
+        out.append(static_cast<char>(f.ffw1));
+        out.append(static_cast<char>(f.ffw2));
+        out.append(static_cast<char>(attrByte));
+        out.append(static_cast<char>((f.length >> 8) & 0xFF));
+        out.append(static_cast<char>(f.length & 0xFF));
+    }
+
+    // 5) Dump visible cell content as runs of text, one SBA per run.
+    //    Skip attribute marker cells (already emitted by SF above).
+    for (int r = 0; r < rows; ++r) {
+        int c = 0;
+        while (c < cols) {
+            while (c < cols && isAttrMarker[r * cols + c]) {
+                c++;
+            }
+            if (c >= cols) break;
+
+            const int runStartCol = c;
+            QByteArray runData;
+            while (c < cols && !isAttrMarker[r * cols + c]) {
+                uint8_t ch = screen->cell(r, c).character;
+                // Any byte in 0x00-0x3F would be parsed as a display order by
+                // the decoder. Nulls and any stray control-range bytes are
+                // coerced to EBCDIC space so the round-trip stays well-formed.
+                if (ch < 0x40) ch = 0x40;
+                runData.append(static_cast<char>(ch));
+                c++;
+            }
+            if (!runData.isEmpty()) {
+                out.append(static_cast<char>(ORDER_SBA));
+                out.append(static_cast<char>(r + 1));
+                out.append(static_cast<char>(runStartCol + 1));
+                out.append(runData);
+            }
+        }
+    }
+
+    // 6) Insert Cursor at the current cursor position.
+    QPoint cur = screen->cursorPosition();
+    int curRow = qBound(0, cur.y(), rows - 1);
+    int curCol = qBound(0, cur.x(), cols - 1);
+    out.append(static_cast<char>(ORDER_IC));
+    out.append(static_cast<char>(curRow + 1));
+    out.append(static_cast<char>(curCol + 1));
+
+    return out;
 }
 
 void TN5250CommandHandler::onClearScreenAlternateRequested() {

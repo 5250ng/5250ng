@@ -234,13 +234,16 @@ ui::widgets::Q5250ScreenWidget *McpToolHandler::resolveSession(
         errorResult = makeResult("Missing required parameter: session_id", true);
         return nullptr;
     }
-    auto *info = m_registry->session(sessionId);
-    if (!info || !info->displayWidget) {
+    // Returns a snapshot by value: the QPointer inside tracks widget
+    // destruction, and holding a copy means a later registry mutation
+    // cannot invalidate what we read here.
+    McpSessionInfo info = m_registry->session(sessionId);
+    if (info.sessionId.isEmpty() || !info.displayWidget) {
         MCP_ERROR(QString("Session not found: %1").arg(sessionId));
         errorResult = makeResult("Session not found or has been closed: " + sessionId, true);
         return nullptr;
     }
-    return info->displayWidget;
+    return info.displayWidget;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +308,21 @@ QJsonObject McpToolHandler::handleCloseSession(const QJsonObject &args) {
 
     if (!m_registry->hasSession(sessionId))
         return makeResult("Session not found: " + sessionId, true);
+
+    // Refuse to close a session whose widget is currently being used by
+    // another tool call inside a nested event loop (e.g. run_script,
+    // create_session).  Tearing the tab down while the script is stepping
+    // through the widget would destroy state that the nested loop still
+    // references, leading to use-after-free even with our QPointer guards
+    // (ScriptExecutor can call back into the adapter between the destruction
+    // and the nested loop's next iteration).  The client should wait for the
+    // in-flight call to return, then retry close_session.
+    if (m_busySessions.contains(sessionId)) {
+        MCP_ERROR(QString("Refusing to close busy session: %1").arg(sessionId));
+        return makeResult(
+            "Session is busy (a script or command is in progress); "
+            "wait for it to finish, then retry.", true);
+    }
 
     MCP_LOG(QString("Closing session: %1").arg(sessionId));
     // Remove from registry first to prevent dangling widget pointers.

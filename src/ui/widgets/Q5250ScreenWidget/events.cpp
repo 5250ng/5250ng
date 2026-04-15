@@ -29,6 +29,7 @@
 #include <QPainter>
 #include <QMenu>
 #include <QResizeEvent>
+#include <QWheelEvent>
 
 namespace ui::widgets {
 
@@ -350,6 +351,19 @@ void Q5250ScreenWidget::mouseReleaseEvent(QMouseEvent *event) {
         update(); // Final repaint (either cursor moved or selection finalized)
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+void Q5250ScreenWidget::wheelEvent(QWheelEvent *event) {
+    // Mouse scroll up/down → PageUp/PageDown (RollUp/RollDown) for AS/400 menu scrolling
+    QPoint delta = event->angleDelta();
+    if (delta.y() != 0) {
+        int key = (delta.y() > 0) ? Qt::Key_PageUp : Qt::Key_PageDown;
+        QKeyEvent synth(QEvent::KeyPress, key, Qt::NoModifier);
+        keyPressEvent(&synth);
+        event->accept();
+        return;
+    }
+    QWidget::wheelEvent(event);
 }
 
 void Q5250ScreenWidget::focusInEvent(QFocusEvent *event) {

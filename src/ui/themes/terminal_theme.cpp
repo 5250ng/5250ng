@@ -238,6 +238,7 @@ QJsonObject TerminalTheme::toJson() const {
     QJsonObject selection;
     selection["background"]     = colorToHex(selectionBackground);
     selection["foreground"]     = colorToHex(selectionForeground);
+    selection["border"]         = colorToHex(selectionBorder);
     selection["fieldIndicator"] = colorToHex(fieldIndicatorColor);
     json["selection"] = selection;
 
@@ -357,6 +358,7 @@ TerminalTheme TerminalTheme::fromJson(const QJsonObject &json) {
         QJsonObject sel = json["selection"].toObject();
         t.selectionBackground = colorFromHex(sel["background"].toString(), QColor(255, 255, 0, 64));
         t.selectionForeground = colorFromHex(sel["foreground"].toString(), QColor(255, 255, 255));
+        t.selectionBorder     = colorFromHex(sel["border"].toString(), QColor(255, 255, 0));
         t.fieldIndicatorColor = colorFromHex(sel["fieldIndicator"].toString(), QColor(0, 128, 255, 64));
     }
 
@@ -484,6 +486,7 @@ TerminalTheme TerminalTheme::resolved(
 
     result.selectionBackground = selectionBackground;
     result.selectionForeground = selectionForeground;
+    result.selectionBorder     = selectionBorder;
     result.fieldIndicatorColor = fieldIndicatorColor;
 
     result.columnSeparatorEnabled = columnSeparatorEnabled;
