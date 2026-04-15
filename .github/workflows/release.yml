@@ -55,7 +55,7 @@ jobs:
 
       - name: Configure CMake (Linux)
         if: matrix.os == 'linux'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
 
       # ── macOS ──
       - name: Install Qt (macOS)
@@ -95,6 +95,7 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF \
             -DCMAKE_OSX_ARCHITECTURES=${{ matrix.macos_cmake_arch }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR"
 
@@ -119,11 +120,12 @@ jobs:
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=OFF
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       # ── Build (all platforms) ──
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --target 5250ng
 
       # ── Package ──
       - name: Package (Linux)
