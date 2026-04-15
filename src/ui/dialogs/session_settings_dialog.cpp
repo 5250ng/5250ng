@@ -376,9 +376,14 @@ QWidget *SessionSettingsDialog::buildSelectionSection() {
     grid->addWidget(m_selFgSwatch, 0, 4);
     connect(m_selFgSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
 
-    grid->addWidget(new QLabel("Field Indicator:"), 1, 0);
+    grid->addWidget(new QLabel("Selection Border:"), 1, 0);
+    m_selBorderSwatch = createColorSwatch("selBorder", QColor(255, 255, 0));
+    grid->addWidget(m_selBorderSwatch, 1, 1);
+    connect(m_selBorderSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
+
+    grid->addWidget(new QLabel("Field Indicator:"), 1, 3);
     m_fieldIndicatorSwatch = createColorSwatch("fieldInd", QColor(0, 128, 255, 64));
-    grid->addWidget(m_fieldIndicatorSwatch, 1, 1);
+    grid->addWidget(m_fieldIndicatorSwatch, 1, 4);
     connect(m_fieldIndicatorSwatch, &QPushButton::clicked, this, &SessionSettingsDialog::onColorSwatchClicked);
 
     grid->setColumnMinimumWidth(2, 20);
@@ -752,6 +757,7 @@ void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme
     // Selection
     setSwatchColor(m_selBgSwatch, theme.selectionBackground);
     setSwatchColor(m_selFgSwatch, theme.selectionForeground);
+    setSwatchColor(m_selBorderSwatch, theme.selectionBorder);
     setSwatchColor(m_fieldIndicatorSwatch, theme.fieldIndicatorColor);
 
     // Column separator
@@ -851,6 +857,7 @@ ui::themes::TerminalTheme SessionSettingsDialog::collectThemeFromUI() const {
     // Selection
     t.selectionBackground = swatchColor(m_selBgSwatch);
     t.selectionForeground = swatchColor(m_selFgSwatch);
+    t.selectionBorder     = swatchColor(m_selBorderSwatch);
     t.fieldIndicatorColor = swatchColor(m_fieldIndicatorSwatch);
 
     // Column separator

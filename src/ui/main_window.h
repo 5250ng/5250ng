@@ -145,7 +145,6 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         QLabel *macroLabel;        // Macro recording/playback indicator
         QWidget *statusBar;
         session::SessionConfig config;
-        ui::widgets::ScreenBuffer::SavedState savedScreen;
         ui::rendering::TN5250CommandHandler *commandHandler;
         ui::widgets::QCRTOverlayWidget *crtOverlay;
         // Background image (painted in container's Paint event via event filter)

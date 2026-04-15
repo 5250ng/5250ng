@@ -63,6 +63,7 @@ void SettingsDialog::setupUI() {
     QTreeWidgetItem *themesCategory = new QTreeWidgetItem(QStringList() << "Themes");
     m_categoryTree->addTopLevelItem(themesCategory);
     QTreeWidgetItem *themeItem = new QTreeWidgetItem(themesCategory, QStringList() << "Application Theme");
+    new QTreeWidgetItem(themesCategory, QStringList() << "5250 Theme");
     themesCategory->setExpanded(true);
     // Scripts category: General + Recording
     QTreeWidgetItem *scriptsCategory = new QTreeWidgetItem(QStringList() << "Scripts");

@@ -61,6 +61,7 @@ struct TerminalTheme {
     // Selection & highlight
     QColor selectionBackground = QColor(255, 255, 0, 64);
     QColor selectionForeground = QColor(255, 255, 255);
+    QColor selectionBorder     = QColor(255, 255, 0);
     QColor fieldIndicatorColor = QColor(0, 128, 255, 64);
 
     // Column separator

@@ -151,6 +151,7 @@ class SessionSettingsDialog : public QDialog {
     // Selection & indicators
     QPushButton *m_selBgSwatch;
     QPushButton *m_selFgSwatch;
+    QPushButton *m_selBorderSwatch;
     QPushButton *m_fieldIndicatorSwatch;
 
     // HRule

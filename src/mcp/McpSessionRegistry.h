@@ -19,6 +19,7 @@
 #include <QHash>
 #include <QList>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 namespace ui::widgets { class Q5250ScreenWidget; }
@@ -30,7 +31,10 @@ struct McpSessionInfo {
     QString hostname;
     quint16 port = 23;
     bool useTLS = false;
-    ui::widgets::Q5250ScreenWidget *displayWidget = nullptr; // non-owning
+    // QPointer: auto-nulls when the widget is destroyed (e.g. tab closed while
+    // an MCP tool call is in flight), so lookups after destruction return
+    // cleanly instead of dereferencing a dangling pointer.
+    QPointer<ui::widgets::Q5250ScreenWidget> displayWidget;
     bool connected = false;
 };
 
@@ -46,8 +50,11 @@ class McpSessionRegistry : public QObject {
     /// Remove a session by ID. Returns false if not found.
     bool removeSession(const QString &sessionId);
 
-    /// Look up a session. Returns nullptr if not found.
-    McpSessionInfo *session(const QString &sessionId);
+    /// Look up a session. Returns a snapshot copy; if the session is not
+    /// found, the returned info has an empty sessionId. Returning a value
+    /// (rather than a pointer into the internal QHash) avoids a footgun where
+    /// a later mutation of the hash could invalidate a stored pointer.
+    McpSessionInfo session(const QString &sessionId) const;
 
     /// Return all registered sessions.
     QList<McpSessionInfo> allSessions() const;

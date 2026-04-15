@@ -855,13 +855,6 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
             }
         });
     session->commandHandler->connectDecoder(session->parser);
-    // Wire save screen - per-session
-    connect(session->parser, &tn5250::client::DecoderAdapter::saveScreenRequested, this,
-        [session]() {
-            if (session->displayWidget && session->displayWidget->screenBuffer()) {
-                session->savedScreen = session->displayWidget->screenBuffer()->saveState();
-            }
-        });
 
     // Notify MCP server that the session tab is ready
     if (session->mcpControlled && m_mcpServer) {
@@ -985,12 +978,17 @@ void MainWindow::updateCursorCoordinatesFont() {
         return;
     }
 
-    // Use the scaled font that the display widget computes for rendering.
-    // Only update the font — do NOT change size constraints here, as that
-    // would alter the footer layout height and trigger another resize of the
-    // terminal view, causing an infinite resize oscillation loop.
-    QFont displayFont = m_displayWidget->scaledFont();
-    m_cursorCoordinates->setFont(displayFont);
+    // Use the BASE (unscaled) theme font rather than the scaled rendering font.
+    // A QLabel's sizeHint depends on its font metrics, so using scaledFont() makes
+    // the footer's sizeHint grow/shrink as the terminal resizes — which in turn
+    // resizes the terminal view, recomputes the cell size, and re-emits
+    // cellSizeChanged. That positive-feedback loop produced the ±3px resize
+    // oscillation observed in fullscreen. The base font is stable across resizes,
+    // so the footer layout no longer oscillates.
+    QFont displayFont = m_displayWidget->baseFont();
+    if (m_cursorCoordinates->font() != displayFont) {
+        m_cursorCoordinates->setFont(displayFont);
+    }
 }
 
 /**

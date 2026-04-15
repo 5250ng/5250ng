@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "McpSessionRegistry.h"
+#include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 
 namespace mcp {
 
@@ -32,10 +33,10 @@ bool McpSessionRegistry::removeSession(const QString &sessionId) {
     return false;
 }
 
-McpSessionInfo *McpSessionRegistry::session(const QString &sessionId) {
-    auto it = m_sessions.find(sessionId);
-    if (it == m_sessions.end()) return nullptr;
-    return &it.value();
+McpSessionInfo McpSessionRegistry::session(const QString &sessionId) const {
+    auto it = m_sessions.constFind(sessionId);
+    if (it == m_sessions.constEnd()) return {};
+    return it.value();
 }
 
 QList<McpSessionInfo> McpSessionRegistry::allSessions() const {

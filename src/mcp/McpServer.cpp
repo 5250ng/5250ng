@@ -120,7 +120,20 @@ void McpServer::onNewConnection() {
     while (QTcpSocket *socket = m_server->nextPendingConnection()) {
         MCP_LOG(QString("New connection from %1:%2")
                     .arg(socket->peerAddress().toString()).arg(socket->peerPort()));
-        connect(socket, &QTcpSocket::readyRead, this, &McpServer::onClientData);
+        // QueuedConnection is CRITICAL here.  Tool handlers (run_script,
+        // create_session) enter a nested QEventLoop.  During that nested
+        // loop, the client may disconnect and Qt will process the
+        // resulting DeferredDelete event — destroying the socket while
+        // its own readyRead signal emission is still active on the outer
+        // call stack.  A direct (auto) connection would then crash in
+        // Qt's signal dispatcher when the nested loop returns and the
+        // dispatcher tries to touch the freed sender metadata.  A queued
+        // connection decouples our slot from the emission stack, so the
+        // socket can be safely destroyed mid-tool-call.  This also
+        // prevents a second request arriving on a keep-alive connection
+        // from re-entering onClientData and corrupting the shared parser.
+        connect(socket, &QTcpSocket::readyRead, this, &McpServer::onClientData,
+                Qt::QueuedConnection);
         connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
     }
 }

@@ -235,6 +235,7 @@ void Q5250ScreenWidget::applyTerminalTheme(const ui::themes::TerminalTheme &them
     // Apply selection & indicator colors (with brightness/saturation adjustment)
     m_selectionBgColor = theme.adjustColor(theme.selectionBackground);
     m_selectionFgColor = theme.adjustColor(theme.selectionForeground);
+    m_selectionBorderColor = theme.adjustColor(theme.selectionBorder);
     m_fieldIndicatorColor = theme.adjustColor(theme.fieldIndicatorColor);
 
     // Apply column separator settings
@@ -419,9 +420,15 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
         painter.fillRect(cellRect, m_fieldIndicatorColor);
     }
 
-    // Selection overlay
-    if (hasSelection() && isCellSelected(row, col)) {
+    // Selection overlay: fill with selection background and override text color
+    const bool cellSelected = hasSelection() && isCellSelected(row, col);
+    if (cellSelected) {
         painter.fillRect(cellRect, m_selectionBgColor);
+        // Only override the text color when the selection FG is fully opaque;
+        // a transparent selection FG (alpha 0) means "keep the original color".
+        if (m_selectionFgColor.alpha() > 0) {
+            fgColor = m_selectionFgColor;
+        }
     }
 
     // Non-display fields: draw background only, no text (e.g. password fields)

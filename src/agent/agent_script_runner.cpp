@@ -39,6 +39,14 @@ void AgentScriptRunner::runScript(const QString &scriptText) {
         return;
     }
 
+    // If the target widget was destroyed between construction and this call
+    // (e.g. the tab was closed), abort cleanly rather than dereferencing a
+    // dead pointer when we wire up signals below.
+    if (!m_display || !m_display->screenBuffer()) {
+        emit finished(false, "Terminal session is unavailable.");
+        return;
+    }
+
     // Parse
     core::scripting::ScriptParser parser;
     auto parseResult = parser.parse(scriptText);
