@@ -413,7 +413,15 @@ void TN5250Client::sendData(const QByteArray &data) {
     // Then IAC-escape the entire record and append IAC EOR.
     using namespace tn5250::protocol;
     QByteArray record;
-    int recLen = GDS_HEADER_SIZE + data.size();
+    const qint64 recLen64 = static_cast<qint64>(GDS_HEADER_SIZE) + data.size();
+    if (recLen64 > 0xFFFF) {
+        logger::Logger::instance()->error(
+            QString("[TN5250->Client]: sendData: GDS record length %1 exceeds "
+                    "16-bit maximum (65535); refusing to send truncated record")
+                .arg(recLen64));
+        return;
+    }
+    const int recLen = static_cast<int>(recLen64);
 
     // 2-byte big-endian record length
     record.append(static_cast<char>((recLen >> 8) & 0xFF));
@@ -465,7 +473,15 @@ void TN5250Client::sendRawData(const QByteArray &data) {
 void TN5250Client::sendGDS(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload) {
     using namespace tn5250::protocol;
     QByteArray record;
-    int recLen = GDS_HEADER_SIZE + payload.size();
+    const qint64 recLen64 = static_cast<qint64>(GDS_HEADER_SIZE) + payload.size();
+    if (recLen64 > 0xFFFF) {
+        logger::Logger::instance()->error(
+            QString("[TN5250->Client]: sendGDS: GDS record length %1 exceeds "
+                    "16-bit maximum (65535); refusing to send truncated record")
+                .arg(recLen64));
+        return;
+    }
+    const int recLen = static_cast<int>(recLen64);
 
     // 2-byte big-endian record length
     record.append(static_cast<char>((recLen >> 8) & 0xFF));
