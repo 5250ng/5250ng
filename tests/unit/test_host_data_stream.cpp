@@ -159,6 +159,32 @@ class TestHostDataStream : public QObject {
         QVERIFY(notFound.isEmpty());
     }
 
+    void testFindCodePointRejectsHighBitLength() {
+        // A malicious LLCP length field with the high bit set would cast
+        // to a negative int before the pre-fix bounds check, bypass it,
+        // and cause parsing to wrap the offset via signed overflow.
+        // The parser must treat such a length as out of range and stop.
+        QByteArray data;
+        HostDataStream::writeU32(data, 0x80000000u); // LL with high bit set
+        HostDataStream::writeU16(data, 0x1101);      // CP
+        data.append(QByteArray(16, '\0'));           // some filler bytes
+
+        QByteArray found = HostDataStream::findCodePoint(data, 0, 0x1101);
+        QVERIFY(found.isEmpty());
+    }
+
+    void testFindCodePointRejectsLengthBeyondBuffer() {
+        // Length that is positive as signed int but exceeds the remaining
+        // buffer. The parser must stop without reading past the end.
+        QByteArray data;
+        HostDataStream::writeU32(data, 0x00010000u); // LL = 65536
+        HostDataStream::writeU16(data, 0x1101);      // CP
+        data.append(QByteArray(16, '\0'));
+
+        QByteArray found = HostDataStream::findCodePoint(data, 0, 0x1101);
+        QVERIFY(found.isEmpty());
+    }
+
     void testUtf16BERoundTrip() {
         QString original = QStringLiteral("/home/MYUSER/test.txt");
         QByteArray encoded = HostDataStream::toUtf16BE(original);
