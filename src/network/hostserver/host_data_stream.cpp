@@ -118,12 +118,13 @@ QByteArray HostDataStream::buildLLCP(uint16_t cp, const QByteArray &data) {
 }
 
 QByteArray HostDataStream::findCodePoint(const QByteArray &data, int offset, uint16_t cp) {
+    if (offset < 0) return {};
     while (offset + 6 <= data.size()) {
         uint32_t ll = readU32(data, offset);
-        if (ll < 6 || offset + static_cast<int>(ll) > data.size()) break;
+        if (ll < 6 || static_cast<qint64>(ll) > data.size() - offset) break;
         uint16_t thisCp = readU16(data, offset + 4);
         if (thisCp == cp) {
-            return data.mid(offset + 6, static_cast<int>(ll) - 6);
+            return data.mid(offset + 6, static_cast<int>(ll - 6));
         }
         offset += static_cast<int>(ll);
     }

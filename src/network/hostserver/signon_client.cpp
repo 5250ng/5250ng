@@ -192,11 +192,11 @@ void SignonClient::handleExchangeAttributesReply(const QByteArray &packet) {
 
     while (offset + 6 <= packet.size()) {
         uint32_t ll = HostDataStream::readU32(packet, offset);
-        if (ll < 6 || offset + static_cast<int>(ll) > packet.size()) break;
+        if (ll < 6 || static_cast<qint64>(ll) > packet.size() - offset) break;
 
         uint16_t cp = HostDataStream::readU16(packet, offset + 4);
         int dataOffset = offset + 6;
-        int dataLen = static_cast<int>(ll) - 6;
+        int dataLen = static_cast<int>(ll - 6);
 
         switch (cp) {
         case codepoint::CLIENT_VERSION:
@@ -343,11 +343,11 @@ void SignonClient::handleSignonReply(const QByteArray &packet) {
     int offset = 24;
     while (offset + 6 <= packet.size()) {
         uint32_t ll = HostDataStream::readU32(packet, offset);
-        if (ll < 6 || offset + static_cast<int>(ll) > packet.size()) break;
+        if (ll < 6 || static_cast<qint64>(ll) > packet.size() - offset) break;
 
         uint16_t cp = HostDataStream::readU16(packet, offset + 4);
         int dataOffset = offset + 6;
-        int dataLen = static_cast<int>(ll) - 6;
+        int dataLen = static_cast<int>(ll - 6);
 
         switch (cp) {
         case codepoint::SERVER_CCSID:
