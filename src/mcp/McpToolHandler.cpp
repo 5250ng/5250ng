@@ -601,8 +601,11 @@ QJsonObject McpToolHandler::handleReadFile(const QJsonObject &args) {
     if (path.isEmpty())
         return makeResult("No file path provided.", true);
 
+    // Open without QIODevice::Text so bytes are returned verbatim; the Text
+    // flag translates CRLF/CR to LF on read, which corrupts binary files and
+    // makes a read/write round-trip lossy.
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if (!file.open(QIODevice::ReadOnly))
         return makeResult("Failed to read file: " + file.errorString(), true);
 
     QString content = QString::fromUtf8(file.readAll());
@@ -619,8 +622,11 @@ QJsonObject McpToolHandler::handleWriteFile(const QJsonObject &args) {
     QFileInfo fi(path);
     QDir().mkpath(fi.absolutePath());
 
+    // Open without QIODevice::Text so the payload is written verbatim;
+    // otherwise Qt injects platform-specific line-ending translations on
+    // Windows and the bytes on disk differ from what the caller supplied.
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return makeResult("Failed to write file: " + file.errorString(), true);
 
     const QByteArray payload = content.toUtf8();
