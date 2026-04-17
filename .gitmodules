@@ -1,6 +1,6 @@
 [submodule "protocol-tn5250"]
 	path = src/network/tn5250
-	url = git@github.com:5250ng/protocol-tn5250.git
+	url = https://github.com/5250ng/protocol-tn5250.git
 [submodule "libs/5250script"]
 	path = libs/5250script
-	url = git@github.com:5250ng/5250script.git
+	url = https://github.com/5250ng/5250script.git
