@@ -87,6 +87,12 @@ void ConnectDialog::setupUI() {
     m_tlsCheck = new QCheckBox("Use TLS/SSL", this);
     formLayout->addRow("", m_tlsCheck);
 
+    m_allowInvalidCertsCheck = new QCheckBox("Allow invalid TLS certificates (insecure)", this);
+    m_allowInvalidCertsCheck->setToolTip(
+        "When enabled, self-signed, expired, or hostname-mismatched TLS "
+        "certificates are accepted. Leave off unless you trust the host.");
+    formLayout->addRow("", m_allowInvalidCertsCheck);
+
     m_usernameEdit = new QLineEdit(this);
     m_usernameEdit->setPlaceholderText("(optional - for encrypted sign-on)");
     formLayout->addRow("Username:", m_usernameEdit);
@@ -233,6 +239,7 @@ void ConnectDialog::updateUI() {
     m_hostnameEdit->setText(m_currentConfig.hostname());
     m_portSpin->setValue(m_currentConfig.port());
     m_tlsCheck->setChecked(m_currentConfig.useTLS());
+    m_allowInvalidCertsCheck->setChecked(m_currentConfig.allowInvalidCertificates());
     m_usernameEdit->setText(m_currentConfig.username());
     m_passwordEdit->setText(m_currentConfig.password());
     // Select device type in combo if supported
@@ -294,6 +301,7 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setHostname(m_hostnameEdit->text());
     config.setPort(static_cast<quint16>(m_portSpin->value()));
     config.setUseTLS(m_tlsCheck->isChecked());
+    config.setAllowInvalidCertificates(m_allowInvalidCertsCheck->isChecked());
     if (m_deviceCombo->currentIndex() == m_customDeviceIndex) {
         config.setDeviceType(m_customDeviceEdit->text());
     } else {

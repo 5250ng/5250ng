@@ -77,6 +77,12 @@ class TN5250Client : public QObject {
     void setCodePage(core::CodePage::ID cp) { m_codePage = cp; }
     core::CodePage::ID codePage() const { return m_codePage; }
 
+    // When true, SSL/TLS certificate validation errors (self-signed, expired,
+    // hostname mismatch, untrusted chain) are ignored for this session. When
+    // false (default), any SSL error aborts the connection before data flows.
+    void setAllowInvalidCertificates(bool allow) { m_allowInvalidCertificates = allow; }
+    bool allowInvalidCertificates() const { return m_allowInvalidCertificates; }
+
   signals:
     void connected();
     void disconnected();
@@ -114,6 +120,7 @@ class TN5250Client : public QObject {
     void startTLS();
     void handleStartTLS();
 
+    bool m_allowInvalidCertificates = false;
     QAbstractSocket *m_socket;
 #ifdef HAVE_QT6_SSL
     QSslSocket *m_sslSocket;
