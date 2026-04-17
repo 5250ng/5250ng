@@ -623,8 +623,23 @@ QJsonObject McpToolHandler::handleWriteFile(const QJsonObject &args) {
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return makeResult("Failed to write file: " + file.errorString(), true);
 
-    file.write(content.toUtf8());
+    const QByteArray payload = content.toUtf8();
+    const qint64 written = file.write(payload);
+    if (written != payload.size()) {
+        const QString errText = file.errorString();
+        file.close();
+        return makeResult(QString("Failed to write file (wrote %1 of %2 bytes): %3")
+                              .arg(written).arg(payload.size()).arg(errText),
+                          true);
+    }
+    if (!file.flush()) {
+        const QString errText = file.errorString();
+        file.close();
+        return makeResult("Failed to flush file: " + errText, true);
+    }
     file.close();
+    if (file.error() != QFileDevice::NoError)
+        return makeResult("Failed to close file: " + file.errorString(), true);
     return makeResult("File written successfully: " + path);
 }
 
