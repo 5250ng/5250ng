@@ -41,7 +41,15 @@ struct HttpResponse {
 /// Minimal HTTP/1.1 request parser for MCP transport.
 class McpHttpParser {
   public:
+    /// Maximum bytes accepted before `\r\n\r\n` is seen.
+    static constexpr int kMaxHeaderSize = 64 * 1024;
+    /// Maximum body bytes accepted, both by Content-Length and by actual
+    /// buffered payload.
+    static constexpr int kMaxBodySize = 16 * 1024 * 1024;
+
     /// Feed raw TCP data. Returns true when a complete request is available.
+    /// Returns false if the request is incomplete or if the parser has
+    /// entered an error state; check hasError() to distinguish.
     bool feed(const QByteArray &data);
 
     /// Returns the parsed request. Only valid after feed() returns true.
@@ -50,12 +58,22 @@ class McpHttpParser {
     /// Reset for the next request.
     void reset();
 
+    /// True once the parser has refused the stream (oversized or malformed).
+    /// After an error the parser will not accept further data; the caller
+    /// should close the connection.
+    bool hasError() const { return m_error; }
+
+    /// Human-readable reason for the current error, or empty if none.
+    QString errorMessage() const { return m_errorMessage; }
+
   private:
     QByteArray m_buffer;
     HttpRequest m_request;
     bool m_headersParsed = false;
     int m_contentLength = 0;
     int m_bodyStart = -1;
+    bool m_error = false;
+    QString m_errorMessage;
 };
 
 } // namespace mcp

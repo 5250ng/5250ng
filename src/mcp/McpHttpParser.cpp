@@ -19,11 +19,24 @@
 namespace mcp {
 
 bool McpHttpParser::feed(const QByteArray &data) {
+    if (m_error) return false;
     m_buffer.append(data);
 
     if (!m_headersParsed) {
         int headerEnd = m_buffer.indexOf("\r\n\r\n");
-        if (headerEnd < 0) return false;
+        if (headerEnd < 0) {
+            if (m_buffer.size() > kMaxHeaderSize) {
+                m_error = true;
+                m_errorMessage = QStringLiteral("Request header exceeds maximum size");
+            }
+            return false;
+        }
+
+        if (headerEnd > kMaxHeaderSize) {
+            m_error = true;
+            m_errorMessage = QStringLiteral("Request header exceeds maximum size");
+            return false;
+        }
 
         m_bodyStart = headerEnd + 4;
 
@@ -48,13 +61,25 @@ bool McpHttpParser::feed(const QByteArray &data) {
             }
         }
 
-        m_contentLength = m_request.headers.value("content-length", "0").toInt();
+        bool lengthOk = false;
+        const QString lengthHeader = m_request.headers.value("content-length", "0");
+        m_contentLength = lengthHeader.toInt(&lengthOk);
+        if (!lengthOk || m_contentLength < 0 || m_contentLength > kMaxBodySize) {
+            m_error = true;
+            m_errorMessage = QStringLiteral("Invalid or oversized Content-Length");
+            return false;
+        }
         m_headersParsed = true;
     }
 
     // Check if we have the full body
     if (m_headersParsed) {
         int available = m_buffer.size() - m_bodyStart;
+        if (available > kMaxBodySize) {
+            m_error = true;
+            m_errorMessage = QStringLiteral("Request body exceeds maximum size");
+            return false;
+        }
         if (available >= m_contentLength) {
             m_request.body = m_buffer.mid(m_bodyStart, m_contentLength);
             return true;
@@ -70,6 +95,8 @@ void McpHttpParser::reset() {
     m_headersParsed = false;
     m_contentLength = 0;
     m_bodyStart = -1;
+    m_error = false;
+    m_errorMessage.clear();
 }
 
 QByteArray HttpResponse::toBytes() const {
