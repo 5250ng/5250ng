@@ -406,6 +406,15 @@ if(BUILD_TESTS)
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
     add_tn5250_test(test_password_encrypt tests/unit/test_password_encrypt.cpp)
 
+    # MCP transport tests
+    # McpHttpParser lives in the main application target (not tn5250_core),
+    # so compile it into the test binary directly.
+    add_executable(test_mcp_http_parser
+        tests/unit/test_mcp_http_parser.cpp
+        src/mcp/McpHttpParser.cpp)
+    target_link_libraries(test_mcp_http_parser PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_mcp_http_parser COMMAND test_mcp_http_parser)
+
     # Scripting tests
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
     add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)

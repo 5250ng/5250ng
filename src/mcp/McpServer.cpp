@@ -162,6 +162,18 @@ void McpServer::onClientData() {
         // disconnected.  Only reset the parser if the socket is still alive.
         if (!socket.isNull())
             httpParser->reset();
+    } else if (httpParser->hasError()) {
+        MCP_ERROR(QString("HTTP parse error: %1").arg(httpParser->errorMessage()));
+        HttpResponse resp;
+        resp.statusCode = 413;
+        resp.statusText = QStringLiteral("Payload Too Large");
+        resp.headers["Content-Type"] = "application/json";
+        QJsonObject err;
+        err["error"] = httpParser->errorMessage();
+        resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
+        socket->write(resp.toBytes());
+        socket->flush();
+        socket->disconnectFromHost();
     }
 }
 
