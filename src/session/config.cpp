@@ -81,14 +81,41 @@ QJsonObject SessionConfig::toJson() const {
 }
 
 bool SessionConfig::fromJson(const QJsonObject &json) {
+    // Validate numeric fields up front so the object is not mutated into a
+    // half-populated state when JSON carries out-of-range values.
+    const bool hasPort = json.contains("port") && json["port"].isDouble();
+    const bool hasRows = json.contains("screenRows") && json["screenRows"].isDouble();
+    const bool hasCols = json.contains("screenCols") && json["screenCols"].isDouble();
+    const bool hasCp = json.contains("codePage") && json["codePage"].isDouble();
+    int port = m_port;
+    int rows = m_screenRows;
+    int cols = m_screenCols;
+    int cp = static_cast<int>(m_codePage);
+    if (hasPort) {
+        port = json["port"].toInt();
+        if (port < 1 || port > 65535) return false;
+    }
+    if (hasRows) {
+        rows = json["screenRows"].toInt();
+        if (rows < 1 || rows > 132) return false;
+    }
+    if (hasCols) {
+        cols = json["screenCols"].toInt();
+        if (cols < 1 || cols > 200) return false;
+    }
+    if (hasCp) {
+        cp = json["codePage"].toInt();
+        if (!core::CodePage::isKnownId(cp)) return false;
+    }
+
     if (json.contains("name") && json["name"].isString()) {
         m_name = json["name"].toString();
     }
     if (json.contains("hostname") && json["hostname"].isString()) {
         m_hostname = json["hostname"].toString();
     }
-    if (json.contains("port") && json["port"].isDouble()) {
-        m_port = static_cast<quint16>(json["port"].toInt());
+    if (hasPort) {
+        m_port = static_cast<quint16>(port);
     }
     if (json.contains("useTLS") && json["useTLS"].isBool()) {
         m_useTLS = json["useTLS"].toBool();
@@ -109,14 +136,14 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
         // New format: deviceName is the workstation identifier
         m_deviceName = json["deviceName"].toString();
     }
-    if (json.contains("screenRows") && json["screenRows"].isDouble()) {
-        m_screenRows = json["screenRows"].toInt();
+    if (hasRows) {
+        m_screenRows = rows;
     }
-    if (json.contains("screenCols") && json["screenCols"].isDouble()) {
-        m_screenCols = json["screenCols"].toInt();
+    if (hasCols) {
+        m_screenCols = cols;
     }
-    if (json.contains("codePage") && json["codePage"].isDouble()) {
-        m_codePage = static_cast<core::CodePage::ID>(json["codePage"].toInt());
+    if (hasCp) {
+        m_codePage = static_cast<core::CodePage::ID>(cp);
     }
     if (json.contains("terminalTheme") && json["terminalTheme"].isString()) {
         m_terminalThemeId = json["terminalTheme"].toString();

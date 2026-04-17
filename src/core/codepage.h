@@ -63,6 +63,8 @@ class CodePage {
     // Get list of supported code pages
     static QList<ID> supportedCodePages();
     static QString codepageName(ID id);
+    // Returns true if the integer matches one of the supported code page IDs.
+    static bool isKnownId(int id);
 
   private:
     ID m_id;
