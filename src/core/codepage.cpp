@@ -75,6 +75,13 @@ QList<CodePage::ID> CodePage::supportedCodePages() {
     };
 }
 
+bool CodePage::isKnownId(int id) {
+    for (ID known : supportedCodePages()) {
+        if (static_cast<int>(known) == id) return true;
+    }
+    return false;
+}
+
 QChar CodePage::toUnicode(uint8_t ebcdic) const {
     uint16_t u = m_toUnicode[ebcdic];
     if (u == 0 && ebcdic != 0) return QChar(0xFFFD); // replacement char

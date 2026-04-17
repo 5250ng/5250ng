@@ -31,6 +31,7 @@ class TestSessionConfig : public QObject {
     void testValidation();
     void testSerialization();
     void testDeserialization();
+    void testDeserializationRejectsOutOfRange();
 
   private:
     SessionConfig *m_config;
@@ -146,6 +147,84 @@ void TestSessionConfig::testDeserialization() {
     QCOMPARE(loaded.deviceName(), QString("MYTERM01"));
     QCOMPARE(loaded.screenRows(), 27);
     QCOMPARE(loaded.screenCols(), 132);
+}
+
+void TestSessionConfig::testDeserializationRejectsOutOfRange() {
+    const auto makeBase = []() {
+        QJsonObject base;
+        base["name"] = "X";
+        base["hostname"] = "h";
+        base["port"] = 23;
+        base["useTLS"] = false;
+        base["deviceType"] = "IBM-3179-2";
+        base["deviceName"] = "T";
+        base["screenRows"] = 24;
+        base["screenCols"] = 80;
+        return base;
+    };
+
+    // Port out of range
+    {
+        QJsonObject j = makeBase();
+        j["port"] = 70000;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+        QCOMPARE(cfg.port(), static_cast<quint16>(23));
+    }
+    {
+        QJsonObject j = makeBase();
+        j["port"] = 0;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+    }
+    {
+        QJsonObject j = makeBase();
+        j["port"] = -1;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+    }
+    // Rows out of range
+    {
+        QJsonObject j = makeBase();
+        j["screenRows"] = 0;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+        QCOMPARE(cfg.screenRows(), 24);
+    }
+    {
+        QJsonObject j = makeBase();
+        j["screenRows"] = 500;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+    }
+    // Cols out of range
+    {
+        QJsonObject j = makeBase();
+        j["screenCols"] = 0;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+    }
+    {
+        QJsonObject j = makeBase();
+        j["screenCols"] = 999;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+    }
+    // Unknown code page
+    {
+        QJsonObject j = makeBase();
+        j["codePage"] = 999999;
+        SessionConfig cfg;
+        QVERIFY(!cfg.fromJson(j));
+    }
+    // Sanity: the base with a known code page succeeds
+    {
+        QJsonObject j = makeBase();
+        j["codePage"] = 37;
+        SessionConfig cfg;
+        QVERIFY(cfg.fromJson(j));
+        QCOMPARE(cfg.codePage(), core::CodePage::ID::CP037);
+    }
 }
 
 QTEST_MAIN(TestSessionConfig)
