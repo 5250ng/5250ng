@@ -76,7 +76,17 @@ void MainWindow::onCloseTabRequested(int index) {
     }
     m_sessions.remove(index);
     m_tabWidget->removeTab(index);
-    delete s; // deletes container and children (parser owned by container)
+    // removeTab() does not destroy the page widget, and Session is a plain
+    // struct whose delete does not cascade into its QObject members.
+    // Schedule the container for destruction so Qt's parent-child cleanup
+    // destroys the terminal view, screen buffer, parser, script executor,
+    // session logger, match-replace engine and every other object that was
+    // parented to the container.
+    if (s->container) {
+        s->container->deleteLater();
+        s->container = nullptr;
+    }
+    delete s;
     if (!m_sessions.isEmpty()) {
         int newIndex = qMin(index, m_sessions.size() - 1);
         setActiveSession(newIndex);
