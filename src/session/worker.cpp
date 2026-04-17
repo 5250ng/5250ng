@@ -50,6 +50,7 @@ void Worker::start() {
     m_client->setTerminalType(termType);
     m_client->setCredentials(m_config.username(), m_config.password());
     m_client->setCodePage(m_config.codePage());
+    m_client->setAllowInvalidCertificates(m_config.allowInvalidCertificates());
 
     connect(m_client, &tn5250::client::TN5250Client::connected, this, &Worker::connected);
     connect(m_client, &tn5250::client::TN5250Client::disconnected, this, &Worker::disconnected);

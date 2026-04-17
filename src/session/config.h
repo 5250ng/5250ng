@@ -48,6 +48,12 @@ class SessionConfig : public QObject {
     bool useTLS() const { return m_useTLS; }
     void setUseTLS(bool useTLS) { m_useTLS = useTLS; }
 
+    // When true, SSL/TLS certificate validation errors (self-signed, expired,
+    // hostname mismatch, untrusted chain) are ignored. Default is false.
+    // Only set for hosts the user has knowingly accepted as insecure.
+    bool allowInvalidCertificates() const { return m_allowInvalidCertificates; }
+    void setAllowInvalidCertificates(bool allow) { m_allowInvalidCertificates = allow; }
+
     // Device type is the terminal model (e.g. IBM-3179-2) sent via TERMINAL_TYPE
     QString deviceType() const { return m_deviceType; }
     void setDeviceType(const QString &type) { m_deviceType = type; }
@@ -105,6 +111,7 @@ class SessionConfig : public QObject {
     QString m_hostname;
     quint16 m_port;
     bool m_useTLS;
+    bool m_allowInvalidCertificates = false;
     QString m_deviceType;
     QString m_deviceName;
     int m_screenRows;
