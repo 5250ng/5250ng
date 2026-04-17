@@ -85,6 +85,10 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     m_clearButton->setStyleSheet("font-size: 11px; padding: 2px 8px;");
     connect(m_clearButton, &QPushButton::clicked, this, [this]() {
         m_chatHistory->clear();
+        // The visible transcript is gone, so the anchors that referenced
+        // m_collapsibleBlocks entries are unreachable; release the payloads
+        // so the map does not grow monotonically across Clear clicks.
+        m_collapsibleBlocks.clear();
         m_thinkingTimer->stop();
         m_thinkingBlockPosition = -1;
         if (m_scriptRunner && m_scriptRunner->isRunning())
