@@ -80,12 +80,27 @@ void TN5250Client::onSocketError(QAbstractSocket::SocketError /*error*/) {
 
 #ifdef HAVE_QT6_SSL
 void TN5250Client::onSslErrors(const QList<QSslError> &errors) {
+    QStringList errorStrings;
     for (const QSslError &err : errors) {
+        errorStrings << err.errorString();
         logger::Logger::instance()->warning(
             QString("[TN5250->Client]: SSL error: %1").arg(err.errorString()));
     }
-    // Accept the connection despite errors (self-signed certs are common on AS/400).
-    // TODO: make this configurable so users can enforce strict certificate validation.
+
+    if (!m_allowInvalidCertificates) {
+        const QString combined = errorStrings.join("; ");
+        logger::Logger::instance()->error(
+            QString("[TN5250->Client]: TLS certificate validation failed: %1").arg(combined));
+        setState(ConnectionState::Error);
+        emit errorOccurred(QString("TLS certificate validation failed: %1").arg(combined));
+        if (m_sslSocket) {
+            static_cast<QSslSocket *>(m_sslSocket)->abort();
+        }
+        return;
+    }
+
+    logger::Logger::instance()->warning(
+        "[TN5250->Client]: Ignoring SSL errors (allowInvalidCertificates=true)");
     if (m_sslSocket) {
         static_cast<QSslSocket *>(m_sslSocket)->ignoreSslErrors();
     }

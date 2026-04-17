@@ -73,6 +73,7 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     QLineEdit *m_hostnameEdit;
     QSpinBox *m_portSpin;
     QCheckBox *m_tlsCheck;
+    QCheckBox *m_allowInvalidCertsCheck;
     QLineEdit *m_usernameEdit;
     QLineEdit *m_passwordEdit;
     QComboBox *m_deviceCombo;

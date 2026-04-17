@@ -32,6 +32,8 @@ class TestSessionConfig : public QObject {
     void testSerialization();
     void testDeserialization();
     void testDeserializationRejectsOutOfRange();
+    void testAllowInvalidCertificatesDefaultsOff();
+    void testAllowInvalidCertificatesRoundTrip();
 
   private:
     SessionConfig *m_config;
@@ -225,6 +227,54 @@ void TestSessionConfig::testDeserializationRejectsOutOfRange() {
         QVERIFY(cfg.fromJson(j));
         QCOMPARE(cfg.codePage(), core::CodePage::ID::CP037);
     }
+void TestSessionConfig::testAllowInvalidCertificatesDefaultsOff() {
+    SessionConfig fresh;
+    QVERIFY(!fresh.allowInvalidCertificates());
+
+    QJsonObject json;
+    json["name"] = "Secure";
+    json["hostname"] = "example.com";
+    json["port"] = 992;
+    json["useTLS"] = true;
+    json["deviceType"] = "IBM-3179-2";
+    json["deviceName"] = "TERM";
+    json["screenRows"] = 24;
+    json["screenCols"] = 80;
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QVERIFY(!loaded.allowInvalidCertificates());
+
+    QJsonObject out = loaded.toJson();
+    QVERIFY(!out.contains("allowInvalidCertificates"));
+}
+
+void TestSessionConfig::testAllowInvalidCertificatesRoundTrip() {
+    m_config->setName("Legacy AS400");
+    m_config->setHostname("legacy.example.com");
+    m_config->setPort(992);
+    m_config->setUseTLS(true);
+    m_config->setAllowInvalidCertificates(true);
+
+    QJsonObject json = m_config->toJson();
+    QCOMPARE(json.value("allowInvalidCertificates").toBool(), true);
+
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QCOMPARE(loaded.allowInvalidCertificates(), true);
+
+    QJsonObject reset;
+    reset["name"] = "Reset";
+    reset["hostname"] = "a.example.com";
+    reset["port"] = 23;
+    reset["useTLS"] = false;
+    reset["deviceType"] = "IBM-3179-2";
+    reset["deviceName"] = "T";
+    reset["screenRows"] = 24;
+    reset["screenCols"] = 80;
+    SessionConfig second;
+    second.setAllowInvalidCertificates(true);
+    QVERIFY(second.fromJson(reset));
+    QVERIFY(!second.allowInvalidCertificates());
 }
 
 QTEST_MAIN(TestSessionConfig)
