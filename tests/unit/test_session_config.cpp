@@ -227,6 +227,8 @@ void TestSessionConfig::testDeserializationRejectsOutOfRange() {
         QVERIFY(cfg.fromJson(j));
         QCOMPARE(cfg.codePage(), core::CodePage::ID::CP037);
     }
+}
+
 void TestSessionConfig::testAllowInvalidCertificatesDefaultsOff() {
     SessionConfig fresh;
     QVERIFY(!fresh.allowInvalidCertificates());
