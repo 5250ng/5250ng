@@ -50,6 +50,8 @@
 ### Linux (Ubuntu / Debian)
 
 ```bash
+git clone --recurse-submodules https://github.com/5250ng/5250ng.git
+cd 5250ng
 sudo apt install qt6-base-dev cmake g++ libxkbcommon-dev libssl-dev
 cmake -S . -B build
 cmake --build build
