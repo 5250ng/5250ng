@@ -16,6 +16,7 @@
 
 #include "Q5250ScreenWidget.h"
 #include "core/ebcdic.h"
+#include "core/keyboard_mapping.h"
 #include "logger/logger.h"
 #include <climits>
 #include <QApplication>
@@ -127,22 +128,23 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
         }
     }
 
-    // Keyboard lock enforcement: when locked, only allow a few keys through
+    // Resolve the chord against the user-configurable keyboard mapping.
+    // Defaults mirror the previous hardcoded behavior (Shift+F1→PF13, Ctrl+End→
+    // FieldExit, Ctrl+Esc→Attn, …), so unmodified installations see no change.
+    Qt::KeyboardModifiers mods = event->modifiers() &
+        (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    core::MappedAction mapped = core::KeyboardMapping::instance().lookup(event->key(), mods);
+
+    // Keyboard lock enforcement: only Attn and SysReq are allowed through.
     if (m_keyboardState == KeyboardState::Locked) {
-        // Allow only Attn (Ctrl+Escape) and SysReq - reject all other input
-        // Attn and SysReq are processed via processKeyEvent -> processEncodedInput
-        bool isAttn = (event->key() == Qt::Key_Escape && (event->modifiers() & Qt::ControlModifier));
-        bool isSysReq = (event->key() == Qt::Key_SysReq);
-        if (!isAttn && !isSysReq) {
+        if (mapped != core::MappedAction::Attn && mapped != core::MappedAction::SysReq) {
             event->accept();
             return;
         }
     }
     if (m_keyboardState == KeyboardState::ErrorLocked) {
-        // Only Error Reset (Escape, handled above), Attn, and Help are allowed
-        bool isAttn = (event->key() == Qt::Key_Escape && (event->modifiers() & Qt::ControlModifier));
-        bool isHelp = (event->key() == Qt::Key_F1 && (event->modifiers() & Qt::ControlModifier));
-        if (!isAttn && !isHelp) {
+        // Escape (Error Reset) was already consumed above; Attn and Help remain.
+        if (mapped != core::MappedAction::Attn && mapped != core::MappedAction::Help) {
             event->accept();
             return;
         }
@@ -151,108 +153,121 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
     // Emit key recording signal for macro capture (all terminal-relevant keys)
     emit keyRecorded(event->key(), event->modifiers(), event->text());
 
-    // Handle local-only keys (block-mode: these never go to the host)
-    if (m_screenBuffer) {
-        switch (event->key()) {
-        case Qt::Key_Left:
-            moveCursorLeft();
-            event->accept();
-            return;
-        case Qt::Key_Right:
-            moveCursorRight();
-            event->accept();
-            return;
-        case Qt::Key_Up:
-            moveCursorUp();
-            event->accept();
-            return;
-        case Qt::Key_Down:
-            moveCursorDown();
-            event->accept();
-            return;
-        case Qt::Key_Tab:
-            if (event->modifiers() & Qt::ShiftModifier) {
-                moveToPreviousField();
-            } else {
-                moveToNextField();
-            }
-            event->accept();
-            return;
-        case Qt::Key_Backtab:
-            moveToPreviousField();
-            event->accept();
-            return;
-        case Qt::Key_Home:
-            moveToFieldStart();
-            event->accept();
-            return;
-        case Qt::Key_End:
-            if (event->modifiers() & Qt::ControlModifier) {
-                // Ctrl+End = Field Exit
-                handleFieldExit();
-                event->accept();
-                return;
-            }
-            moveToFieldEnd();
-            event->accept();
-            return;
-        case Qt::Key_Backspace:
-            if (event->modifiers() & Qt::ControlModifier) {
-                // Ctrl+Backspace = Erase Field
-                handleEraseField();
-                event->accept();
-                return;
-            }
-            handleBackspace();
-            event->accept();
-            return;
-        case Qt::Key_Delete:
-            if (event->modifiers() & Qt::AltModifier) {
-                // Erase Input: clear all non-protected fields, reset MDT, move to IC
-                handleEraseInput();
-            } else if (event->modifiers() & Qt::ControlModifier) {
-                // EraseEOF: clear from cursor to end of field
-                handleEraseEOF();
-            } else {
-                handleDelete();
-            }
-            event->accept();
-            return;
-        case Qt::Key_Insert:
-            if (event->modifiers() & Qt::ShiftModifier) {
-                // Shift+Insert = Dup key
-                handleDup();
-            } else {
-                m_insertMode = !m_insertMode;
-                emit terminalStateChanged();
-            }
-            event->accept();
-            return;
-        case Qt::Key_Plus:
-            if (event->modifiers() & Qt::AltModifier) {
-                handleFieldPlus();
-                event->accept();
-                return;
-            }
-            break;
-        case Qt::Key_Minus:
-            if (event->modifiers() & Qt::AltModifier) {
-                handleFieldMinus();
-                event->accept();
-                return;
-            }
-            break;
-        default:
-            break;
-        }
+    if (mapped != core::MappedAction::None) {
+        LOG_DEBUG(QString("[Q5250Widget] keyPressEvent: chord key=0x%1 mods=0x%2 -> action=%3")
+            .arg(event->key(), 0, 16).arg(static_cast<int>(mods), 0, 16)
+            .arg(core::KeyboardMapping::actionName(mapped)));
+        dispatchMappedAction(mapped);
+        event->accept();
+        return;
     }
 
-    // Pass other keys to input handler (AID keys and characters)
+    // Unmapped chord: treat as character input (EBCDIC-encoded to the host).
     LOG_DEBUG(QString("[Q5250Widget] keyPressEvent: key=0x%1 mod=0x%2 text='%3'")
         .arg(event->key(), 0, 16).arg(static_cast<int>(event->modifiers()), 0, 16)
         .arg(event->text()));
     processKeyEvent(event);
     QWidget::keyPressEvent(event);
+}
+
+void Q5250ScreenWidget::dispatchMappedAction(core::MappedAction action) {
+    using core::MappedAction;
+
+    // PF1..PF24 are AID keys sent to the host.
+    if (action >= MappedAction::PF1 && action <= MappedAction::PF24) {
+        int pfNumber = static_cast<int>(action) - static_cast<int>(MappedAction::PF1) + 1;
+        if (m_encoder) {
+            QByteArray encoded = m_encoder->encodePFKey(pfNumber);
+            if (!encoded.isEmpty()) processEncodedInput(encoded, /*isAID=*/true);
+        }
+        return;
+    }
+
+    switch (action) {
+    case MappedAction::Enter:
+    case MappedAction::Clear:
+    case MappedAction::RollUp:
+    case MappedAction::RollDown:
+    case MappedAction::Attn:
+    case MappedAction::SysReq:
+    case MappedAction::Print: {
+        if (!m_encoder) return;
+        core::KeyboardAction kbd = core::KeyboardAction::Enter;
+        switch (action) {
+        case MappedAction::Enter:    kbd = core::KeyboardAction::Enter; break;
+        case MappedAction::Clear:    kbd = core::KeyboardAction::Clear; break;
+        case MappedAction::RollUp:   kbd = core::KeyboardAction::RollUp; break;
+        case MappedAction::RollDown: kbd = core::KeyboardAction::RollDown; break;
+        case MappedAction::Attn:     kbd = core::KeyboardAction::Attn; break;
+        case MappedAction::SysReq:   kbd = core::KeyboardAction::SysReq; break;
+        case MappedAction::Print:    kbd = core::KeyboardAction::Print; break;
+        default: return;
+        }
+        QByteArray encoded = m_encoder->encodeAction(kbd);
+        if (!encoded.isEmpty()) processEncodedInput(encoded, /*isAID=*/true);
+        return;
+    }
+    case MappedAction::Help: {
+        // 5250 Help AID (0xF3). KeyboardEncoder has no action enum for it yet,
+        // so emit the AID byte directly through the same AID response path.
+        QByteArray aid;
+        aid.append(static_cast<char>(0xF3));
+        processEncodedInput(aid, /*isAID=*/true);
+        return;
+    }
+
+    // Local (block-mode) actions — never go to the host.
+    case MappedAction::Tab:         moveToNextField(); return;
+    case MappedAction::BackTab:     moveToPreviousField(); return;
+    case MappedAction::Home:        moveToFieldStart(); return;
+    case MappedAction::End:         moveToFieldEnd(); return;
+    case MappedAction::FieldExit:   handleFieldExit(); return;
+    case MappedAction::FieldPlus:   handleFieldPlus(); return;
+    case MappedAction::FieldMinus:  handleFieldMinus(); return;
+    case MappedAction::ArrowUp:     moveCursorUp(); return;
+    case MappedAction::ArrowDown:   moveCursorDown(); return;
+    case MappedAction::ArrowLeft:   moveCursorLeft(); return;
+    case MappedAction::ArrowRight:  moveCursorRight(); return;
+    case MappedAction::Backspace:   handleBackspace(); return;
+    case MappedAction::Delete:      handleDelete(); return;
+    case MappedAction::EraseEOF:    handleEraseEOF(); return;
+    case MappedAction::EraseField:  handleEraseField(); return;
+    case MappedAction::EraseInput:  handleEraseInput(); return;
+    case MappedAction::Dup:         handleDup(); return;
+    case MappedAction::Insert:
+        m_insertMode = !m_insertMode;
+        emit terminalStateChanged();
+        return;
+    case MappedAction::Reset:
+        // Error Reset: if locked by an error, restore the error line and unlock.
+        if (m_keyboardState == KeyboardState::ErrorLocked) {
+            if (!m_savedErrorLine.isEmpty() && m_screenBuffer) {
+                int errRow = (m_errorLineRow >= 0) ? m_errorLineRow
+                                                    : (m_screenBuffer->rows() - 1);
+                for (int c = 0; c < m_screenBuffer->cols() && c < m_savedErrorLine.size(); ++c) {
+                    m_screenBuffer->cell(errRow, c) = m_savedErrorLine[c];
+                }
+                m_savedErrorLine.clear();
+            }
+            setKeyboardState(KeyboardState::Unlocked);
+        }
+        return;
+
+    case MappedAction::None:
+    default:
+        return;
+    }
+}
+
+void Q5250ScreenWidget::dispatchCharacter(QChar ch) {
+    if (!m_screenBuffer || !m_encoder) return;
+    if (m_readOnly && !m_mcpInjecting) return;
+    if (m_keyboardState == KeyboardState::Locked ||
+        m_keyboardState == KeyboardState::ErrorLocked) {
+        return;
+    }
+    QByteArray encoded = m_encoder->encodeCharacter(ch);
+    if (!encoded.isEmpty()) processEncodedInput(encoded, /*isAID=*/false);
 }
 
 void Q5250ScreenWidget::mousePressEvent(QMouseEvent *event) {
