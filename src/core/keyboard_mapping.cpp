@@ -165,6 +165,14 @@ KeyChord KeyboardMapping::chordFor(MappedAction action) const {
     return KeyChord{};
 }
 
+QList<KeyChord> KeyboardMapping::chordsFor(MappedAction action) const {
+    QList<KeyChord> out;
+    for (auto it = m_chordToAction.constBegin(); it != m_chordToAction.constEnd(); ++it) {
+        if (it.value() == action) out.append(it.key());
+    }
+    return out;
+}
+
 void KeyboardMapping::setBinding(const KeyChord &chord, MappedAction action) {
     if (!chord.isValid()) return;
     if (action == MappedAction::None) {

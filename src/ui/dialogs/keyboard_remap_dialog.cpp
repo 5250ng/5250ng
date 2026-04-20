@@ -27,6 +27,7 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QString>
 #include <QVBoxLayout>
 
@@ -67,12 +68,92 @@ void KeyChordCaptureEdit::keyPressEvent(QKeyEvent *event) {
     event->accept();
 }
 
+// --- ChordListEditor -------------------------------------------------------
+
+ChordListEditor::ChordListEditor(MappedAction action, QWidget *parent)
+    : QWidget(parent), m_action(action) {
+    m_layout = new QHBoxLayout(this);
+    m_layout->setContentsMargins(0, 0, 0, 0);
+    m_layout->setSpacing(4);
+    m_addBtn = new QPushButton(tr("+ Add chord"), this);
+    m_addBtn->setFocusPolicy(Qt::NoFocus);
+    connect(m_addBtn, &QPushButton::clicked, this, [this]() {
+        addChip(core::KeyChord{}, /*startFocused=*/true);
+    });
+    m_layout->addWidget(m_addBtn);
+    m_layout->addStretch(1);
+}
+
+QList<core::KeyChord> ChordListEditor::chords() const {
+    QList<core::KeyChord> out;
+    for (const auto &e : m_entries) {
+        core::KeyChord c = e.edit->chord();
+        if (c.isValid()) out.append(c);
+    }
+    return out;
+}
+
+void ChordListEditor::setChords(const QList<core::KeyChord> &chords) {
+    // Clear and rebuild; block signals so we don't emit during setup.
+    while (!m_entries.isEmpty()) {
+        Entry e = m_entries.takeLast();
+        m_layout->removeWidget(e.edit);
+        m_layout->removeWidget(e.removeBtn);
+        e.edit->deleteLater();
+        e.removeBtn->deleteLater();
+    }
+    QSignalBlocker block(this);
+    for (const auto &c : chords) addChip(c, /*startFocused=*/false);
+}
+
+void ChordListEditor::addChip(const core::KeyChord &chord, bool startFocused) {
+    Entry entry;
+    entry.edit = new KeyChordCaptureEdit(this);
+    entry.edit->setChord(chord);
+    entry.edit->setMinimumWidth(140);
+    entry.removeBtn = new QPushButton(QString::fromUtf8("\xc3\x97"), this); // ×
+    entry.removeBtn->setFocusPolicy(Qt::NoFocus);
+    entry.removeBtn->setFixedWidth(24);
+    entry.removeBtn->setToolTip(tr("Remove this chord"));
+
+    // Insert before the "+ Add chord" button and the trailing stretch.
+    int insertAt = m_layout->count() - 2;
+    if (insertAt < 0) insertAt = 0;
+    m_layout->insertWidget(insertAt, entry.edit);
+    m_layout->insertWidget(insertAt + 1, entry.removeBtn);
+    m_entries.append(entry);
+
+    connect(entry.edit, &KeyChordCaptureEdit::chordCaptured, this,
+            [this](const core::KeyChord &) { emitChords(); });
+    connect(entry.removeBtn, &QPushButton::clicked, this, [this, editPtr = entry.edit]() {
+        for (int i = 0; i < m_entries.size(); ++i) {
+            if (m_entries[i].edit == editPtr) { removeChipAt(i); return; }
+        }
+    });
+
+    if (startFocused) entry.edit->setFocus();
+}
+
+void ChordListEditor::removeChipAt(int index) {
+    if (index < 0 || index >= m_entries.size()) return;
+    Entry e = m_entries.takeAt(index);
+    m_layout->removeWidget(e.edit);
+    m_layout->removeWidget(e.removeBtn);
+    e.edit->deleteLater();
+    e.removeBtn->deleteLater();
+    emitChords();
+}
+
+void ChordListEditor::emitChords() {
+    emit chordsChanged(m_action, chords());
+}
+
 // --- KeyboardRemapDialog ---------------------------------------------------
 
 KeyboardRemapDialog::KeyboardRemapDialog(QWidget *parent, MappedAction focusOn)
     : ui::widgets::BaseFramelessDialog(parent), m_focusOn(focusOn) {
     setWindowTitle(tr("Remap Keyboard"));
-    resize(640, 520);
+    resize(720, 560);
     m_working = KeyboardMapping::instance().allBindings();
     buildUI();
     populateRows();
@@ -81,8 +162,8 @@ KeyboardRemapDialog::KeyboardRemapDialog(QWidget *parent, MappedAction focusOn)
         if (row >= 0) {
             m_table->scrollToItem(m_table->item(row, 0));
             m_table->setCurrentCell(row, 1);
-            QWidget *w = m_table->cellWidget(row, 1);
-            if (w) w->setFocus();
+            ChordListEditor *editor = editorForAction(m_focusOn);
+            if (editor) editor->setFocus();
         }
     }
 }
@@ -99,12 +180,11 @@ void KeyboardRemapDialog::buildUI() {
     root->addWidget(hint);
 
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(3);
-    m_table->setHorizontalHeaderLabels({tr("Action"), tr("Chord"), tr("")});
-    m_table->horizontalHeader()->setStretchLastSection(false);
+    m_table->setColumnCount(2);
+    m_table->setHorizontalHeaderLabels({tr("Action"), tr("Chords")});
+    m_table->horizontalHeader()->setStretchLastSection(true);
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_table->verticalHeader()->setVisible(false);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -142,50 +222,51 @@ void KeyboardRemapDialog::populateRows() {
         nameItem->setData(Qt::UserRole, static_cast<int>(action));
         m_table->setItem(r, 0, nameItem);
 
-        // Find the chord currently bound to this action in the working copy.
-        KeyChord bound;
+        // Collect every chord currently bound to this action from the working copy.
+        QList<KeyChord> bound;
         for (auto it = m_working.constBegin(); it != m_working.constEnd(); ++it) {
-            if (it.value() == action) { bound = it.key(); break; }
+            if (it.value() == action) bound.append(it.key());
         }
 
-        auto *chordEdit = new KeyChordCaptureEdit(this);
-        chordEdit->setChord(bound);
-        connect(chordEdit, &KeyChordCaptureEdit::chordCaptured, this,
-                [this, action, chordEdit](const KeyChord &chord) {
-                    // Remove the action's old binding and any other action that used the new chord.
-                    for (auto it = m_working.begin(); it != m_working.end();) {
-                        if (it.value() == action) {
-                            it = m_working.erase(it);
-                        } else if (chord.isValid() && it.key() == chord) {
-                            // Clear the row that previously owned this chord.
-                            MappedAction replaced = it.value();
-                            int row = rowForAction(replaced);
-                            if (row >= 0) {
-                                auto *w = qobject_cast<KeyChordCaptureEdit *>(m_table->cellWidget(row, 1));
-                                if (w) w->setChord(KeyChord{});
-                            }
-                            it = m_working.erase(it);
-                        } else {
-                            ++it;
-                        }
-                    }
-                    if (chord.isValid()) m_working.insert(chord, action);
-                    // Reflect change in the edit itself.
-                    chordEdit->setChord(chord);
-                });
-        m_table->setCellWidget(r, 1, chordEdit);
-
-        auto *clearBtn = new QPushButton(tr("Clear"), this);
-        clearBtn->setFocusPolicy(Qt::NoFocus);
-        connect(clearBtn, &QPushButton::clicked, this, [this, action, chordEdit]() {
-            for (auto it = m_working.begin(); it != m_working.end();) {
-                if (it.value() == action) it = m_working.erase(it);
-                else ++it;
-            }
-            chordEdit->setChord(KeyChord{});
-        });
-        m_table->setCellWidget(r, 2, clearBtn);
+        auto *editor = new ChordListEditor(action, this);
+        editor->setChords(bound);
+        connect(editor, &ChordListEditor::chordsChanged,
+                this, &KeyboardRemapDialog::onRowChordsChanged);
+        m_table->setCellWidget(r, 1, editor);
     }
+    m_table->resizeRowsToContents();
+}
+
+void KeyboardRemapDialog::onRowChordsChanged(MappedAction action,
+                                             const QList<KeyChord> &chords) {
+    // Drop every existing binding for this action so we can rebuild from the
+    // editor's current set.
+    for (auto it = m_working.begin(); it != m_working.end();) {
+        if (it.value() == action) it = m_working.erase(it);
+        else ++it;
+    }
+
+    // For each captured chord: steal it from whichever action owned it, then
+    // assign it to this one. Editors that lose a chord are refreshed in place.
+    for (const auto &chord : chords) {
+        if (!chord.isValid()) continue;
+        auto existing = m_working.constFind(chord);
+        if (existing != m_working.constEnd() && existing.value() != action) {
+            MappedAction prevOwner = existing.value();
+            m_working.remove(chord);
+            ChordListEditor *otherEditor = editorForAction(prevOwner);
+            if (otherEditor) {
+                QList<KeyChord> remaining;
+                for (const auto &c : otherEditor->chords()) {
+                    if (c != chord) remaining.append(c);
+                }
+                QSignalBlocker block(otherEditor);
+                otherEditor->setChords(remaining);
+            }
+        }
+        m_working.insert(chord, action);
+    }
+    m_table->resizeRowsToContents();
 }
 
 int KeyboardRemapDialog::rowForAction(MappedAction action) const {
@@ -194,6 +275,12 @@ int KeyboardRemapDialog::rowForAction(MappedAction action) const {
         if (it && it->data(Qt::UserRole).toInt() == static_cast<int>(action)) return r;
     }
     return -1;
+}
+
+ChordListEditor *KeyboardRemapDialog::editorForAction(MappedAction action) const {
+    int row = rowForAction(action);
+    if (row < 0) return nullptr;
+    return qobject_cast<ChordListEditor *>(m_table->cellWidget(row, 1));
 }
 
 void KeyboardRemapDialog::onResetDefaultsClicked() {

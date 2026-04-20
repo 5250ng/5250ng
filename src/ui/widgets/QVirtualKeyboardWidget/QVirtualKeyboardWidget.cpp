@@ -22,6 +22,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QString>
+#include <QStringList>
 #include <QVBoxLayout>
 
 namespace ui::widgets {
@@ -207,12 +208,15 @@ void QVirtualKeyboardWidget::buildLayout() {
 void QVirtualKeyboardWidget::refreshChordLabels() {
     const auto &mapping = KeyboardMapping::instance();
     for (const auto &entry : m_actionButtons) {
-        KeyChord c = mapping.chordFor(entry.action);
+        const QList<KeyChord> chords = mapping.chordsFor(entry.action);
         QString tip = QObject::tr("Click to send %1").arg(entry.baseLabel);
-        if (c.isValid()) {
-            tip += QObject::tr("\nHost chord: %1").arg(c.toString());
-        } else {
+        if (chords.isEmpty()) {
             tip += QObject::tr("\nHost chord: (unbound)");
+        } else {
+            QStringList names;
+            names.reserve(chords.size());
+            for (const auto &c : chords) names.append(c.toString());
+            tip += QObject::tr("\nHost chord: %1").arg(names.join(QStringLiteral(", ")));
         }
         entry.button->setToolTip(tip);
     }
