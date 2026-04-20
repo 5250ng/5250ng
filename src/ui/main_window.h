@@ -121,6 +121,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onVirtualKeyboardAction(core::MappedAction action);
     void onVirtualKeyboardCharacter(QChar ch);
     void onVirtualKeyboardRemap(core::MappedAction action);
+    void rebindVirtualKeyboardPulse();
 
   private:
     void setupUI();
@@ -210,6 +211,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_matchReplaceEnableAction;
     QAction *m_virtualKeyboardAction = nullptr;
     ui::widgets::QVirtualKeyboardWidget *m_virtualKeyboard = nullptr;
+    QMetaObject::Connection m_virtualKeyboardPulseConnection;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
     ui::widgets::QConnectionStatusWidget *m_globalConnectionStatus; // Global bottom-bar status
 

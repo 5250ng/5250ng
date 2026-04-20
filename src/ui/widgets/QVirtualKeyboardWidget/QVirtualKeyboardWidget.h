@@ -41,6 +41,12 @@ class QVirtualKeyboardWidget : public QWidget {
     // Re-label action keys after a remap so chord hints match current bindings.
     void refreshChordLabels();
 
+  public slots:
+    // Resolve the given host chord against the current KeyboardMapping and, if
+    // it matches an action key on the virtual keyboard, briefly highlight that
+    // key. Unmapped chords are ignored so this can be wired to keyRecorded().
+    void pulseForChord(int key, Qt::KeyboardModifiers modifiers);
+
   signals:
     void actionTriggered(core::MappedAction action);
     void characterTriggered(QChar ch);
