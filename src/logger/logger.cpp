@@ -68,10 +68,12 @@ void Logger::setLogFile(const QString &filePath) {
     if (m_logStream) {
         m_logStream->flush();
         delete m_logStream;
+        m_logStream = nullptr;
     }
     if (m_logFile) {
         m_logFile->close();
         delete m_logFile;
+        m_logFile = nullptr;
     }
 
     m_logFile = new QFile(filePath);
