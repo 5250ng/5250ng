@@ -20,6 +20,7 @@
 #include "core/hotspot_detector.h"
 #include "core/match_replace_engine.h"
 #include "core/keyboard_encoder.h"
+#include "core/keyboard_mapping.h"
 #include "core/screen_history.h"
 #include "screen_buffer.h"
 #include "ui/themes/terminal_theme.h"
@@ -160,6 +161,14 @@ class Q5250ScreenWidget : public QWidget {
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
+
+    // Execute a logical 5250 action resolved either from a host key chord
+    // (via KeyboardMapping) or from a click on the on-screen virtual keyboard.
+    void dispatchMappedAction(core::MappedAction action);
+
+    // Inject a single character as if typed into the active field (used by
+    // the virtual keyboard widget). Respects read-only/keyboard-lock state.
+    void dispatchCharacter(QChar ch);
 
     void setReadType(uint8_t readType) { m_readType = readType; }
     uint8_t readType() const { return m_readType; }

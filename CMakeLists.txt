@@ -49,6 +49,8 @@ set(CORE_SOURCES
     src/core/codepage.h
     src/core/keyboard_encoder.cpp
     src/core/keyboard_encoder.h
+    src/core/keyboard_mapping.cpp
+    src/core/keyboard_mapping.h
     src/core/hotspot_detector.cpp
     src/core/hotspot_detector.h
     src/core/screen_history.cpp
@@ -212,6 +214,8 @@ set(UI_SOURCES
     src/ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.h
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.cpp
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h
+    src/ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.cpp
+    src/ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.h
     src/ui/widgets/Frameless/BaseFramelessWindow.cpp
     src/ui/widgets/Frameless/BaseFramelessWindow.h
     src/ui/widgets/Frameless/BaseFramelessDialog.cpp
@@ -241,6 +245,8 @@ set(UI_SOURCES
     src/ui/dialogs/theme_preview_widget.h
     src/ui/dialogs/match_replace_dialog.cpp
     src/ui/dialogs/match_replace_dialog.h
+    src/ui/dialogs/keyboard_remap_dialog.cpp
+    src/ui/dialogs/keyboard_remap_dialog.h
     # themes
     src/ui/themes/manager.cpp
     src/ui/themes/manager.h
@@ -278,6 +284,7 @@ set(UI_SOURCES
     src/ui/actions/onScreenHistory.cpp
     src/ui/actions/onToggleAgentPanel.cpp
     src/ui/actions/onMatchReplace.cpp
+    src/ui/actions/onVirtualKeyboard.cpp
     # setup
     src/ui/setup/setupUI.cpp
     src/ui/setup/setupMenuBar.cpp
@@ -395,6 +402,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_ebcdic tests/unit/test_ebcdic.cpp)
     add_tn5250_test(test_screen_buffer tests/unit/test_screen_buffer.cpp)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
+    add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)

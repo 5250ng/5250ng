@@ -129,6 +129,11 @@ void MainWindow::setupMenuBar() {
     m_sessionLoggingAction = toolsMenu->addAction("Session &Logging", this, &MainWindow::onToggleSessionLogging);
     m_sessionLoggingAction->setCheckable(true);
     toolsMenu->addSeparator();
+    m_virtualKeyboardAction = toolsMenu->addAction("Virtual &Keyboard",
+        this, &MainWindow::onToggleVirtualKeyboard);
+    m_virtualKeyboardAction->setCheckable(true);
+    toolsMenu->addAction("Remap Keyboard...", this, &MainWindow::onEditKeyboardMapping);
+    toolsMenu->addSeparator();
     // Match and Replace submenu
     QMenu *matchReplaceMenu = toolsMenu->addMenu("Match and &Replace");
     m_matchReplaceEnableAction = matchReplaceMenu->addAction("&Enable", this, &MainWindow::onToggleMatchReplace);

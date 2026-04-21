@@ -16,6 +16,7 @@
 
 #include "version.h"
 #include "agent/config.h"
+#include "core/keyboard_mapping.h"
 #include "logger/logger.h"
 #include "session/config.h"
 #include "session/manager.h"
@@ -241,6 +242,9 @@ int main(int argc, char *argv[]) {
     // Load terminal themes (builtin + user-created)
     ui::themes::TerminalThemeManager::instance().loadBuiltinThemes();
     ui::themes::TerminalThemeManager::instance().loadUserThemes();
+
+    // Load user keyboard mapping (falls back to defaults when none saved).
+    core::KeyboardMapping::instance().load();
 
     MainWindow win;
     win.show();

@@ -27,6 +27,7 @@
 #include "session/worker.h"
 #include "ui/dialogs/connect_dialog.h"
 #include "ui/rendering/tn5250_command_handler.h"
+#include "ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.h"
 #include "ui/widgets/Frameless/BaseFramelessWindow.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
@@ -115,6 +116,12 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void onEditMatchReplacePatterns();
     void rebuildQuickThemeMenu();
     void onQuickThemeChosen(QAction *action);
+    void onToggleVirtualKeyboard();
+    void onEditKeyboardMapping();
+    void onVirtualKeyboardAction(core::MappedAction action);
+    void onVirtualKeyboardCharacter(QChar ch);
+    void onVirtualKeyboardRemap(core::MappedAction action);
+    void rebindVirtualKeyboardPulse();
 
   private:
     void setupUI();
@@ -202,6 +209,9 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     QAction *m_mcpEnableAction;
     QAction *m_mcpReadOnlyAction;
     QAction *m_matchReplaceEnableAction;
+    QAction *m_virtualKeyboardAction = nullptr;
+    ui::widgets::QVirtualKeyboardWidget *m_virtualKeyboard = nullptr;
+    QMetaObject::Connection m_virtualKeyboardPulseConnection;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
     ui::widgets::QConnectionStatusWidget *m_globalConnectionStatus; // Global bottom-bar status
 

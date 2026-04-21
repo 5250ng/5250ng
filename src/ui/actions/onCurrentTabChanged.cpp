@@ -18,6 +18,9 @@
 
 void MainWindow::onCurrentTabChanged(int index) {
     setActiveSession(index);
+    // Re-route the virtual keyboard pulse feed onto the new active session so
+    // the on-screen keyboard keeps highlighting the right host chord.
+    rebindVirtualKeyboardPulse();
     if (index >= 0 && index < m_sessions.size()) {
         Session *s = m_sessions[index];
         // Clear activity indicator when the tab gains focus
