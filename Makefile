@@ -16,10 +16,18 @@ UNAME_M := $(shell uname -m)
 all: build
 
 # Build the project
+# On Linux, prepend /usr/bin to PATH so the system linker is used. Otherwise a
+# conda-provided ld earlier on PATH is a sysroot-confined linker that can't see
+# system libs (libEGL, libfontconfig, libX11, ...) needed by Qt6.
 build:
 	@echo "Building project..."
+ifeq ($(UNAME_S),Linux)
+	@PATH=/usr/bin:$(PATH) cmake -S . -B build
+	@PATH=/usr/bin:$(PATH) cmake --build build $(PARALLEL)
+else
 	@cmake -S . -B build
 	@cmake --build build $(PARALLEL)
+endif
 	@echo "Build complete!"
 
 # Clean build artifacts
