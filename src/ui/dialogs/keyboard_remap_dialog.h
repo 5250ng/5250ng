@@ -20,7 +20,12 @@
 #include "ui/widgets/Frameless/BaseFramelessDialog.h"
 #include <QHash>
 #include <QLineEdit>
+#include <QList>
+#include <QPushButton>
 #include <QTableWidget>
+#include <QWidget>
+
+class QHBoxLayout;
 
 namespace ui::dialogs {
 
@@ -41,6 +46,39 @@ class KeyChordCaptureEdit : public QLineEdit {
 
   private:
     core::KeyChord m_chord;
+};
+
+// Row editor showing every chord currently bound to a single action, with a
+// remove button next to each and a "+ Add chord" at the end. Emits
+// chordsChanged whenever the set of bound chords changes.
+class ChordListEditor : public QWidget {
+    Q_OBJECT
+  public:
+    explicit ChordListEditor(core::MappedAction action, QWidget *parent = nullptr);
+
+    core::MappedAction action() const { return m_action; }
+    QList<core::KeyChord> chords() const;
+
+    // Replace the set of bound chords. Does not emit chordsChanged.
+    void setChords(const QList<core::KeyChord> &chords);
+
+  signals:
+    void chordsChanged(core::MappedAction action, const QList<core::KeyChord> &chords);
+
+  private:
+    void addChip(const core::KeyChord &chord, bool startFocused);
+    void removeChipAt(int index);
+    void emitChords();
+
+    struct Entry {
+        KeyChordCaptureEdit *edit;
+        QPushButton *removeBtn;
+    };
+
+    core::MappedAction m_action;
+    QHBoxLayout *m_layout = nullptr;
+    QPushButton *m_addBtn = nullptr;
+    QList<Entry> m_entries;
 };
 
 // Dialog that lets the user edit the {chord -> action} map. Changes are only
@@ -68,6 +106,8 @@ class KeyboardRemapDialog : public ui::widgets::BaseFramelessDialog {
     void buildUI();
     void populateRows();
     int rowForAction(core::MappedAction action) const;
+    ChordListEditor *editorForAction(core::MappedAction action) const;
+    void onRowChordsChanged(core::MappedAction action, const QList<core::KeyChord> &chords);
 
     QTableWidget *m_table = nullptr;
     // Editable snapshot of bindings; flushed to the singleton on Save.

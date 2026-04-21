@@ -101,8 +101,15 @@ class KeyboardMapping {
     MappedAction lookup(const KeyChord &chord) const;
 
     // Reverse lookup: return the chord currently bound to an action, or an
-    // empty chord (isValid()==false) if none is bound.
+    // empty chord (isValid()==false) if none is bound. When several chords are
+    // bound to the same action the result is unspecified among them; callers
+    // that care about the full set should use chordsFor() instead.
     KeyChord chordFor(MappedAction action) const;
+
+    // All chords currently bound to a given action. Empty if the action has
+    // no binding. Ordering is stable within a run but not guaranteed across
+    // runs (QHash iteration order).
+    QList<KeyChord> chordsFor(MappedAction action) const;
 
     // Set or clear a binding. Setting a chord that was previously bound to a
     // different action unbinds the old action silently. Setting action=None

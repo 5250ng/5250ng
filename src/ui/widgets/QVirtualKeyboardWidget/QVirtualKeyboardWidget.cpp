@@ -21,7 +21,10 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QPointer>
 #include <QString>
+#include <QStringList>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace ui::widgets {
@@ -204,15 +207,44 @@ void QVirtualKeyboardWidget::buildLayout() {
     root->addLayout(nav);
 }
 
+void QVirtualKeyboardWidget::pulseForChord(int key, Qt::KeyboardModifiers modifiers) {
+    // Only the modifiers the mapping cares about; strip keypad/num-lock noise.
+    Qt::KeyboardModifiers mods = modifiers &
+        (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    core::MappedAction action = core::KeyboardMapping::instance().lookup(key, mods);
+    if (action == core::MappedAction::None) return;
+
+    QPushButton *target = nullptr;
+    for (const auto &entry : m_actionButtons) {
+        if (entry.action == action) { target = entry.button; break; }
+    }
+    if (!target) return;
+
+    // Use a dynamic property + stylesheet so the pulse restores cleanly without
+    // interfering with whatever base styling the host application provides.
+    target->setProperty("pulsing", true);
+    target->setStyleSheet(QStringLiteral(
+        "QPushButton[pulsing=\"true\"] { background-color: #f1c40f; color: #202020; }"));
+    QPointer<QPushButton> safe(target);
+    QTimer::singleShot(180, this, [safe]() {
+        if (!safe) return;
+        safe->setProperty("pulsing", false);
+        safe->setStyleSheet(QString());
+    });
+}
+
 void QVirtualKeyboardWidget::refreshChordLabels() {
     const auto &mapping = KeyboardMapping::instance();
     for (const auto &entry : m_actionButtons) {
-        KeyChord c = mapping.chordFor(entry.action);
+        const QList<KeyChord> chords = mapping.chordsFor(entry.action);
         QString tip = QObject::tr("Click to send %1").arg(entry.baseLabel);
-        if (c.isValid()) {
-            tip += QObject::tr("\nHost chord: %1").arg(c.toString());
-        } else {
+        if (chords.isEmpty()) {
             tip += QObject::tr("\nHost chord: (unbound)");
+        } else {
+            QStringList names;
+            names.reserve(chords.size());
+            for (const auto &c : chords) names.append(c.toString());
+            tip += QObject::tr("\nHost chord: %1").arg(names.join(QStringLiteral(", ")));
         }
         entry.button->setToolTip(tip);
     }

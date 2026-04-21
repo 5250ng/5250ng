@@ -39,6 +39,9 @@ class TestKeyboardMapping : public QObject {
     void testJsonRoundTrip();
     void testFromJsonInvalidReturnsFalse();
     void testActionNameAndFromName();
+    void testChordsForReturnsAllBoundChords();
+    void testMultipleChordsCanBindSameAction();
+    void testMultipleChordsPersistViaQSettings();
 
   private:
     void resetMappingToDefaults() {
@@ -155,6 +158,47 @@ void TestKeyboardMapping::testActionNameAndFromName() {
     QCOMPARE(KeyboardMapping::actionFromName("Attn"), MappedAction::Attn);
     QCOMPARE(KeyboardMapping::actionFromName("definitely-not-a-real-action"),
              MappedAction::None);
+}
+
+void TestKeyboardMapping::testChordsForReturnsAllBoundChords() {
+    // Default: PF13 is bound to both Shift+F1 and F13.
+    auto chords = KeyboardMapping::instance().chordsFor(MappedAction::PF13);
+    QCOMPARE(chords.size(), 2);
+    QVERIFY(chords.contains(KeyChord{Qt::Key_F1, Qt::ShiftModifier}));
+    QVERIFY(chords.contains(KeyChord{Qt::Key_F13, Qt::NoModifier}));
+}
+
+void TestKeyboardMapping::testMultipleChordsCanBindSameAction() {
+    auto &m = KeyboardMapping::instance();
+    KeyChord primary{Qt::Key_Q, Qt::ControlModifier};
+    KeyChord secondary{Qt::Key_L, Qt::ControlModifier | Qt::AltModifier};
+    m.setBinding(primary, MappedAction::Clear);
+    m.setBinding(secondary, MappedAction::Clear);
+    auto chords = m.chordsFor(MappedAction::Clear);
+    QVERIFY(chords.contains(primary));
+    QVERIFY(chords.contains(secondary));
+    // Both chords resolve to the same action.
+    QCOMPARE(m.lookup(primary), MappedAction::Clear);
+    QCOMPARE(m.lookup(secondary), MappedAction::Clear);
+}
+
+void TestKeyboardMapping::testMultipleChordsPersistViaQSettings() {
+    auto &m = KeyboardMapping::instance();
+    KeyChord a{Qt::Key_Q, Qt::ControlModifier};
+    KeyChord b{Qt::Key_L, Qt::ControlModifier | Qt::AltModifier};
+    m.setBinding(a, MappedAction::Clear);
+    m.setBinding(b, MappedAction::Clear);
+    m.save();
+
+    m.resetToDefaults();
+    // After defaults reset, our custom chords no longer resolve.
+    QCOMPARE(m.lookup(a), MappedAction::None);
+    QCOMPARE(m.lookup(b), MappedAction::None);
+
+    m.load();
+    QCOMPARE(m.lookup(a), MappedAction::Clear);
+    QCOMPARE(m.lookup(b), MappedAction::Clear);
+    QCOMPARE(m.chordsFor(MappedAction::Clear).size(), 2);
 }
 
 QTEST_MAIN(TestKeyboardMapping)
