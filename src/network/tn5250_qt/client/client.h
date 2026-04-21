@@ -95,6 +95,7 @@ class TN5250Client : public QObject {
     void onSocketDisconnected();
     void onSocketReadyRead();
     void onSocketError(QAbstractSocket::SocketError error);
+    void onConnectTimeout();
 #ifdef HAVE_QT6_SSL
     void onSslErrors(const QList<QSslError> &errors);
 #endif
@@ -160,6 +161,14 @@ class TN5250Client : public QObject {
     void startHeartbeat();
     void stopHeartbeat();
     void sendHeartbeat();
+
+    // Connect timeout: owned QTimer so each connect attempt can arm it and
+    // any later successful connect, user-initiated disconnect, or subsequent
+    // connectToHost() cancels it. A fire-and-forget QTimer::singleShot would
+    // leave stale timers live across reconnects and could abort an unrelated
+    // later attempt that happens to be in the Connecting state.
+    QTimer *m_connectTimeoutTimer = nullptr;
+    void armConnectTimeout();
 };
 
 } // namespace tn5250::client
