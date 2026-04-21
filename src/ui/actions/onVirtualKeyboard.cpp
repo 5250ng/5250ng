@@ -38,6 +38,22 @@ void MainWindow::onToggleVirtualKeyboard() {
     bool show = !m_virtualKeyboard->isVisible();
     m_virtualKeyboard->setVisible(show);
     if (m_virtualKeyboardAction) m_virtualKeyboardAction->setChecked(show);
+    rebindVirtualKeyboardPulse();
+}
+
+void MainWindow::rebindVirtualKeyboardPulse() {
+    // Drop the previous session's connection (harmless if it is already stale).
+    if (m_virtualKeyboardPulseConnection) {
+        QObject::disconnect(m_virtualKeyboardPulseConnection);
+        m_virtualKeyboardPulseConnection = QMetaObject::Connection();
+    }
+    if (!m_virtualKeyboard || !m_virtualKeyboard->isVisible() || !m_displayWidget) return;
+    m_virtualKeyboardPulseConnection = connect(
+        m_displayWidget, &ui::widgets::Q5250ScreenWidget::keyRecorded,
+        m_virtualKeyboard,
+        [this](int key, Qt::KeyboardModifiers mods, const QString &) {
+            m_virtualKeyboard->pulseForChord(key, mods);
+        });
 }
 
 void MainWindow::onEditKeyboardMapping() {
