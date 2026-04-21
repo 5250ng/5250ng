@@ -21,8 +21,10 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace ui::widgets {
@@ -203,6 +205,32 @@ void QVirtualKeyboardWidget::buildLayout() {
     addActionKey(nav, 2, 4, 1, 1, tr("←"), MappedAction::ArrowLeft);
     addActionKey(nav, 2, 5, 1, 1, tr("→"), MappedAction::ArrowRight);
     root->addLayout(nav);
+}
+
+void QVirtualKeyboardWidget::pulseForChord(int key, Qt::KeyboardModifiers modifiers) {
+    // Only the modifiers the mapping cares about; strip keypad/num-lock noise.
+    Qt::KeyboardModifiers mods = modifiers &
+        (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    core::MappedAction action = core::KeyboardMapping::instance().lookup(key, mods);
+    if (action == core::MappedAction::None) return;
+
+    QPushButton *target = nullptr;
+    for (const auto &entry : m_actionButtons) {
+        if (entry.action == action) { target = entry.button; break; }
+    }
+    if (!target) return;
+
+    // Use a dynamic property + stylesheet so the pulse restores cleanly without
+    // interfering with whatever base styling the host application provides.
+    target->setProperty("pulsing", true);
+    target->setStyleSheet(QStringLiteral(
+        "QPushButton[pulsing=\"true\"] { background-color: #f1c40f; color: #202020; }"));
+    QPointer<QPushButton> safe(target);
+    QTimer::singleShot(180, this, [safe]() {
+        if (!safe) return;
+        safe->setProperty("pulsing", false);
+        safe->setStyleSheet(QString());
+    });
 }
 
 void QVirtualKeyboardWidget::refreshChordLabels() {

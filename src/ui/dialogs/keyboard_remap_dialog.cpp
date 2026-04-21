@@ -239,6 +239,43 @@ void KeyboardRemapDialog::populateRows() {
 
 void KeyboardRemapDialog::onRowChordsChanged(MappedAction action,
                                              const QList<KeyChord> &chords) {
+    // Snapshot this action's previous bindings BEFORE any mutation so we can
+    // roll the editor back if the user declines a conflict prompt.
+    QList<KeyChord> previous;
+    for (auto it = m_working.constBegin(); it != m_working.constEnd(); ++it) {
+        if (it.value() == action) previous.append(it.key());
+    }
+
+    // Ask the user before silently stealing a chord from a different action.
+    // Only newly captured chords are candidates — reordering or re-entering the
+    // same chord must not trigger a prompt.
+    for (const auto &chord : chords) {
+        if (!chord.isValid()) continue;
+        if (previous.contains(chord)) continue;
+        auto existing = m_working.constFind(chord);
+        if (existing == m_working.constEnd() || existing.value() == action) continue;
+
+        MappedAction prevOwner = existing.value();
+        QString prompt = tr(
+            "%1 is currently bound to \"%2\".\n\n"
+            "Replace that binding with \"%3\"?")
+            .arg(chord.toString(),
+                 KeyboardMapping::actionName(prevOwner),
+                 KeyboardMapping::actionName(action));
+        auto result = ui::widgets::StyledMessageBox::question(
+            this, tr("Replace existing binding?"), prompt);
+        if (result != ui::widgets::StyledMessageBox::Yes) {
+            // Roll the row back to its prior state without touching m_working.
+            ChordListEditor *editor = editorForAction(action);
+            if (editor) {
+                QSignalBlocker block(editor);
+                editor->setChords(previous);
+            }
+            m_table->resizeRowsToContents();
+            return;
+        }
+    }
+
     // Drop every existing binding for this action so we can rebuild from the
     // editor's current set.
     for (auto it = m_working.begin(); it != m_working.end();) {
