@@ -75,15 +75,7 @@ void TN5250Client::connectToHost(const QString &hostname, quint16 port, bool use
         // Start TLS after connection
         m_sslSocket->connectToHostEncrypted(hostname, port);
 
-        // Safety timeout: if TLS handshake doesn't complete within 30s, abort
-        QTimer::singleShot(30000, this, [this]() {
-            if (m_state == ConnectionState::Connecting) {
-                logger::Logger::instance()->error(
-                    "[TN5250->Client]: TLS handshake timed out after 30 seconds");
-                disconnectFromHost();
-                emit errorOccurred("TLS handshake timed out");
-            }
-        });
+        armConnectTimeout();
     } else {
 #else
     if (useTLS) {
@@ -112,20 +104,36 @@ void TN5250Client::connectToHost(const QString &hostname, quint16 port, bool use
 
         m_tcpSocket->connectToHost(hostname, port);
 
-        // Safety timeout: if TCP connection doesn't establish within 30s, abort
-        QTimer::singleShot(30000, this, [this]() {
-            if (m_state == ConnectionState::Connecting) {
-                logger::Logger::instance()->error(
-                    "[TN5250->Client]: TCP connection timed out after 30 seconds");
-                disconnectFromHost();
-                emit errorOccurred("Connection timed out");
-            }
-        });
+        armConnectTimeout();
     }
+}
+
+void TN5250Client::armConnectTimeout() {
+    if (!m_connectTimeoutTimer) {
+        m_connectTimeoutTimer = new QTimer(this);
+        m_connectTimeoutTimer->setSingleShot(true);
+        connect(m_connectTimeoutTimer, &QTimer::timeout,
+                this, &TN5250Client::onConnectTimeout);
+    }
+    m_connectTimeoutTimer->start(30000);
+}
+
+void TN5250Client::onConnectTimeout() {
+    if (m_state != ConnectionState::Connecting) return;
+    const char *what = m_useTLS ? "TLS handshake" : "TCP connection";
+    logger::Logger::instance()->error(
+        QString("[TN5250->Client]: %1 timed out after 30 seconds").arg(what));
+    disconnectFromHost();
+    emit errorOccurred(m_useTLS ? QStringLiteral("TLS handshake timed out")
+                                : QStringLiteral("Connection timed out"));
 }
 
 void TN5250Client::disconnectFromHost() {
     stopHeartbeat();
+
+    if (m_connectTimeoutTimer) {
+        m_connectTimeoutTimer->stop();
+    }
 
     if (m_socket) {
         // Abort instead of blocking - avoids freezing the thread for up to 3s

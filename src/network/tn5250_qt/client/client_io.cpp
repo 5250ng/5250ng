@@ -22,6 +22,8 @@
 #include <QtNetwork/QSslSocket>
 #endif
 
+#include <QTimer>
+
 namespace tn5250::client {
 
 void TN5250Client::onSocketConnected() {
@@ -34,6 +36,7 @@ void TN5250Client::onSocketConnected() {
                 "[TN5250->Client]: TLS connection established"
             );
             m_tlsStarted = true;
+            if (m_connectTimeoutTimer) m_connectTimeoutTimer->stop();
             setState(ConnectionState::Negotiating);
             performHandshake();
         } else {
@@ -42,6 +45,7 @@ void TN5250Client::onSocketConnected() {
         }
     } else {
 #endif
+        if (m_connectTimeoutTimer) m_connectTimeoutTimer->stop();
         setState(ConnectionState::Negotiating);
         performHandshake();
 #ifdef HAVE_QT6_SSL
