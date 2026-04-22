@@ -443,6 +443,14 @@ if(WIN32)
     set_target_properties(5250ng PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
+    # The .rc file embeds our custom manifest (DPI awareness, Win10/11 compat,
+    # UAC asInvoker, common-controls v6). MSVC's linker also auto-generates a
+    # manifest at id 1, language 0x0409 — the same slot — which causes
+    # CVT1100 "duplicate resource" at link time. Suppress the linker's
+    # manifest so only the .rc-embedded one ships.
+    if(MSVC)
+        target_link_options(5250ng PRIVATE "/MANIFEST:NO")
+    endif()
 endif()
 
 if(APPLE)
