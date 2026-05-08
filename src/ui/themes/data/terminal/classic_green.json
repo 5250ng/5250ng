@@ -21,7 +21,7 @@
     },
     "columnSeparator": {
         "color": "#808080",
-        "enabled": true,
+        "enabled": false,
         "style": "solid"
     },
     "crtEffect": {
