@@ -47,6 +47,7 @@ class TestDecoder : public QObject {
   private slots:
     void onCommandReceived(TN5250Command cmd, const QByteArray &data);
     void onStructuredFieldReceived(StructuredFieldType type, const QByteArray &data);
+    void onWriteStructuredFieldReceived(const QByteArray &data);
     void onParseError(const QString &error);
     void onRawScreenDataReceived(const QByteArray &data);
     void onClearScreenRequested();
@@ -62,6 +63,8 @@ void TestDecoder::init() {
     connect(m_parser, &DecoderAdapter::commandReceived, this, &TestDecoder::onCommandReceived);
     connect(m_parser, &DecoderAdapter::structuredFieldReceived,
             this, &TestDecoder::onStructuredFieldReceived);
+    connect(m_parser, &DecoderAdapter::writeStructuredFieldReceived,
+            this, &TestDecoder::onWriteStructuredFieldReceived);
     connect(m_parser, &DecoderAdapter::parseError, this, &TestDecoder::onParseError);
     connect(m_parser, &DecoderAdapter::rawScreenDataReceived,
             this, &TestDecoder::onRawScreenDataReceived);
@@ -90,6 +93,10 @@ void TestDecoder::onCommandReceived(TN5250Command cmd, const QByteArray &data) {
 void TestDecoder::onStructuredFieldReceived(StructuredFieldType type,
                                             const QByteArray &data) {
     m_lastSFType = type;
+    m_lastSFData = data;
+}
+
+void TestDecoder::onWriteStructuredFieldReceived(const QByteArray &data) {
     m_lastSFData = data;
 }
 
@@ -173,10 +180,17 @@ void TestDecoder::testCommandWithData() {
 }
 
 void TestDecoder::testStructuredField() {
+    // Build a real Write Structured Field per RFC 1205 §12.5.1:
+    //   ESC F3 [LL LL] [class] [type] [data]
+    // where LL LL is the big-endian total SF length (length + class + type
+    // + data). Length 6 = 2 (length) + 2 (class/type) + 2 (data).
     QByteArray sfPayload;
     sfPayload.append('\x04');
-    sfPayload.append('\x12');
-    sfPayload.append(static_cast<char>(StructuredFieldType::OUTBOUND_5250_DS));
+    sfPayload.append('\xF3');
+    sfPayload.append('\x00');
+    sfPayload.append('\x06');
+    sfPayload.append('\xD9');
+    sfPayload.append('\x70');
     sfPayload.append('\xAA');
     sfPayload.append('\xBB');
 
@@ -185,6 +199,13 @@ void TestDecoder::testStructuredField() {
 
     QCOMPARE(m_parser->state(), ParserState::WaitingForCommand);
     QVERIFY(m_lastError.isEmpty());
+    QCOMPARE(m_lastSFData.size(), 6);
+    QCOMPARE(static_cast<uint8_t>(m_lastSFData[0]), static_cast<uint8_t>(0x00));
+    QCOMPARE(static_cast<uint8_t>(m_lastSFData[1]), static_cast<uint8_t>(0x06));
+    QCOMPARE(static_cast<uint8_t>(m_lastSFData[2]), static_cast<uint8_t>(0xD9));
+    QCOMPARE(static_cast<uint8_t>(m_lastSFData[3]), static_cast<uint8_t>(0x70));
+    QCOMPARE(static_cast<uint8_t>(m_lastSFData[4]), static_cast<uint8_t>(0xAA));
+    QCOMPARE(static_cast<uint8_t>(m_lastSFData[5]), static_cast<uint8_t>(0xBB));
 }
 
 void TestDecoder::testInvalidLength() {
