@@ -25,6 +25,18 @@
 
 namespace session {
 
+// Policy controlling how the client reacts to a host-issued STRPCCMD
+// (Start PC Command). The default is DenyAndAlert: STRPCCMD is the mechanism
+// behind CVE-2005-0868 so we never run anything by default, but we surface
+// the attempt to the user instead of staying silent — silent denial would
+// hide the fact that a host is trying to run code on the user's machine.
+enum class PcCommandPolicy {
+    Deny,             // Refuse silently. Host still receives ENTER so its CL program continues.
+    DenyAndAlert,     // Refuse, but show the user a notification with the attempted command.
+    AllowWithPrompt,  // Show an Allow/Deny dialog with the command before running.
+    AllowAlways,      // Run every command silently. Insecure; only for trusted hosts.
+};
+
 // Session configuration for TN5250 connections
 class SessionConfig : public QObject {
     Q_OBJECT
@@ -96,16 +108,10 @@ class SessionConfig : public QObject {
     QString password() const { return m_password; }
     void setPassword(const QString &password) { m_password = password; }
 
-    // STRPCCMD: when true, allow the host to ask the client to run a command
-    // on the local PC. Default is false because this is the mechanism behind
-    // CVE-2005-0868. Even when enabled, every command is gated by a per-command
-    // confirmation prompt unless pcCommandConfirmEachTime is explicitly turned
-    // off (currently always-on; the field exists for forward extensibility).
-    bool pcCommandEnabled() const { return m_pcCommandEnabled; }
-    void setPcCommandEnabled(bool enabled) { m_pcCommandEnabled = enabled; }
-
-    bool pcCommandConfirmEachTime() const { return m_pcCommandConfirmEachTime; }
-    void setPcCommandConfirmEachTime(bool confirm) { m_pcCommandConfirmEachTime = confirm; }
+    // STRPCCMD policy. Default is Deny because this is the mechanism behind
+    // CVE-2005-0868. See the PcCommandPolicy enum for the four states.
+    PcCommandPolicy pcCommandPolicy() const { return m_pcCommandPolicy; }
+    void setPcCommandPolicy(PcCommandPolicy policy) { m_pcCommandPolicy = policy; }
 
     // Serialization
     QJsonObject toJson() const;
@@ -134,8 +140,7 @@ class SessionConfig : public QObject {
     QHash<QString, QString> m_sessionVariables;
     QString m_username;
     QString m_password;
-    bool m_pcCommandEnabled = false;
-    bool m_pcCommandConfirmEachTime = true;
+    PcCommandPolicy m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
 
 };
 

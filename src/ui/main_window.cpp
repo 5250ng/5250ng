@@ -860,11 +860,15 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // cannot run anything on the PC unless the user explicitly enabled it in
     // session settings.
     session->pcCommandRunner = new core::PcCommandRunner(session->container);
-    session->pcCommandRunner->setEnabled(session->config.pcCommandEnabled());
+    // The handler dispatches on the STRPCCMD policy; the runner itself stays
+    // disabled here and is enabled per-call in the AllowWithPrompt /
+    // AllowAlways branches. This keeps the policy as the single source of
+    // truth and prevents accidental "enabled but no policy" states.
     session->commandHandler->setPcCommandRunner(session->pcCommandRunner);
     session->commandHandler->setCodePage(session->config.codePage());
     session->commandHandler->setHostname(session->config.hostname());
     session->commandHandler->setDialogParent(session->container);
+    session->commandHandler->setPcCommandPolicy(session->config.pcCommandPolicy());
 
     session->commandHandler->connectDecoder(session->parser);
 

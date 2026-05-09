@@ -41,6 +41,13 @@ class PcCommandConfirmDialog : public QDialog {
     static bool ask(const QString &hostname,
                     const QString &command,
                     QWidget *parent);
+
+    // Notify the user that a host attempted to run a PC command that was
+    // refused by policy ("Deny and alert" mode). Modeless / dismiss-only —
+    // there is no Allow option, just an OK button.
+    static void notifyDenied(const QString &hostname,
+                             const QString &command,
+                             QWidget *parent);
 };
 
 } // namespace ui::dialogs

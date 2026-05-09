@@ -83,4 +83,51 @@ bool PcCommandConfirmDialog::ask(const QString &hostname,
     return dlg.exec() == QDialog::Accepted;
 }
 
+void PcCommandConfirmDialog::notifyDenied(const QString &hostname,
+                                          const QString &command,
+                                          QWidget *parent) {
+    // Information-only modal: surfaces a refused STRPCCMD attempt to the user
+    // so a host that tries to run something never goes unnoticed under the
+    // "Deny and alert" policy. No Allow button — the policy already refused.
+    QDialog dlg(parent);
+    dlg.setWindowTitle("PC command blocked");
+    dlg.setModal(true);
+
+    auto *layout = new QVBoxLayout(&dlg);
+
+    auto *header = new QLabel(&dlg);
+    header->setTextFormat(Qt::RichText);
+    header->setWordWrap(true);
+    header->setText(
+        QString("<b>The host <code>%1</code> tried to run a command on this "
+                "PC. It was refused by your session policy (Deny and alert).</b>")
+            .arg(hostname.isEmpty() ? "(unknown)" : hostname.toHtmlEscaped()));
+    layout->addWidget(header);
+
+    auto *commandView = new QPlainTextEdit(&dlg);
+    commandView->setPlainText(command);
+    commandView->setReadOnly(true);
+    commandView->setMinimumHeight(80);
+    layout->addWidget(commandView);
+
+    auto *footer = new QLabel(&dlg);
+    footer->setTextFormat(Qt::RichText);
+    footer->setWordWrap(true);
+    footer->setText(
+        "<i>Nothing was executed. To allow PC commands from this host, change "
+        "the STRPCCMD policy in the session settings.</i>");
+    layout->addWidget(footer);
+
+    auto *buttons = new QHBoxLayout();
+    auto *ok = new QPushButton("OK", &dlg);
+    ok->setDefault(true);
+    QObject::connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
+    buttons->addStretch();
+    buttons->addWidget(ok);
+    layout->addLayout(buttons);
+
+    dlg.setLayout(layout);
+    dlg.exec();
+}
+
 } // namespace ui::dialogs

@@ -93,15 +93,6 @@ void ConnectDialog::setupUI() {
         "certificates are accepted. Leave off unless you trust the host.");
     formLayout->addRow("", m_allowInvalidCertsCheck);
 
-    m_pcCommandEnabledCheck = new QCheckBox(
-        "Allow host to run PC commands (STRPCCMD, insecure)", this);
-    m_pcCommandEnabledCheck->setToolTip(
-        "When enabled, the host can ask 5250ng to run a command on this PC "
-        "(IBM i STRPCCMD). Every command shows a confirmation prompt before "
-        "running. Leave off unless you trust the host — this is the mechanism "
-        "behind CVE-2005-0868.");
-    formLayout->addRow("", m_pcCommandEnabledCheck);
-
     m_usernameEdit = new QLineEdit(this);
     m_usernameEdit->setPlaceholderText("(optional - for encrypted sign-on)");
     formLayout->addRow("Username:", m_usernameEdit);
@@ -183,6 +174,50 @@ void ConnectDialog::setupUI() {
     codePageGroup->setLayout(codePageLayout);
     mainLayout->addWidget(codePageGroup);
 
+    // PC Command Execution (STRPCCMD) — three-way policy. Off by default
+    // because this is the mechanism behind CVE-2005-0868: the host can ask
+    // the client to run any command its user can run.
+    QGroupBox *pcCmdGroup = new QGroupBox("PC Command Execution (STRPCCMD)", this);
+    QVBoxLayout *pcCmdLayout = new QVBoxLayout(pcCmdGroup);
+    QLabel *pcCmdWarning = new QLabel(
+        "Controls whether this host can ask 5250ng to run a command on your PC. "
+        "STRPCCMD is the mechanism behind CVE-2005-0868 — leave on \"Deny\" "
+        "unless you trust this host.",
+        this);
+    pcCmdWarning->setWordWrap(true);
+    pcCmdLayout->addWidget(pcCmdWarning);
+
+    m_pcCmdDenyRadio = new QRadioButton(
+        "Deny silently: refuse all PC commands (recommended)", this);
+    m_pcCmdDenyAlertRadio = new QRadioButton(
+        "Deny and alert: refuse, but show a notification when the host attempts a command", this);
+    m_pcCmdPromptRadio = new QRadioButton(
+        "Allow with confirmation: prompt before running each command", this);
+    m_pcCmdAllowAlwaysRadio = new QRadioButton(
+        "Allow without prompting: run every command silently (insecure)", this);
+    m_pcCmdDenyRadio->setToolTip(
+        "Default. The host's STRPCCMD requests are silently refused; the host "
+        "still receives an ENTER reply so its CL program continues.");
+    m_pcCmdDenyAlertRadio->setToolTip(
+        "The host's STRPCCMD requests are refused, but a notification dialog "
+        "is shown each time so you know the host attempted to run something. "
+        "Useful when you want to monitor a host without trusting it.");
+    m_pcCmdPromptRadio->setToolTip(
+        "Each STRPCCMD shows a modal with the command string and Allow/Deny "
+        "before anything runs.");
+    m_pcCmdAllowAlwaysRadio->setToolTip(
+        "Every STRPCCMD runs immediately with no user confirmation. Anything "
+        "the host sends will execute as you. Only use on hosts you fully "
+        "control.");
+    pcCmdLayout->addWidget(m_pcCmdDenyRadio);
+    pcCmdLayout->addWidget(m_pcCmdDenyAlertRadio);
+    pcCmdLayout->addWidget(m_pcCmdPromptRadio);
+    pcCmdLayout->addWidget(m_pcCmdAllowAlwaysRadio);
+    // Default selection mirrors the SessionConfig default (DenyAndAlert).
+    m_pcCmdDenyAlertRadio->setChecked(true);
+    pcCmdGroup->setLayout(pcCmdLayout);
+    mainLayout->addWidget(pcCmdGroup);
+
     // Terminal theme group
     QGroupBox *themeGroup = new QGroupBox("Terminal Theme", this);
     QFormLayout *themeLayout = new QFormLayout(themeGroup);
@@ -249,7 +284,20 @@ void ConnectDialog::updateUI() {
     m_portSpin->setValue(m_currentConfig.port());
     m_tlsCheck->setChecked(m_currentConfig.useTLS());
     m_allowInvalidCertsCheck->setChecked(m_currentConfig.allowInvalidCertificates());
-    m_pcCommandEnabledCheck->setChecked(m_currentConfig.pcCommandEnabled());
+    switch (m_currentConfig.pcCommandPolicy()) {
+    case session::PcCommandPolicy::Deny:
+        m_pcCmdDenyRadio->setChecked(true);
+        break;
+    case session::PcCommandPolicy::DenyAndAlert:
+        m_pcCmdDenyAlertRadio->setChecked(true);
+        break;
+    case session::PcCommandPolicy::AllowWithPrompt:
+        m_pcCmdPromptRadio->setChecked(true);
+        break;
+    case session::PcCommandPolicy::AllowAlways:
+        m_pcCmdAllowAlwaysRadio->setChecked(true);
+        break;
+    }
     m_usernameEdit->setText(m_currentConfig.username());
     m_passwordEdit->setText(m_currentConfig.password());
     // Select device type in combo if supported
@@ -312,7 +360,15 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setPort(static_cast<quint16>(m_portSpin->value()));
     config.setUseTLS(m_tlsCheck->isChecked());
     config.setAllowInvalidCertificates(m_allowInvalidCertsCheck->isChecked());
-    config.setPcCommandEnabled(m_pcCommandEnabledCheck->isChecked());
+    if (m_pcCmdAllowAlwaysRadio->isChecked()) {
+        config.setPcCommandPolicy(session::PcCommandPolicy::AllowAlways);
+    } else if (m_pcCmdPromptRadio->isChecked()) {
+        config.setPcCommandPolicy(session::PcCommandPolicy::AllowWithPrompt);
+    } else if (m_pcCmdDenyAlertRadio->isChecked()) {
+        config.setPcCommandPolicy(session::PcCommandPolicy::DenyAndAlert);
+    } else {
+        config.setPcCommandPolicy(session::PcCommandPolicy::Deny);
+    }
     if (m_deviceCombo->currentIndex() == m_customDeviceIndex) {
         config.setDeviceType(m_customDeviceEdit->text());
     } else {

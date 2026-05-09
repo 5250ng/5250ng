@@ -797,17 +797,40 @@ void TN5250CommandHandler::onStrpccmdRequested() {
         return;
     }
 
-    if (m_pcCommandRunner) {
+    // Dispatch on the four STRPCCMD policies. The host always gets ENTER (via
+    // sendEnterAndReturn at function exit) regardless of which branch runs.
+    switch (m_pcCommandPolicy) {
+    case session::PcCommandPolicy::Deny:
+        LOG_DEBUG("CommandHandler: STRPCCMD denied silently by policy");
+        break;
+    case session::PcCommandPolicy::DenyAndAlert:
+        LOG_DEBUG("CommandHandler: STRPCCMD denied by policy; alerting user");
+        ui::dialogs::PcCommandConfirmDialog::notifyDenied(
+            m_hostname, command, m_dialogParent);
+        break;
+    case session::PcCommandPolicy::AllowWithPrompt:
+    case session::PcCommandPolicy::AllowAlways: {
+        if (!m_pcCommandRunner) {
+            LOG_DEBUG("CommandHandler: STRPCCMD policy allows but runner not configured; refusing");
+            break;
+        }
+        m_pcCommandRunner->setEnabled(true);
         m_pcCommandRunner->setHostname(m_hostname);
-        m_pcCommandRunner->setConfirmCallback(
-            [this](const QString &host, const QString &cmd) {
-                return ui::dialogs::PcCommandConfirmDialog::ask(host, cmd, m_dialogParent);
-            });
+        if (m_pcCommandPolicy == session::PcCommandPolicy::AllowWithPrompt) {
+            m_pcCommandRunner->setConfirmCallback(
+                [this](const QString &host, const QString &cmd) {
+                    return ui::dialogs::PcCommandConfirmDialog::ask(host, cmd, m_dialogParent);
+                });
+        } else {
+            // AllowAlways: clear any previously-installed dialog callback so
+            // the runner falls through directly to execute.
+            m_pcCommandRunner->setConfirmCallback(nullptr);
+        }
         m_pcCommandRunner->run(command,
                                noWait ? core::PcCommandRunner::Mode::NoWait
                                       : core::PcCommandRunner::Mode::Wait);
-    } else {
-        LOG_DEBUG("CommandHandler: STRPCCMD has no runner configured; refusing silently");
+        break;
+    }
     }
 
     sendEnterAndReturn();

@@ -27,6 +27,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
 #include <QHash>
@@ -74,7 +75,10 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     QSpinBox *m_portSpin;
     QCheckBox *m_tlsCheck;
     QCheckBox *m_allowInvalidCertsCheck;
-    QCheckBox *m_pcCommandEnabledCheck;
+    QRadioButton *m_pcCmdDenyRadio;
+    QRadioButton *m_pcCmdDenyAlertRadio;
+    QRadioButton *m_pcCmdPromptRadio;
+    QRadioButton *m_pcCmdAllowAlwaysRadio;
     QLineEdit *m_usernameEdit;
     QLineEdit *m_passwordEdit;
     QComboBox *m_deviceCombo;

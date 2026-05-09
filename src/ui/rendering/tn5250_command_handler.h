@@ -19,6 +19,7 @@
 #include "core/codepage.h"
 #include "core/pc_command_runner.h"
 #include "network/tn5250_qt/client/decoder_adapter.h"
+#include "session/config.h"
 #include "tn5250_stream_renderer.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
@@ -98,6 +99,9 @@ class TN5250CommandHandler : public QObject {
     void setCodePage(core::CodePage::ID id) { m_codePageId = id; }
     void setHostname(const QString &hostname) { m_hostname = hostname; }
     void setDialogParent(QWidget *parent) { m_dialogParent = parent; }
+    // STRPCCMD policy — controls how onStrpccmdRequested reacts to a host
+    // attempt: Deny silently, Deny + alert, Allow with prompt, Allow always.
+    void setPcCommandPolicy(session::PcCommandPolicy policy) { m_pcCommandPolicy = policy; }
 
   private:
     ui::widgets::Q5250ScreenWidget *m_displayWidget = nullptr;
@@ -110,6 +114,7 @@ class TN5250CommandHandler : public QObject {
     core::CodePage::ID m_codePageId = core::CodePage::ID::CP037;
     QString m_hostname;
     QPointer<QWidget> m_dialogParent;
+    session::PcCommandPolicy m_pcCommandPolicy = session::PcCommandPolicy::DenyAndAlert;
 };
 
 } // namespace ui::rendering
