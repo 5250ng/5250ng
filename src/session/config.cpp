@@ -23,7 +23,7 @@ namespace session {
 
 SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceType("IBM-3179-2"), m_deviceName(""), m_screenRows(24), m_screenCols(80), m_codePage(core::CodePage::ID::CP037), m_terminalThemeId("classic_green") {}
 
-SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password) {}
+SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_pcCommandPolicy(other.m_pcCommandPolicy) {}
 
 SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
     if (this != &other) {
@@ -43,10 +43,38 @@ SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
         m_sessionVariables = other.m_sessionVariables;
         m_username = other.m_username;
         m_password = other.m_password;
+        m_pcCommandPolicy = other.m_pcCommandPolicy;
         emit changed();
     }
     return *this;
 }
+
+namespace {
+
+// String tags persisted in JSON for each PcCommandPolicy. Strings are stable
+// over time and self-documenting in saved config files; an int would be
+// shorter but harder to grep and easy to misread when comparing files.
+QString pcCommandPolicyToString(PcCommandPolicy policy) {
+    switch (policy) {
+    case PcCommandPolicy::Deny:            return QStringLiteral("deny");
+    case PcCommandPolicy::DenyAndAlert:    return QStringLiteral("denyAlert");
+    case PcCommandPolicy::AllowWithPrompt: return QStringLiteral("allowPrompt");
+    case PcCommandPolicy::AllowAlways:     return QStringLiteral("allowAlways");
+    }
+    return QStringLiteral("deny");
+}
+
+// Returns the default DenyAndAlert on any unrecognised string. This keeps the
+// fall-through path safe (never run) while also surfacing the typo/unknown
+// value to the user via the alert, instead of silently swallowing it.
+PcCommandPolicy pcCommandPolicyFromString(const QString &s) {
+    if (s == QStringLiteral("deny"))         return PcCommandPolicy::Deny;
+    if (s == QStringLiteral("allowPrompt"))  return PcCommandPolicy::AllowWithPrompt;
+    if (s == QStringLiteral("allowAlways"))  return PcCommandPolicy::AllowAlways;
+    return PcCommandPolicy::DenyAndAlert;
+}
+
+} // namespace
 
 QJsonObject SessionConfig::toJson() const {
     QJsonObject json;
@@ -77,6 +105,10 @@ QJsonObject SessionConfig::toJson() const {
         json["username"] = m_username;
     if (!m_password.isEmpty())
         json["password"] = m_password;
+    // Only persist the policy when it diverges from the default (DenyAndAlert),
+    // so existing config files do not gain a surprising new key on first save.
+    if (m_pcCommandPolicy != PcCommandPolicy::DenyAndAlert)
+        json["pcCommandPolicy"] = pcCommandPolicyToString(m_pcCommandPolicy);
     return json;
 }
 
@@ -165,6 +197,27 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     }
     if (json.contains("password") && json["password"].isString()) {
         m_password = json["password"].toString();
+    }
+    // STRPCCMD policy. Prefer the new "pcCommandPolicy" string field; fall
+    // back to the older boolean pair for configs written by an earlier build:
+    //   pcCommandEnabled=false (or absent)                   -> DenyAndAlert (default)
+    //   pcCommandEnabled=true,  confirmEachTime=true|absent  -> AllowWithPrompt
+    //   pcCommandEnabled=true,  confirmEachTime=false        -> AllowAlways
+    // Absence of every key also lands on DenyAndAlert — never run on
+    // ambiguous configs, but always make refused attempts visible.
+    if (json.contains("pcCommandPolicy") && json["pcCommandPolicy"].isString()) {
+        m_pcCommandPolicy = pcCommandPolicyFromString(json["pcCommandPolicy"].toString());
+    } else if (json.contains("pcCommandEnabled") && json["pcCommandEnabled"].isBool()
+               && json["pcCommandEnabled"].toBool()) {
+        const bool confirmEachTime =
+            !json.contains("pcCommandConfirmEachTime")
+            || !json["pcCommandConfirmEachTime"].isBool()
+            || json["pcCommandConfirmEachTime"].toBool();
+        m_pcCommandPolicy = confirmEachTime
+            ? PcCommandPolicy::AllowWithPrompt
+            : PcCommandPolicy::AllowAlways;
+    } else {
+        m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
     }
     emit changed();
     return isValid();

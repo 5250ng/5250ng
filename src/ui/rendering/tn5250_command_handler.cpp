@@ -15,8 +15,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "tn5250_command_handler.h"
+#include "core/codepage.h"
 #include "logger/logger.h"
 #include "tn5250/protocol_constants.h"
+#include "ui/dialogs/pc_command_confirm_dialog.h"
 #include "utils/hex/hex.h"
 #include <QApplication>
 #include <vector>
@@ -78,6 +80,8 @@ void TN5250CommandHandler::connectDecoder(tn5250::client::DecoderAdapter *parser
             this, &TN5250CommandHandler::onReadScreenRequested);
     connect(parser, &tn5250::client::DecoderAdapter::writeStructuredFieldReceived,
             this, &TN5250CommandHandler::onWriteStructuredFieldReceived);
+    connect(parser, &tn5250::client::DecoderAdapter::strpccmdRequested,
+            this, &TN5250CommandHandler::onStrpccmdRequested);
 }
 
 void TN5250CommandHandler::handleTN5250Command(tn5250::client::TN5250Command cmd,
@@ -718,6 +722,118 @@ void TN5250CommandHandler::onWriteStructuredFieldReceived(const QByteArray &data
     }
     LOG_DEBUG(QString("CommandHandler: Unhandled Write Structured Field (%1 bytes)")
         .arg(data.size()));
+}
+
+void TN5250CommandHandler::onStrpccmdRequested() {
+    // Always send ENTER AID at the end so the host CL program continues
+    // regardless of whether we ran the command. Leaving the keyboard locked is
+    // worse than refusing the command — the user can still recover.
+    auto sendEnterAndReturn = [this]() {
+        if (m_sendToHost) {
+            // 0xF1 = AID_ENTER per SA21-9247-6 page 2-2; same literal used at
+            // the READ_IMMEDIATE site above. Sending ENTER unconditionally on
+            // STRPCCMD ensures the host CL program continues even when we
+            // refuse or fail to run the command.
+            m_sendToHost(buildFieldResponse(0xF1));
+        }
+    };
+
+    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
+        LOG_DEBUG("CommandHandler: STRPCCMD with no screen buffer; sending ENTER and dropping");
+        sendEnterAndReturn();
+        return;
+    }
+
+    auto *screen = m_displayWidget->screenBuffer();
+    const int rows = screen->rows();
+    const int cols = screen->cols();
+    const int totalCells = rows * cols;
+
+    // tn5250j reads from a 1D screen plane: position 11 is the wait flag
+    // ('a' = run async / no-wait), positions 12..(12+123) hold the command
+    // string padded with EBCDIC blanks. Translate to (row, col) using the
+    // configured screen geometry.
+    constexpr int waitFlagPos = 11;
+    constexpr int commandStartPos = 12;
+    constexpr int kPccmdMaxLength = 123;
+
+    if (totalCells < commandStartPos + kPccmdMaxLength) {
+        LOG_DEBUG("CommandHandler: STRPCCMD screen too small for command region; sending ENTER and dropping");
+        sendEnterAndReturn();
+        return;
+    }
+
+    const core::CodePage cp(m_codePageId);
+    auto charAtLinearPos = [&](int pos) -> QChar {
+        const int row = pos / cols;
+        const int col = pos % cols;
+        const uint8_t byte = screen->cell(row, col).character;
+        return cp.toUnicode(byte);
+    };
+
+    const QChar waitChar = charAtLinearPos(waitFlagPos);
+    const bool noWait = (waitChar == QChar('a'));
+
+    QString command;
+    command.reserve(kPccmdMaxLength);
+    for (int p = commandStartPos; p < commandStartPos + kPccmdMaxLength; ++p) {
+        QChar c = charAtLinearPos(p);
+        // Map control characters and undefined codepage entries to space so
+        // they do not break tokenisation downstream.
+        if (c.isNull() || c.category() == QChar::Other_Control) {
+            c = QChar(' ');
+        }
+        command.append(c);
+    }
+    command = command.trimmed();
+
+    LOG_DEBUG(QString("CommandHandler: STRPCCMD wait=%1 command=%2")
+                  .arg(noWait ? "no" : "yes")
+                  .arg(command));
+
+    if (command.isEmpty()) {
+        LOG_DEBUG("CommandHandler: STRPCCMD with empty command after trim; sending ENTER and dropping");
+        sendEnterAndReturn();
+        return;
+    }
+
+    // Dispatch on the four STRPCCMD policies. The host always gets ENTER (via
+    // sendEnterAndReturn at function exit) regardless of which branch runs.
+    switch (m_pcCommandPolicy) {
+    case session::PcCommandPolicy::Deny:
+        LOG_DEBUG("CommandHandler: STRPCCMD denied silently by policy");
+        break;
+    case session::PcCommandPolicy::DenyAndAlert:
+        LOG_DEBUG("CommandHandler: STRPCCMD denied by policy; alerting user");
+        ui::dialogs::PcCommandConfirmDialog::notifyDenied(
+            m_hostname, command, m_dialogParent);
+        break;
+    case session::PcCommandPolicy::AllowWithPrompt:
+    case session::PcCommandPolicy::AllowAlways: {
+        if (!m_pcCommandRunner) {
+            LOG_DEBUG("CommandHandler: STRPCCMD policy allows but runner not configured; refusing");
+            break;
+        }
+        m_pcCommandRunner->setEnabled(true);
+        m_pcCommandRunner->setHostname(m_hostname);
+        if (m_pcCommandPolicy == session::PcCommandPolicy::AllowWithPrompt) {
+            m_pcCommandRunner->setConfirmCallback(
+                [this](const QString &host, const QString &cmd) {
+                    return ui::dialogs::PcCommandConfirmDialog::ask(host, cmd, m_dialogParent);
+                });
+        } else {
+            // AllowAlways: clear any previously-installed dialog callback so
+            // the runner falls through directly to execute.
+            m_pcCommandRunner->setConfirmCallback(nullptr);
+        }
+        m_pcCommandRunner->run(command,
+                               noWait ? core::PcCommandRunner::Mode::NoWait
+                                      : core::PcCommandRunner::Mode::Wait);
+        break;
+    }
+    }
+
+    sendEnterAndReturn();
 }
 
 QByteArray TN5250CommandHandler::buildQueryResponse() {

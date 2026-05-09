@@ -25,6 +25,18 @@
 
 namespace session {
 
+// Policy controlling how the client reacts to a host-issued STRPCCMD
+// (Start PC Command). The default is DenyAndAlert: STRPCCMD is the mechanism
+// behind CVE-2005-0868 so we never run anything by default, but we surface
+// the attempt to the user instead of staying silent — silent denial would
+// hide the fact that a host is trying to run code on the user's machine.
+enum class PcCommandPolicy {
+    Deny,             // Refuse silently. Host still receives ENTER so its CL program continues.
+    DenyAndAlert,     // Refuse, but show the user a notification with the attempted command.
+    AllowWithPrompt,  // Show an Allow/Deny dialog with the command before running.
+    AllowAlways,      // Run every command silently. Insecure; only for trusted hosts.
+};
+
 // Session configuration for TN5250 connections
 class SessionConfig : public QObject {
     Q_OBJECT
@@ -96,6 +108,11 @@ class SessionConfig : public QObject {
     QString password() const { return m_password; }
     void setPassword(const QString &password) { m_password = password; }
 
+    // STRPCCMD policy. Default is Deny because this is the mechanism behind
+    // CVE-2005-0868. See the PcCommandPolicy enum for the four states.
+    PcCommandPolicy pcCommandPolicy() const { return m_pcCommandPolicy; }
+    void setPcCommandPolicy(PcCommandPolicy policy) { m_pcCommandPolicy = policy; }
+
     // Serialization
     QJsonObject toJson() const;
     bool fromJson(const QJsonObject &json);
@@ -123,6 +140,7 @@ class SessionConfig : public QObject {
     QHash<QString, QString> m_sessionVariables;
     QString m_username;
     QString m_password;
+    PcCommandPolicy m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
 
 };
 

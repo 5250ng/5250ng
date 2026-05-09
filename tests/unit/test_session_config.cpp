@@ -34,6 +34,9 @@ class TestSessionConfig : public QObject {
     void testDeserializationRejectsOutOfRange();
     void testAllowInvalidCertificatesDefaultsOff();
     void testAllowInvalidCertificatesRoundTrip();
+    void testPcCommandPolicyDefaults();
+    void testPcCommandPolicyRoundTrip();
+    void testPcCommandPolicyLegacyConfigCompat();
 
   private:
     SessionConfig *m_config;
@@ -278,6 +281,151 @@ void TestSessionConfig::testAllowInvalidCertificatesRoundTrip() {
     QVERIFY(second.fromJson(reset));
     QVERIFY(!second.allowInvalidCertificates());
 }
+
+void TestSessionConfig::testPcCommandPolicyDefaults() {
+    // The default for a fresh SessionConfig must be DenyAndAlert: never run a
+    // host-issued PC command without explicit opt-in, but always make refused
+    // attempts visible so the user knows a host tried.
+    SessionConfig fresh;
+    QCOMPARE(fresh.pcCommandPolicy(), PcCommandPolicy::DenyAndAlert);
+
+    // A JSON object that does not carry the policy key must also resolve to
+    // the default. This covers existing configs written by an earlier build
+    // (where the field did not exist) and any third-party config that omits
+    // the field entirely.
+    QJsonObject json;
+    json["name"] = "Default";
+    json["hostname"] = "example.com";
+    json["port"] = 23;
+    json["useTLS"] = false;
+    json["deviceType"] = "IBM-3179-2";
+    json["deviceName"] = "T";
+    json["screenRows"] = 24;
+    json["screenCols"] = 80;
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QCOMPARE(loaded.pcCommandPolicy(), PcCommandPolicy::DenyAndAlert);
+
+    // Round-tripping a config at the default must NOT write the policy key,
+    // so existing config files do not gain a surprising new key on first save.
+    QJsonObject out = loaded.toJson();
+    QVERIFY(!out.contains("pcCommandPolicy"));
+    QVERIFY(!out.contains("pcCommandEnabled"));
+    QVERIFY(!out.contains("pcCommandConfirmEachTime"));
+}
+
+void TestSessionConfig::testPcCommandPolicyRoundTrip() {
+    // Each non-default policy must round-trip through JSON with a stable
+    // string tag, and the loader must parse that tag back to the same enum.
+    struct Case {
+        PcCommandPolicy policy;
+        const char *expectedTag;
+    };
+    const Case cases[] = {
+        {PcCommandPolicy::Deny,            "deny"},
+        {PcCommandPolicy::AllowWithPrompt, "allowPrompt"},
+        {PcCommandPolicy::AllowAlways,     "allowAlways"},
+    };
+
+    for (const auto &c : cases) {
+        SessionConfig src;
+        src.setName("Round-trip");
+        src.setHostname("h.example.com");
+        src.setPort(23);
+        src.setPcCommandPolicy(c.policy);
+
+        QJsonObject json = src.toJson();
+        QVERIFY2(json.contains("pcCommandPolicy"), c.expectedTag);
+        QCOMPARE(json.value("pcCommandPolicy").toString(), QString::fromLatin1(c.expectedTag));
+
+        SessionConfig loaded;
+        QVERIFY(loaded.fromJson(json));
+        QCOMPARE(loaded.pcCommandPolicy(), c.policy);
+    }
+
+    // A subsequent fromJson with NO policy key must reset back to the default
+    // — guards against a stale policy leaking across config loads.
+    QJsonObject reset;
+    reset["name"] = "Reset";
+    reset["hostname"] = "a.example.com";
+    reset["port"] = 23;
+    reset["useTLS"] = false;
+    reset["deviceType"] = "IBM-3179-2";
+    reset["deviceName"] = "T";
+    reset["screenRows"] = 24;
+    reset["screenCols"] = 80;
+    SessionConfig stale;
+    stale.setPcCommandPolicy(PcCommandPolicy::AllowAlways);
+    QVERIFY(stale.fromJson(reset));
+    QCOMPARE(stale.pcCommandPolicy(), PcCommandPolicy::DenyAndAlert);
+
+    // Unknown policy strings must fall back to the safe default rather than
+    // silently mapping to Deny — the alert path makes the bad value visible.
+    QJsonObject unknown = reset;
+    unknown["pcCommandPolicy"] = "totallyMadeUp";
+    SessionConfig recovered;
+    recovered.setPcCommandPolicy(PcCommandPolicy::AllowAlways);
+    QVERIFY(recovered.fromJson(unknown));
+    QCOMPARE(recovered.pcCommandPolicy(), PcCommandPolicy::DenyAndAlert);
+}
+
+void TestSessionConfig::testPcCommandPolicyLegacyConfigCompat() {
+    // Configs written by the earlier draft of this PR carried a pair of
+    // booleans (pcCommandEnabled + pcCommandConfirmEachTime). The loader must
+    // still understand them so users who saved a config against that build
+    // do not silently revert to the default after upgrade.
+    QJsonObject base;
+    base["name"] = "Legacy";
+    base["hostname"] = "legacy.example.com";
+    base["port"] = 23;
+    base["useTLS"] = false;
+    base["deviceType"] = "IBM-3179-2";
+    base["deviceName"] = "T";
+    base["screenRows"] = 24;
+    base["screenCols"] = 80;
+
+    {
+        // pcCommandEnabled=true with no confirm flag -> AllowWithPrompt.
+        QJsonObject j = base;
+        j["pcCommandEnabled"] = true;
+        SessionConfig cfg;
+        QVERIFY(cfg.fromJson(j));
+        QCOMPARE(cfg.pcCommandPolicy(), PcCommandPolicy::AllowWithPrompt);
+    }
+    {
+        // pcCommandEnabled=true, pcCommandConfirmEachTime=false -> AllowAlways.
+        QJsonObject j = base;
+        j["pcCommandEnabled"] = true;
+        j["pcCommandConfirmEachTime"] = false;
+        SessionConfig cfg;
+        QVERIFY(cfg.fromJson(j));
+        QCOMPARE(cfg.pcCommandPolicy(), PcCommandPolicy::AllowAlways);
+    }
+    {
+        // pcCommandEnabled=false (or absent) -> DenyAndAlert default. The old
+        // build's "Deny silently" lands on the new "Deny and alert" default
+        // intentionally — making refused attempts visible is the new floor.
+        QJsonObject j = base;
+        j["pcCommandEnabled"] = false;
+        SessionConfig cfg;
+        QVERIFY(cfg.fromJson(j));
+        QCOMPARE(cfg.pcCommandPolicy(), PcCommandPolicy::DenyAndAlert);
+    }
+    {
+        // The new policy key wins over the legacy bools when both are present.
+        QJsonObject j = base;
+        j["pcCommandEnabled"] = true;
+        j["pcCommandConfirmEachTime"] = false;
+        j["pcCommandPolicy"] = "deny";
+        SessionConfig cfg;
+        QVERIFY(cfg.fromJson(j));
+        QCOMPARE(cfg.pcCommandPolicy(), PcCommandPolicy::Deny);
+    }
+}
+
+// Make the enum visible to QCOMPARE's diagnostics (the registration is only
+// for nicer failure messages — equality already works on plain enums).
+Q_DECLARE_METATYPE(PcCommandPolicy)
 
 QTEST_MAIN(TestSessionConfig)
 #include "test_session_config.moc"
