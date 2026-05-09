@@ -100,10 +100,15 @@ void TestPcCommandRunner::testNoWaitLaunchesDetachedAndReturnsImmediately() {
     runner.setEnabled(true);
     runner.setConfirmCallback([](const QString &, const QString &) { return true; });
 
+    // Use a command that lives long enough for QProcess::startDetached to
+    // confirm the launch on every supported platform. macOS Qt 6.11 uses
+    // posix_spawn followed by a non-blocking waitpid; sub-millisecond
+    // commands like /bin/true can exit before that check and produce a
+    // false StartFailed result. A short sleep is reliable everywhere.
 #ifdef Q_OS_WIN
-    const QString cmd = "cmd /c exit 0";
+    const QString cmd = "ping -n 2 127.0.0.1";
 #else
-    const QString cmd = "/bin/true";
+    const QString cmd = "/bin/sleep 1";
 #endif
 
     auto result = runner.run(cmd, PcCommandRunner::Mode::NoWait);
