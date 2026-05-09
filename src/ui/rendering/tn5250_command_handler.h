@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "core/codepage.h"
+#include "core/pc_command_runner.h"
 #include "network/tn5250_qt/client/decoder_adapter.h"
 #include "tn5250_stream_renderer.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
@@ -23,6 +25,8 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QObject>
+#include <QPointer>
+#include <QString>
 #include <cstdint>
 #include <functional>
 
@@ -74,6 +78,11 @@ class TN5250CommandHandler : public QObject {
     void onMessageLightOff();
     void onReadScreenRequested(bool includeAttributes);
     void onWriteStructuredFieldReceived(const QByteArray &data);
+    // STRPCCMD: host has asked us to run a PC command. Reads the command off
+    // the rendered screen at fixed positions (per tn5250j's reference
+    // implementation), gates it through the configured PcCommandRunner, then
+    // unconditionally returns ENTER AID so the host CL program continues.
+    void onStrpccmdRequested();
 
     void sendNegResponse(uint8_t category, uint8_t modifier, uint8_t uByte1, uint8_t uByte2);
 
@@ -82,6 +91,14 @@ class TN5250CommandHandler : public QObject {
     QByteArray buildQueryResponse();
     QByteArray buildSaveScreenResponse();
 
+    // Inject runtime context for STRPCCMD handling. The runner owns the
+    // policy/confirm/execute flow; the codepage decodes EBCDIC bytes from the
+    // screen buffer; the parent widget is used as the dialog parent.
+    void setPcCommandRunner(core::PcCommandRunner *runner) { m_pcCommandRunner = runner; }
+    void setCodePage(core::CodePage::ID id) { m_codePageId = id; }
+    void setHostname(const QString &hostname) { m_hostname = hostname; }
+    void setDialogParent(QWidget *parent) { m_dialogParent = parent; }
+
   private:
     ui::widgets::Q5250ScreenWidget *m_displayWidget = nullptr;
     TN5250StreamRenderer *m_renderer = nullptr;
@@ -89,6 +106,10 @@ class TN5250CommandHandler : public QObject {
     SendGDSFn m_sendGDS;
     uint8_t m_pendingCC2 = 0;
     uint8_t m_readType = 0; // 0x52=READ_MDT, 0x42=READ_INPUT
+    core::PcCommandRunner *m_pcCommandRunner = nullptr;
+    core::CodePage::ID m_codePageId = core::CodePage::ID::CP037;
+    QString m_hostname;
+    QPointer<QWidget> m_dialogParent;
 };
 
 } // namespace ui::rendering

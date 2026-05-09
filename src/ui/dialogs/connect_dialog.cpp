@@ -93,6 +93,15 @@ void ConnectDialog::setupUI() {
         "certificates are accepted. Leave off unless you trust the host.");
     formLayout->addRow("", m_allowInvalidCertsCheck);
 
+    m_pcCommandEnabledCheck = new QCheckBox(
+        "Allow host to run PC commands (STRPCCMD, insecure)", this);
+    m_pcCommandEnabledCheck->setToolTip(
+        "When enabled, the host can ask 5250ng to run a command on this PC "
+        "(IBM i STRPCCMD). Every command shows a confirmation prompt before "
+        "running. Leave off unless you trust the host — this is the mechanism "
+        "behind CVE-2005-0868.");
+    formLayout->addRow("", m_pcCommandEnabledCheck);
+
     m_usernameEdit = new QLineEdit(this);
     m_usernameEdit->setPlaceholderText("(optional - for encrypted sign-on)");
     formLayout->addRow("Username:", m_usernameEdit);
@@ -240,6 +249,7 @@ void ConnectDialog::updateUI() {
     m_portSpin->setValue(m_currentConfig.port());
     m_tlsCheck->setChecked(m_currentConfig.useTLS());
     m_allowInvalidCertsCheck->setChecked(m_currentConfig.allowInvalidCertificates());
+    m_pcCommandEnabledCheck->setChecked(m_currentConfig.pcCommandEnabled());
     m_usernameEdit->setText(m_currentConfig.username());
     m_passwordEdit->setText(m_currentConfig.password());
     // Select device type in combo if supported
@@ -302,6 +312,7 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setPort(static_cast<quint16>(m_portSpin->value()));
     config.setUseTLS(m_tlsCheck->isChecked());
     config.setAllowInvalidCertificates(m_allowInvalidCertsCheck->isChecked());
+    config.setPcCommandEnabled(m_pcCommandEnabledCheck->isChecked());
     if (m_deviceCombo->currentIndex() == m_customDeviceIndex) {
         config.setDeviceType(m_customDeviceEdit->text());
     } else {

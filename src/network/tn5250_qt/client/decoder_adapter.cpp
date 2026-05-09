@@ -64,6 +64,7 @@ DecoderAdapter::DecoderAdapter(QObject *parent) : QObject(parent) {
     cb.onWriteStructuredField = [this](const std::vector<uint8_t> &data) {
         emit writeStructuredFieldReceived(toQt(data));
     };
+    cb.onStrpccmdRequested = [this]() { emit strpccmdRequested(); };
     cb.onParseError = [this](const std::string &err) {
         emit parseError(QString::fromStdString(err));
     };

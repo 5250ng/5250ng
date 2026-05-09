@@ -854,6 +854,18 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                     Q_ARG(QByteArray, payload));
             }
         });
+
+    // STRPCCMD runner: per-session, owned by the command handler's parent so
+    // it dies with the session container. Disabled by default — the host
+    // cannot run anything on the PC unless the user explicitly enabled it in
+    // session settings.
+    session->pcCommandRunner = new core::PcCommandRunner(session->container);
+    session->pcCommandRunner->setEnabled(session->config.pcCommandEnabled());
+    session->commandHandler->setPcCommandRunner(session->pcCommandRunner);
+    session->commandHandler->setCodePage(session->config.codePage());
+    session->commandHandler->setHostname(session->config.hostname());
+    session->commandHandler->setDialogParent(session->container);
+
     session->commandHandler->connectDecoder(session->parser);
 
     // Notify MCP server that the session tab is ready

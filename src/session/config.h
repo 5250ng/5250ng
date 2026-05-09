@@ -96,6 +96,17 @@ class SessionConfig : public QObject {
     QString password() const { return m_password; }
     void setPassword(const QString &password) { m_password = password; }
 
+    // STRPCCMD: when true, allow the host to ask the client to run a command
+    // on the local PC. Default is false because this is the mechanism behind
+    // CVE-2005-0868. Even when enabled, every command is gated by a per-command
+    // confirmation prompt unless pcCommandConfirmEachTime is explicitly turned
+    // off (currently always-on; the field exists for forward extensibility).
+    bool pcCommandEnabled() const { return m_pcCommandEnabled; }
+    void setPcCommandEnabled(bool enabled) { m_pcCommandEnabled = enabled; }
+
+    bool pcCommandConfirmEachTime() const { return m_pcCommandConfirmEachTime; }
+    void setPcCommandConfirmEachTime(bool confirm) { m_pcCommandConfirmEachTime = confirm; }
+
     // Serialization
     QJsonObject toJson() const;
     bool fromJson(const QJsonObject &json);
@@ -123,6 +134,8 @@ class SessionConfig : public QObject {
     QHash<QString, QString> m_sessionVariables;
     QString m_username;
     QString m_password;
+    bool m_pcCommandEnabled = false;
+    bool m_pcCommandConfirmEachTime = true;
 
 };
 

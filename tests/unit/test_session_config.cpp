@@ -34,6 +34,8 @@ class TestSessionConfig : public QObject {
     void testDeserializationRejectsOutOfRange();
     void testAllowInvalidCertificatesDefaultsOff();
     void testAllowInvalidCertificatesRoundTrip();
+    void testPcCommandSettingsDefaults();
+    void testPcCommandSettingsRoundTrip();
 
   private:
     SessionConfig *m_config;
@@ -277,6 +279,69 @@ void TestSessionConfig::testAllowInvalidCertificatesRoundTrip() {
     second.setAllowInvalidCertificates(true);
     QVERIFY(second.fromJson(reset));
     QVERIFY(!second.allowInvalidCertificates());
+}
+
+void TestSessionConfig::testPcCommandSettingsDefaults() {
+    SessionConfig fresh;
+    QVERIFY(!fresh.pcCommandEnabled());
+    QVERIFY(fresh.pcCommandConfirmEachTime());
+
+    // Round-tripping a config that does not opt in must NOT add the keys to
+    // the JSON output, so existing config files do not gain a surprising new
+    // key on first save.
+    QJsonObject json;
+    json["name"] = "Default";
+    json["hostname"] = "example.com";
+    json["port"] = 23;
+    json["useTLS"] = false;
+    json["deviceType"] = "IBM-3179-2";
+    json["deviceName"] = "T";
+    json["screenRows"] = 24;
+    json["screenCols"] = 80;
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QVERIFY(!loaded.pcCommandEnabled());
+    QVERIFY(loaded.pcCommandConfirmEachTime());
+
+    QJsonObject out = loaded.toJson();
+    QVERIFY(!out.contains("pcCommandEnabled"));
+    QVERIFY(!out.contains("pcCommandConfirmEachTime"));
+}
+
+void TestSessionConfig::testPcCommandSettingsRoundTrip() {
+    m_config->setName("With STRPCCMD");
+    m_config->setHostname("trusted.example.com");
+    m_config->setPort(23);
+    m_config->setPcCommandEnabled(true);
+    QCOMPARE(m_config->pcCommandEnabled(), true);
+
+    QJsonObject json = m_config->toJson();
+    QCOMPARE(json.value("pcCommandEnabled").toBool(), true);
+
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QCOMPARE(loaded.pcCommandEnabled(), true);
+    // The confirm-each-time default must persist round-tripping even when the
+    // key is absent on input (a config that opted into STRPCCMD without
+    // explicitly disabling per-command confirmation must keep confirmation on).
+    QCOMPARE(loaded.pcCommandConfirmEachTime(), true);
+
+    // A subsequent fromJson with no pcCommandEnabled key must reset back to
+    // the disabled default — guards against a stale enabled state leaking
+    // across config loads.
+    QJsonObject reset;
+    reset["name"] = "Reset";
+    reset["hostname"] = "a.example.com";
+    reset["port"] = 23;
+    reset["useTLS"] = false;
+    reset["deviceType"] = "IBM-3179-2";
+    reset["deviceName"] = "T";
+    reset["screenRows"] = 24;
+    reset["screenCols"] = 80;
+    SessionConfig second;
+    second.setPcCommandEnabled(true);
+    QVERIFY(second.fromJson(reset));
+    QVERIFY(!second.pcCommandEnabled());
 }
 
 QTEST_MAIN(TestSessionConfig)
