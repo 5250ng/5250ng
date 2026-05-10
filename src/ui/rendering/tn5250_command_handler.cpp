@@ -724,7 +724,8 @@ void TN5250CommandHandler::onWriteStructuredFieldReceived(const QByteArray &data
         .arg(data.size()));
 }
 
-void TN5250CommandHandler::onStrpccmdRequested() {
+void TN5250CommandHandler::onStrpccmdRequested(bool noWait,
+                                               const QByteArray &commandBytes) {
     // Always send ENTER AID at the end so the host CL program continues
     // regardless of whether we ran the command. Leaving the keyboard locked is
     // worse than refusing the command — the user can still recover.
@@ -738,48 +739,15 @@ void TN5250CommandHandler::onStrpccmdRequested() {
         }
     };
 
-    if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
-        LOG_DEBUG("CommandHandler: STRPCCMD with no screen buffer; sending ENTER and dropping");
-        sendEnterAndReturn();
-        return;
-    }
-
-    auto *screen = m_displayWidget->screenBuffer();
-    const int rows = screen->rows();
-    const int cols = screen->cols();
-    const int totalCells = rows * cols;
-
-    // tn5250j reads from a 1D screen plane: position 11 is the wait flag
-    // ('a' = run async / no-wait), positions 12..(12+123) hold the command
-    // string padded with EBCDIC blanks. Translate to (row, col) using the
-    // configured screen geometry.
-    constexpr int waitFlagPos = 11;
-    constexpr int commandStartPos = 12;
-    constexpr int kPccmdMaxLength = 123;
-
-    if (totalCells < commandStartPos + kPccmdMaxLength) {
-        LOG_DEBUG("CommandHandler: STRPCCMD screen too small for command region; sending ENTER and dropping");
-        sendEnterAndReturn();
-        return;
-    }
-
+    // Apply the session's configured codepage to the raw EBCDIC bytes the
+    // decoder pulled off the wire. Map control characters and undefined
+    // codepage entries to a space so they do not break tokenisation
+    // downstream.
     const core::CodePage cp(m_codePageId);
-    auto charAtLinearPos = [&](int pos) -> QChar {
-        const int row = pos / cols;
-        const int col = pos % cols;
-        const uint8_t byte = screen->cell(row, col).character;
-        return cp.toUnicode(byte);
-    };
-
-    const QChar waitChar = charAtLinearPos(waitFlagPos);
-    const bool noWait = (waitChar == QChar('a'));
-
     QString command;
-    command.reserve(kPccmdMaxLength);
-    for (int p = commandStartPos; p < commandStartPos + kPccmdMaxLength; ++p) {
-        QChar c = charAtLinearPos(p);
-        // Map control characters and undefined codepage entries to space so
-        // they do not break tokenisation downstream.
+    command.reserve(commandBytes.size());
+    for (auto rawByte : commandBytes) {
+        QChar c = cp.toUnicode(static_cast<uint8_t>(rawByte));
         if (c.isNull() || c.category() == QChar::Other_Control) {
             c = QChar(' ');
         }

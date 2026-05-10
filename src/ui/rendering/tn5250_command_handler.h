@@ -79,11 +79,13 @@ class TN5250CommandHandler : public QObject {
     void onMessageLightOff();
     void onReadScreenRequested(bool includeAttributes);
     void onWriteStructuredFieldReceived(const QByteArray &data);
-    // STRPCCMD: host has asked us to run a PC command. Reads the command off
-    // the rendered screen at fixed positions (per tn5250j's reference
-    // implementation), gates it through the configured PcCommandRunner, then
-    // unconditionally returns ENTER AID so the host CL program continues.
-    void onStrpccmdRequested();
+    // STRPCCMD: host has asked us to run a PC command. Receives the wait flag
+    // and raw EBCDIC command bytes consumed by the protocol decoder from the
+    // wire (immediately after the 10-byte PCO marker), applies the configured
+    // codepage, gates the resulting command through the configured
+    // PcCommandRunner, then unconditionally returns ENTER AID so the host CL
+    // program continues.
+    void onStrpccmdRequested(bool noWait, const QByteArray &commandBytes);
 
     void sendNegResponse(uint8_t category, uint8_t modifier, uint8_t uByte1, uint8_t uByte2);
 

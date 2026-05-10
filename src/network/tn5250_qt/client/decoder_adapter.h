@@ -56,11 +56,12 @@ class DecoderAdapter : public QObject {
     void messageLightOff();
     void readScreenRequested(bool includeAttributes);
     void writeStructuredFieldReceived(const QByteArray &data);
-    // Fires when the host's WTD stream contains the STRPCCMD marker. The
-    // 10-byte marker has already been consumed by the protocol decoder; the
-    // command string itself lives at fixed screen coordinates and must be read
-    // off the rendered screen by the consumer (TN5250CommandHandler).
-    void strpccmdRequested();
+    // Fires when the host's WTD stream contains the STRPCCMD marker. Carries
+    // the wait flag (true → no-wait, EBCDIC 'a' / 0x81) and the raw EBCDIC
+    // command bytes consumed by the protocol decoder from immediately after
+    // the marker. Codepage conversion and trimming are the consumer's
+    // responsibility (TN5250CommandHandler).
+    void strpccmdRequested(bool noWait, const QByteArray &commandBytes);
     void parseError(const QString &error);
 
   private:
