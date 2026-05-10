@@ -16,6 +16,7 @@
 
 #include "pc_command_confirm_dialog.h"
 
+#include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPlainTextEdit>
@@ -25,31 +26,74 @@
 
 namespace ui::dialogs {
 
+namespace {
+
+// Project-wide horizontal-rectangle dialog dimensions for STRPCCMD surfaces.
+// Picked so the displayed command fits a typical PCCMD payload (123 char max
+// per SA21-9247-6 §15.7) on one line at the project's default font.
+constexpr int kDialogWidth = 720;
+constexpr int kDialogHeight = 260;
+constexpr int kIconSize = 48;
+
+// Build the icon column shared by both surfaces (Allow/Deny and Deny/alert).
+// QStyle::SP_MessageBoxWarning matches the system "this needs your attention"
+// icon and keeps the dialog readable across platform themes.
+QLabel *makeWarningIcon(QWidget *parent) {
+    QLabel *icon = new QLabel(parent);
+    QStyle *style = parent ? parent->style() : QApplication::style();
+    QIcon stdIcon = style->standardIcon(QStyle::SP_MessageBoxWarning);
+    icon->setPixmap(stdIcon.pixmap(kIconSize, kIconSize));
+    icon->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
+    icon->setFixedWidth(kIconSize + 8);
+    return icon;
+}
+
+QPlainTextEdit *makeCommandView(QWidget *parent, const QString &command) {
+    QPlainTextEdit *view = new QPlainTextEdit(parent);
+    view->setPlainText(command);
+    view->setReadOnly(true);
+    view->setLineWrapMode(QPlainTextEdit::NoWrap);
+    view->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    view->setMaximumHeight(70);
+    return view;
+}
+
+} // namespace
+
 PcCommandConfirmDialog::PcCommandConfirmDialog(const QString &hostname,
                                                const QString &command,
                                                QWidget *parent)
-    : QDialog(parent) {
+    : ui::widgets::BaseFramelessDialog(parent) {
     setWindowTitle("Allow PC command from host?");
     setModal(true);
+    resize(kDialogWidth, kDialogHeight);
 
-    auto *layout = new QVBoxLayout(this);
+    QVBoxLayout *content = contentLayout();
+    content->setContentsMargins(16, 12, 16, 12);
+    content->setSpacing(10);
 
-    auto *header = new QLabel(this);
+    // Top row: icon column on the left, header + command + warning stacked
+    // on the right. The icon column anchors the dialog as a horizontal
+    // rectangle and matches the rest of the warning-style modals.
+    QHBoxLayout *body = new QHBoxLayout();
+    body->setSpacing(12);
+    body->addWidget(makeWarningIcon(this));
+
+    QVBoxLayout *text = new QVBoxLayout();
+    text->setSpacing(8);
+
+    QLabel *header = new QLabel(this);
     header->setTextFormat(Qt::RichText);
     header->setWordWrap(true);
     header->setText(
         QString("<b>The host <code>%1</code> is asking 5250ng to run a "
                 "command on this PC.</b>")
             .arg(hostname.isEmpty() ? "(unknown)" : hostname.toHtmlEscaped()));
-    layout->addWidget(header);
+    text->addWidget(header);
 
-    auto *commandView = new QPlainTextEdit(this);
-    commandView->setPlainText(command);
-    commandView->setReadOnly(true);
-    commandView->setMinimumHeight(80);
-    layout->addWidget(commandView);
+    text->addWidget(makeCommandView(this, command));
 
-    auto *warning = new QLabel(this);
+    QLabel *warning = new QLabel(this);
     warning->setTextFormat(Qt::RichText);
     warning->setWordWrap(true);
     warning->setText(
@@ -57,23 +101,26 @@ PcCommandConfirmDialog::PcCommandConfirmDialog(const QString &hostname,
         "It can read or modify any file you can, and contact any network you "
         "can reach. Only allow if you trust this host and recognise the "
         "command.</i>");
-    layout->addWidget(warning);
+    text->addWidget(warning);
 
-    auto *buttons = new QHBoxLayout();
-    auto *deny = new QPushButton("Deny", this);
-    auto *allow = new QPushButton("Allow", this);
+    body->addLayout(text, 1);
+    content->addLayout(body, 1);
+
+    // Buttons row: right-aligned, Deny is the default. Allow remains opt-in
+    // — the user must explicitly select it.
+    QHBoxLayout *buttons = new QHBoxLayout();
+    buttons->addStretch();
+    QPushButton *deny = new QPushButton("Deny", this);
+    QPushButton *allow = new QPushButton("Allow", this);
     deny->setDefault(true);
     deny->setAutoDefault(true);
     allow->setDefault(false);
     allow->setAutoDefault(false);
     connect(deny, &QPushButton::clicked, this, &QDialog::reject);
     connect(allow, &QPushButton::clicked, this, &QDialog::accept);
-    buttons->addStretch();
     buttons->addWidget(deny);
     buttons->addWidget(allow);
-    layout->addLayout(buttons);
-
-    setLayout(layout);
+    content->addLayout(buttons);
 }
 
 bool PcCommandConfirmDialog::ask(const QString &hostname,
@@ -89,44 +136,52 @@ void PcCommandConfirmDialog::notifyDenied(const QString &hostname,
     // Information-only modal: surfaces a refused STRPCCMD attempt to the user
     // so a host that tries to run something never goes unnoticed under the
     // "Deny and alert" policy. No Allow button — the policy already refused.
-    QDialog dlg(parent);
+    ui::widgets::BaseFramelessDialog dlg(parent);
     dlg.setWindowTitle("PC command blocked");
     dlg.setModal(true);
+    dlg.resize(kDialogWidth, kDialogHeight);
 
-    auto *layout = new QVBoxLayout(&dlg);
+    QVBoxLayout *content = dlg.contentLayout();
+    content->setContentsMargins(16, 12, 16, 12);
+    content->setSpacing(10);
 
-    auto *header = new QLabel(&dlg);
+    QHBoxLayout *body = new QHBoxLayout();
+    body->setSpacing(12);
+    body->addWidget(makeWarningIcon(&dlg));
+
+    QVBoxLayout *text = new QVBoxLayout();
+    text->setSpacing(8);
+
+    QLabel *header = new QLabel(&dlg);
     header->setTextFormat(Qt::RichText);
     header->setWordWrap(true);
     header->setText(
         QString("<b>The host <code>%1</code> tried to run a command on this "
                 "PC. It was refused by your session policy (Deny and alert).</b>")
             .arg(hostname.isEmpty() ? "(unknown)" : hostname.toHtmlEscaped()));
-    layout->addWidget(header);
+    text->addWidget(header);
 
-    auto *commandView = new QPlainTextEdit(&dlg);
-    commandView->setPlainText(command);
-    commandView->setReadOnly(true);
-    commandView->setMinimumHeight(80);
-    layout->addWidget(commandView);
+    text->addWidget(makeCommandView(&dlg, command));
 
-    auto *footer = new QLabel(&dlg);
+    QLabel *footer = new QLabel(&dlg);
     footer->setTextFormat(Qt::RichText);
     footer->setWordWrap(true);
     footer->setText(
         "<i>Nothing was executed. To allow PC commands from this host, change "
         "the STRPCCMD policy in the session settings.</i>");
-    layout->addWidget(footer);
+    text->addWidget(footer);
 
-    auto *buttons = new QHBoxLayout();
-    auto *ok = new QPushButton("OK", &dlg);
+    body->addLayout(text, 1);
+    content->addLayout(body, 1);
+
+    QHBoxLayout *buttons = new QHBoxLayout();
+    buttons->addStretch();
+    QPushButton *ok = new QPushButton("OK", &dlg);
     ok->setDefault(true);
     QObject::connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
-    buttons->addStretch();
     buttons->addWidget(ok);
-    layout->addLayout(buttons);
+    content->addLayout(buttons);
 
-    dlg.setLayout(layout);
     dlg.exec();
 }
 

@@ -16,20 +16,18 @@
 
 #pragma once
 
-#include <QDialog>
+#include "ui/widgets/Frameless/BaseFramelessDialog.h"
 #include <QString>
-
-class QLabel;
-class QPushButton;
-class QPlainTextEdit;
 
 namespace ui::dialogs {
 
 // Modal dialog shown for every host-issued STRPCCMD when the feature is
 // enabled. Displays the host name and the full command string with a clear
 // security warning, and offers Allow / Deny. Allow is NOT the default button
-// — the user must explicitly choose it.
-class PcCommandConfirmDialog : public QDialog {
+// — the user must explicitly choose it. Renders with the project's frameless
+// title bar in a wide horizontal-rectangle layout matching the rest of the
+// dialogs in src/ui/dialogs/.
+class PcCommandConfirmDialog : public ui::widgets::BaseFramelessDialog {
     Q_OBJECT
 
   public:
