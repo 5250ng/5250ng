@@ -778,25 +778,25 @@ void TN5250CommandHandler::onStrpccmdRequested(bool noWait,
         break;
     case session::PcCommandPolicy::AllowWithPrompt:
     case session::PcCommandPolicy::AllowAlways: {
-        if (!m_pcCommandRunner) {
+        if (!m_commandRunner) {
             LOG_DEBUG("CommandHandler: STRPCCMD policy allows but runner not configured; refusing");
             break;
         }
-        m_pcCommandRunner->setEnabled(true);
-        m_pcCommandRunner->setHostname(m_hostname);
+        m_commandRunner->setEnabled(true);
+        m_commandRunner->setHostname(m_hostname);
         if (m_pcCommandPolicy == session::PcCommandPolicy::AllowWithPrompt) {
-            m_pcCommandRunner->setConfirmCallback(
+            m_commandRunner->setConfirmCallback(
                 [this](const QString &host, const QString &cmd) {
                     return ui::dialogs::PcCommandConfirmDialog::ask(host, cmd, m_dialogParent);
                 });
         } else {
             // AllowAlways: clear any previously-installed dialog callback so
             // the runner falls through directly to execute.
-            m_pcCommandRunner->setConfirmCallback(nullptr);
+            m_commandRunner->setConfirmCallback(nullptr);
         }
-        m_pcCommandRunner->run(command,
-                               noWait ? core::PcCommandRunner::Mode::NoWait
-                                      : core::PcCommandRunner::Mode::Wait);
+        m_commandRunner->run(command,
+                             noWait ? core::CommandRunner::Mode::NoWait
+                                    : core::CommandRunner::Mode::Wait);
         break;
     }
     }

@@ -65,8 +65,8 @@ set(CORE_SOURCES
     src/core/match_replace_engine.h
     src/core/macro_to_script.cpp
     src/core/macro_to_script.h
-    src/core/pc_command_runner.cpp
-    src/core/pc_command_runner.h
+    src/core/command_runner.cpp
+    src/core/command_runner.h
 )
 
 set(SESSION_SOURCES
@@ -408,7 +408,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
-    add_tn5250_test(test_pc_command_runner tests/unit/test_pc_command_runner.cpp)
+    add_tn5250_test(test_command_runner tests/unit/test_command_runner.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)

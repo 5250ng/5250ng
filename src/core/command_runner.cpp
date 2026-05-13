@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "core/pc_command_runner.h"
+#include "core/command_runner.h"
 #include "logger/logger.h"
 
 #include <QProcess>
@@ -22,14 +22,18 @@
 
 namespace core {
 
-PcCommandRunner::PcCommandRunner(QObject *parent) : QObject(parent) {}
+CommandRunner::CommandRunner(QObject *parent) : QObject(parent) {}
 
-// Splits a STRPCCMD command string into program + arguments using the same
-// quoting rules as a typical shell: bare tokens separated by whitespace, with
-// double-quoted spans treated as one token. This intentionally avoids passing
-// the string to a real shell — STRPCCMD payloads come from the host and could
-// contain shell metacharacters; QProcess::start(program, arguments) executes
-// the program directly and does not re-interpret the args.
+/// Splits a `STRPCCMD` command string into program + arguments using
+/// minimal shell-like quoting rules: bare tokens separated by
+/// whitespace, with double-quoted spans treated as one token.
+///
+/// This intentionally avoids handing the string to a real shell —
+/// `STRPCCMD` payloads come from the host and may contain shell
+/// metacharacters (`;`, `|`, `$()`, backticks). `QProcess::start`'s
+/// `(program, arguments)` overload executes the program directly and
+/// does NOT re-interpret the arguments through a shell, which neuters
+/// those metacharacters.
 static QStringList splitCommand(const QString &command) {
     QStringList tokens;
     QString current;
@@ -52,22 +56,22 @@ static QStringList splitCommand(const QString &command) {
     return tokens;
 }
 
-PcCommandRunner::Result PcCommandRunner::run(const QString &command, Mode mode) {
+CommandRunner::Result CommandRunner::run(const QString &command, Mode mode) {
     if (!m_enabled) {
         logger::Logger::instance()->warning(
-            QString("PcCommandRunner: refused (feature disabled): %1").arg(command));
+            QString("CommandRunner: refused (feature disabled): %1").arg(command));
         return {Outcome::DisabledByPolicy, 0};
     }
     if (m_confirm && !m_confirm(m_hostname, command)) {
         logger::Logger::instance()->info(
-            QString("PcCommandRunner: user denied command: %1").arg(command));
+            QString("CommandRunner: user denied command: %1").arg(command));
         return {Outcome::DeniedByUser, 0};
     }
 
     QStringList tokens = splitCommand(command);
     if (tokens.isEmpty()) {
         logger::Logger::instance()->warning(
-            "PcCommandRunner: empty command after tokenisation, refusing to launch");
+            "CommandRunner: empty command after tokenisation, refusing to launch");
         return {Outcome::StartFailed, 0};
     }
     const QString program = tokens.takeFirst();
@@ -78,11 +82,11 @@ PcCommandRunner::Result PcCommandRunner::run(const QString &command, Mode mode) 
         const bool ok = QProcess::startDetached(program, args, QString(), &pid);
         if (!ok) {
             logger::Logger::instance()->warning(
-                QString("PcCommandRunner: startDetached failed: %1").arg(command));
+                QString("CommandRunner: startDetached failed: %1").arg(command));
             return {Outcome::StartFailed, 0};
         }
         logger::Logger::instance()->info(
-            QString("PcCommandRunner: launched detached pid=%1: %2")
+            QString("CommandRunner: launched detached pid=%1: %2")
                 .arg(pid).arg(command));
         return {Outcome::Launched, 0};
     }
@@ -91,20 +95,20 @@ PcCommandRunner::Result PcCommandRunner::run(const QString &command, Mode mode) 
     proc.start(program, args);
     if (!proc.waitForStarted(5000)) {
         logger::Logger::instance()->warning(
-            QString("PcCommandRunner: waitForStarted failed: %1").arg(command));
+            QString("CommandRunner: waitForStarted failed: %1").arg(command));
         return {Outcome::StartFailed, 0};
     }
     if (!proc.waitForFinished(m_waitTimeoutMs)) {
         proc.kill();
         proc.waitForFinished(1000);
         logger::Logger::instance()->warning(
-            QString("PcCommandRunner: timed out after %1 ms: %2")
+            QString("CommandRunner: timed out after %1 ms: %2")
                 .arg(m_waitTimeoutMs).arg(command));
         return {Outcome::TimedOut, 0};
     }
     const int code = proc.exitCode();
     logger::Logger::instance()->info(
-        QString("PcCommandRunner: completed exit=%1: %2").arg(code).arg(command));
+        QString("CommandRunner: completed exit=%1: %2").arg(code).arg(command));
     return {Outcome::Completed, code};
 }
 

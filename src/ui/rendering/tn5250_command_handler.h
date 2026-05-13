@@ -17,7 +17,7 @@
 #pragma once
 
 #include "core/codepage.h"
-#include "core/pc_command_runner.h"
+#include "core/command_runner.h"
 #include "network/tn5250_qt/client/decoder_adapter.h"
 #include "session/config.h"
 #include "tn5250_stream_renderer.h"
@@ -79,12 +79,12 @@ class TN5250CommandHandler : public QObject {
     void onMessageLightOff();
     void onReadScreenRequested(bool includeAttributes);
     void onWriteStructuredFieldReceived(const QByteArray &data);
-    // STRPCCMD: host has asked us to run a PC command. Receives the wait flag
-    // and raw EBCDIC command bytes consumed by the protocol decoder from the
-    // wire (immediately after the 10-byte PCO marker), applies the configured
-    // codepage, gates the resulting command through the configured
-    // PcCommandRunner, then unconditionally returns ENTER AID so the host CL
-    // program continues.
+    // STRPCCMD: host has asked us to run a workstation-side command. Receives
+    // the wait flag and raw EBCDIC command bytes consumed by the protocol
+    // decoder from the wire (immediately after the 10-byte PCO marker),
+    // applies the configured codepage, gates the resulting command through
+    // the configured CommandRunner, then unconditionally returns ENTER AID
+    // so the host CL program continues.
     void onStrpccmdRequested(bool noWait, const QByteArray &commandBytes);
 
     void sendNegResponse(uint8_t category, uint8_t modifier, uint8_t uByte1, uint8_t uByte2);
@@ -97,7 +97,7 @@ class TN5250CommandHandler : public QObject {
     // Inject runtime context for STRPCCMD handling. The runner owns the
     // policy/confirm/execute flow; the codepage decodes EBCDIC bytes from the
     // screen buffer; the parent widget is used as the dialog parent.
-    void setPcCommandRunner(core::PcCommandRunner *runner) { m_pcCommandRunner = runner; }
+    void setCommandRunner(core::CommandRunner *runner) { m_commandRunner = runner; }
     void setCodePage(core::CodePage::ID id) { m_codePageId = id; }
     void setHostname(const QString &hostname) { m_hostname = hostname; }
     void setDialogParent(QWidget *parent) { m_dialogParent = parent; }
@@ -112,7 +112,7 @@ class TN5250CommandHandler : public QObject {
     SendGDSFn m_sendGDS;
     uint8_t m_pendingCC2 = 0;
     uint8_t m_readType = 0; // 0x52=READ_MDT, 0x42=READ_INPUT
-    core::PcCommandRunner *m_pcCommandRunner = nullptr;
+    core::CommandRunner *m_commandRunner = nullptr;
     core::CodePage::ID m_codePageId = core::CodePage::ID::CP037;
     QString m_hostname;
     QPointer<QWidget> m_dialogParent;
