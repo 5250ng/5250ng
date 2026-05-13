@@ -130,6 +130,31 @@ class TestMcpHttpParser : public QObject {
         QVERIFY(!p.feed(QByteArray()));
         QVERIFY(!p.hasError());
     }
+
+    // Regression: a malformed pipelined second request must leave the
+    // parser in an observable error state after reset(), so the server
+    // can respond with the same 413 + disconnect path it uses on a
+    // first-request error. Before this fix, reset() wiped the buffer and
+    // the malformed bytes disappeared entirely.
+    void resetExposesErrorOnMalformedPipelinedRequest() {
+        McpHttpParser p;
+        const QByteArray good = "POST /mcp HTTP/1.1\r\n"
+                                "Content-Length: 2\r\n"
+                                "\r\n"
+                                "{}";
+        const QByteArray bad = "POST /mcp HTTP/1.1\r\n"
+                               "Content-Length: -7\r\n\r\n";
+        QVERIFY(p.feed(good + bad));
+        QCOMPARE(p.request().body, QByteArray("{}"));
+
+        p.reset();
+        QVERIFY(!p.hasError());
+
+        // feed(empty) drains the buffered malformed request; the parser
+        // must surface the error rather than silently swallow the bytes.
+        QVERIFY(!p.feed(QByteArray()));
+        QVERIFY(p.hasError());
+    }
 };
 
 QTEST_MAIN(TestMcpHttpParser)

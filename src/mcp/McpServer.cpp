@@ -155,6 +155,23 @@ void McpServer::onClientData() {
         httpParser = reinterpret_cast<McpHttpParser *>(parser->property("ptr").value<quintptr>());
     }
 
+    // Local helper: write the same 413 error response and disconnect the
+    // socket. Used by both the first-request error branch and the
+    // pipelined-drain error branch so the two paths stay in sync.
+    auto sendParseError = [&]() {
+        MCP_ERROR(QString("HTTP parse error: %1").arg(httpParser->errorMessage()));
+        HttpResponse resp;
+        resp.statusCode = 413;
+        resp.statusText = QStringLiteral("Payload Too Large");
+        resp.headers["Content-Type"] = "application/json";
+        QJsonObject err;
+        err["error"] = httpParser->errorMessage();
+        resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
+        socket->write(resp.toBytes());
+        socket->flush();
+        socket->disconnectFromHost();
+    };
+
     if (httpParser->feed(socket->readAll())) {
         handleHttpRequest(socket);
         // The socket (and its httpParser) may have been destroyed during
@@ -171,18 +188,16 @@ void McpServer::onClientData() {
             handleHttpRequest(socket);
             if (!socket.isNull()) httpParser->reset();
         }
+        // A malformed pipelined request (oversized header, bad
+        // Content-Length, oversized body) leaves the parser in error
+        // state and breaks out of the drain loop. Respond with the same
+        // 413 + close as the first-request error branch, otherwise the
+        // client is left waiting for a response that never comes.
+        if (!socket.isNull() && httpParser->hasError()) {
+            sendParseError();
+        }
     } else if (httpParser->hasError()) {
-        MCP_ERROR(QString("HTTP parse error: %1").arg(httpParser->errorMessage()));
-        HttpResponse resp;
-        resp.statusCode = 413;
-        resp.statusText = QStringLiteral("Payload Too Large");
-        resp.headers["Content-Type"] = "application/json";
-        QJsonObject err;
-        err["error"] = httpParser->errorMessage();
-        resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
-        socket->write(resp.toBytes());
-        socket->flush();
-        socket->disconnectFromHost();
+        sendParseError();
     }
 }
 
