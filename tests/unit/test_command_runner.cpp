@@ -34,6 +34,7 @@ class TestCommandRunner : public QObject {
     void testEnabledAndAllowedRunsCommand();
     void testNoWaitLaunchesDetachedAndReturnsImmediately();
     void testEmptyCommandIsRejected();
+    void testUnterminatedQuoteIsRejected();
 };
 
 void TestCommandRunner::testDisabledByDefault() {
@@ -121,6 +122,24 @@ void TestCommandRunner::testEmptyCommandIsRejected() {
     runner.setConfirmCallback([](const QString &, const QString &) { return true; });
 
     auto result = runner.run("   ", CommandRunner::Mode::Wait);
+    QCOMPARE(result.outcome, CommandRunner::Outcome::StartFailed);
+}
+
+void TestCommandRunner::testUnterminatedQuoteIsRejected() {
+    // STRPCCMD payloads come from the host; a malformed command like
+    //   prog "arg1 arg2                        (missing closing quote)
+    // must be refused rather than silently re-tokenised. The intended
+    // command `prog "arg1" arg2` tokenises to ["prog", "arg1", "arg2"]
+    // (3 tokens), but the malformed form absorbs the would-be token
+    // boundary into the quoted span and yields ["prog", "arg1 arg2"]
+    // (2 tokens). The runner cannot tell whether the merged form is
+    // what the host intended, so it refuses every unterminated-quote
+    // input with a clear log line.
+    CommandRunner runner;
+    runner.setEnabled(true);
+    runner.setConfirmCallback([](const QString &, const QString &) { return true; });
+
+    auto result = runner.run("prog \"arg1 arg2", CommandRunner::Mode::Wait);
     QCOMPARE(result.outcome, CommandRunner::Outcome::StartFailed);
 }
 
