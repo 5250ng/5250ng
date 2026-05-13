@@ -99,6 +99,37 @@ class TestMcpHttpParser : public QObject {
         QVERIFY(!p.hasError());
         QCOMPARE(p.errorMessage(), QString());
     }
+
+    // Regression: reset() previously cleared the buffer wholesale, so a
+    // pipelined second request that arrived in the same TCP read as the
+    // first request body was silently discarded.
+    void resetPreservesLeftoverForPipelinedRequest() {
+        McpHttpParser p;
+        const QByteArray first = "POST /mcp HTTP/1.1\r\n"
+                                 "Content-Length: 2\r\n"
+                                 "\r\n"
+                                 "{}";
+        const QByteArray second = "POST /mcp HTTP/1.1\r\n"
+                                  "Content-Length: 4\r\n"
+                                  "\r\n"
+                                  "[12]";
+        // Feed both requests in a single buffer, as readAll() would deliver
+        // them on a busy socket.
+        QVERIFY(p.feed(first + second));
+        QCOMPARE(p.request().body, QByteArray("{}"));
+
+        // After reset, the parser should still have the second request
+        // buffered and feed(empty) should immediately return true.
+        p.reset();
+        QVERIFY(!p.hasError());
+        QVERIFY(p.feed(QByteArray()));
+        QCOMPARE(p.request().body, QByteArray("[12]"));
+
+        // No third request → feed(empty) returns false without erroring.
+        p.reset();
+        QVERIFY(!p.feed(QByteArray()));
+        QVERIFY(!p.hasError());
+    }
 };
 
 QTEST_MAIN(TestMcpHttpParser)

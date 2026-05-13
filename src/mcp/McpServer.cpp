@@ -162,6 +162,15 @@ void McpServer::onClientData() {
         // disconnected.  Only reset the parser if the socket is still alive.
         if (!socket.isNull())
             httpParser->reset();
+        // Drain any additional requests that arrived in the same TCP read.
+        // Now that reset() preserves the parser's leftover bytes (everything
+        // past the just-parsed body), feed(empty) re-runs the state machine
+        // on what is already buffered and returns true once another full
+        // request is available.
+        while (!socket.isNull() && httpParser->feed(QByteArray())) {
+            handleHttpRequest(socket);
+            if (!socket.isNull()) httpParser->reset();
+        }
     } else if (httpParser->hasError()) {
         MCP_ERROR(QString("HTTP parse error: %1").arg(httpParser->errorMessage()));
         HttpResponse resp;
