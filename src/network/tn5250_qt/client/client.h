@@ -32,10 +32,17 @@
 class QSslSocket;
 class QSslError;
 
+// Forward-declared in the global namespace so the friend declaration below
+// names the test class defined at file scope in tests/unit/test_telnet_subnegotiation.cpp,
+// not a nested ::tn5250::client::TestTelnetSubnegotiation.
+class TestTelnetSubnegotiation;
+
 namespace tn5250::client {
 
 class TN5250Client : public QObject {
     Q_OBJECT
+
+    friend class ::TestTelnetSubnegotiation;
 
   public:
     enum class ConnectionState {

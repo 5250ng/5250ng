@@ -411,6 +411,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_pc_command_runner tests/unit/test_pc_command_runner.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
+    add_tn5250_test(test_telnet_subnegotiation tests/unit/test_telnet_subnegotiation.cpp)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
 
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
