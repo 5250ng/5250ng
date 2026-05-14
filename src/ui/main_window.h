@@ -153,7 +153,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
         QWidget *statusBar;
         session::SessionConfig config;
         ui::rendering::TN5250CommandHandler *commandHandler;
-        core::PcCommandRunner *pcCommandRunner = nullptr;
+        core::CommandRunner *commandRunner = nullptr;
         ui::widgets::QCRTOverlayWidget *crtOverlay;
         // Background image (painted in container's Paint event via event filter)
         QPixmap bgImage;
