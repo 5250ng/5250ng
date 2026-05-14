@@ -99,6 +99,62 @@ class TestMcpHttpParser : public QObject {
         QVERIFY(!p.hasError());
         QCOMPARE(p.errorMessage(), QString());
     }
+
+    // Regression: reset() previously cleared the buffer wholesale, so a
+    // pipelined second request that arrived in the same TCP read as the
+    // first request body was silently discarded.
+    void resetPreservesLeftoverForPipelinedRequest() {
+        McpHttpParser p;
+        const QByteArray first = "POST /mcp HTTP/1.1\r\n"
+                                 "Content-Length: 2\r\n"
+                                 "\r\n"
+                                 "{}";
+        const QByteArray second = "POST /mcp HTTP/1.1\r\n"
+                                  "Content-Length: 4\r\n"
+                                  "\r\n"
+                                  "[12]";
+        // Feed both requests in a single buffer, as readAll() would deliver
+        // them on a busy socket.
+        QVERIFY(p.feed(first + second));
+        QCOMPARE(p.request().body, QByteArray("{}"));
+
+        // After reset, the parser should still have the second request
+        // buffered and feed(empty) should immediately return true.
+        p.reset();
+        QVERIFY(!p.hasError());
+        QVERIFY(p.feed(QByteArray()));
+        QCOMPARE(p.request().body, QByteArray("[12]"));
+
+        // No third request → feed(empty) returns false without erroring.
+        p.reset();
+        QVERIFY(!p.feed(QByteArray()));
+        QVERIFY(!p.hasError());
+    }
+
+    // Regression: a malformed pipelined second request must leave the
+    // parser in an observable error state after reset(), so the server
+    // can respond with the same 413 + disconnect path it uses on a
+    // first-request error. Before this fix, reset() wiped the buffer and
+    // the malformed bytes disappeared entirely.
+    void resetExposesErrorOnMalformedPipelinedRequest() {
+        McpHttpParser p;
+        const QByteArray good = "POST /mcp HTTP/1.1\r\n"
+                                "Content-Length: 2\r\n"
+                                "\r\n"
+                                "{}";
+        const QByteArray bad = "POST /mcp HTTP/1.1\r\n"
+                               "Content-Length: -7\r\n\r\n";
+        QVERIFY(p.feed(good + bad));
+        QCOMPARE(p.request().body, QByteArray("{}"));
+
+        p.reset();
+        QVERIFY(!p.hasError());
+
+        // feed(empty) drains the buffered malformed request; the parser
+        // must surface the error rather than silently swallow the bytes.
+        QVERIFY(!p.feed(QByteArray()));
+        QVERIFY(p.hasError());
+    }
 };
 
 QTEST_MAIN(TestMcpHttpParser)

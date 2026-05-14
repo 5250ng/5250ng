@@ -155,14 +155,10 @@ void McpServer::onClientData() {
         httpParser = reinterpret_cast<McpHttpParser *>(parser->property("ptr").value<quintptr>());
     }
 
-    if (httpParser->feed(socket->readAll())) {
-        handleHttpRequest(socket);
-        // The socket (and its httpParser) may have been destroyed during
-        // handleHttpRequest if a nested event loop ran and the client
-        // disconnected.  Only reset the parser if the socket is still alive.
-        if (!socket.isNull())
-            httpParser->reset();
-    } else if (httpParser->hasError()) {
+    // Local helper: write the same 413 error response and disconnect the
+    // socket. Used by both the first-request error branch and the
+    // pipelined-drain error branch so the two paths stay in sync.
+    auto sendParseError = [&]() {
         MCP_ERROR(QString("HTTP parse error: %1").arg(httpParser->errorMessage()));
         HttpResponse resp;
         resp.statusCode = 413;
@@ -174,6 +170,34 @@ void McpServer::onClientData() {
         socket->write(resp.toBytes());
         socket->flush();
         socket->disconnectFromHost();
+    };
+
+    if (httpParser->feed(socket->readAll())) {
+        handleHttpRequest(socket);
+        // The socket (and its httpParser) may have been destroyed during
+        // handleHttpRequest if a nested event loop ran and the client
+        // disconnected.  Only reset the parser if the socket is still alive.
+        if (!socket.isNull())
+            httpParser->reset();
+        // Drain any additional requests that arrived in the same TCP read.
+        // Now that reset() preserves the parser's leftover bytes (everything
+        // past the just-parsed body), feed(empty) re-runs the state machine
+        // on what is already buffered and returns true once another full
+        // request is available.
+        while (!socket.isNull() && httpParser->feed(QByteArray())) {
+            handleHttpRequest(socket);
+            if (!socket.isNull()) httpParser->reset();
+        }
+        // A malformed pipelined request (oversized header, bad
+        // Content-Length, oversized body) leaves the parser in error
+        // state and breaks out of the drain loop. Respond with the same
+        // 413 + close as the first-request error branch, otherwise the
+        // client is left waiting for a response that never comes.
+        if (!socket.isNull() && httpParser->hasError()) {
+            sendParseError();
+        }
+    } else if (httpParser->hasError()) {
+        sendParseError();
     }
 }
 

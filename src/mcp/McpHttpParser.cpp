@@ -90,7 +90,23 @@ bool McpHttpParser::feed(const QByteArray &data) {
 }
 
 void McpHttpParser::reset() {
-    m_buffer.clear();
+    // "Reset for the next request" — drop only the bytes consumed by the
+    // just-parsed request, keeping any leftover that already sits in the
+    // buffer (e.g. a pipelined second request that arrived in the same
+    // TCP read as the first request body). Wiping m_buffer wholesale
+    // would silently discard those bytes.
+    if (m_headersParsed && m_bodyStart >= 0) {
+        const int consumed = m_bodyStart + m_contentLength;
+        if (consumed > 0 && consumed <= m_buffer.size()) {
+            m_buffer.remove(0, consumed);
+        } else {
+            // Parser state inconsistent (shouldn't happen on the success
+            // path that triggers reset); clear to recover safely.
+            m_buffer.clear();
+        }
+    } else {
+        m_buffer.clear();
+    }
     m_request = {};
     m_headersParsed = false;
     m_contentLength = 0;
