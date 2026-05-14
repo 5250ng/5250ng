@@ -34,6 +34,13 @@ CommandRunner::CommandRunner(QObject *parent) : QObject(parent) {}
 /// `(program, arguments)` overload executes the program directly and
 /// does NOT re-interpret the arguments through a shell, which neuters
 /// those metacharacters.
+///
+/// An unterminated quoted span is treated as a parse error: the
+/// returned token list is empty, which the caller maps to
+/// `Outcome::StartFailed`. The alternative (silently concatenating
+/// program name and arguments into a single mangled token) would run
+/// the command under an interpretation the host may not have
+/// intended.
 static QStringList splitCommand(const QString &command) {
     QStringList tokens;
     QString current;
@@ -51,6 +58,12 @@ static QStringList splitCommand(const QString &command) {
             continue;
         }
         current.append(c);
+    }
+    if (inQuotes) {
+        logger::Logger::instance()->warning(
+            QString("CommandRunner: refusing command with unterminated quote: %1")
+                .arg(command));
+        return {};
     }
     if (!current.isEmpty()) tokens.append(current);
     return tokens;
