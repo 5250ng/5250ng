@@ -45,9 +45,19 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
 
             uint8_t next = static_cast<uint8_t>(m_receiveBuffer[i + 1]);
 
-            // Double IAC means literal IAC
+            // Double IAC means literal 0xFF.  When we are inside a
+            // subnegotiation (between IAC SB and IAC SE), that 0xFF belongs to
+            // the SB payload — routing it to the application stream both
+            // poisons the app data with a spurious 0xFF and silently drops the
+            // byte from the SB buffer (so e.g. a 0xFF byte in an IBMRSEED
+            // server seed would never reach handleSubnegotiation).
             if (next == static_cast<uint8_t>(TelnetCommand::IAC)) {
-                processed.append(static_cast<uint8_t>(TelnetCommand::IAC));
+                if (m_inSubnegotiation) {
+                    m_subnegotiationBuffer.append(
+                        static_cast<uint8_t>(TelnetCommand::IAC));
+                } else {
+                    processed.append(static_cast<uint8_t>(TelnetCommand::IAC));
+                }
                 i += 2;
                 continue;
             }
