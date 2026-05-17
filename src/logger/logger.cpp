@@ -88,10 +88,11 @@ void Logger::setLogFile(const QString &filePath) {
 
 /**
  * Set the minimum severity level to be recorded.
+ * Atomic store: safe to call concurrently with log() readers without
+ * acquiring m_mutex.
  */
 void Logger::setLogLevel(LogLevel level) {
-    QMutexLocker locker(&m_mutex);
-    m_logLevel = level;
+    m_logLevel.store(level, std::memory_order_relaxed);
 }
 
 /**
@@ -99,7 +100,7 @@ void Logger::setLogLevel(LogLevel level) {
  * Emits the logMessage signal after writing.
  */
 void Logger::log(LogLevel level, const QString &message) {
-    if (level < m_logLevel) {
+    if (level < m_logLevel.load(std::memory_order_relaxed)) {
         return;
     }
 
@@ -126,7 +127,7 @@ void Logger::log(LogLevel level, const QString &message) {
  * Emits the logMessage signal after writing.
  */
 void Logger::log_with_prefix(LogLevel level, const QString &prefix, const QString &message) {
-    if (level < m_logLevel) {
+    if (level < m_logLevel.load(std::memory_order_relaxed)) {
         return;
     }
 

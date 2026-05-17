@@ -22,6 +22,7 @@
 #include <QObject>
 #include <QString>
 #include <QTextStream>
+#include <atomic>
 
 namespace logger {
 
@@ -140,8 +141,9 @@ class Logger : public QObject {
     void setLogLevel(LogLevel level);
     /**
      * Get the currently configured minimum log level.
+     * Atomic load: safe to call concurrently with setLogLevel().
      */
-    LogLevel logLevel() const { return m_logLevel; }
+    LogLevel logLevel() const { return m_logLevel.load(std::memory_order_relaxed); }
 
     /**
      * Enable or disable console (stderr/stdout) output in addition to file output.
@@ -196,7 +198,11 @@ class Logger : public QObject {
     QFile *m_logFile;
     QTextStream *m_logStream;
     mutable QMutex m_mutex;
-    LogLevel m_logLevel;
+    // Atomic so the hot-path level check in log() / log_with_prefix() does
+    // not need to acquire m_mutex on every call. setLogLevel() may run from
+    // the UI thread (settings dialog) while log() runs from session worker
+    // threads, the MCP server's request thread, etc.
+    std::atomic<LogLevel> m_logLevel;
     bool m_consoleOutput;
     QStringList m_buffer;
     static constexpr int MAX_BUFFER = 10000;
