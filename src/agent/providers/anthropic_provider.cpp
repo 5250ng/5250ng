@@ -93,6 +93,15 @@ void AnthropicProvider::sendRequest() {
     body["max_tokens"] = 4096;
     body["messages"] = m_conversationHistory;
     body["tools"] = anthropicToolsArray();
+    // This client executes exactly one tool call per turn (handleResponse
+    // forwards a single ToolCall and sendToolResult appends a single
+    // tool_result block). A turn with multiple tool_use blocks would leave
+    // unanswered tool_use ids in the continuation, which the Messages API
+    // rejects — so disable parallel tool use.
+    QJsonObject toolChoice;
+    toolChoice["type"] = "auto";
+    toolChoice["disable_parallel_tool_use"] = true;
+    body["tool_choice"] = toolChoice;
 
     if (!m_systemContext.isEmpty()) {
         body["system"] = m_systemContext;

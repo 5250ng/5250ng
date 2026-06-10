@@ -32,6 +32,8 @@ class TestTelnetSubnegotiation : public QObject {
   private slots:
     void testEscapedIacInsideSubnegotiationStaysInSbBuffer();
     void testEscapedIacOutsideSubnegotiationFlowsAsAppData();
+    void testIbmrseedSeedWithEscapedControlBytes();
+    void testIbmrseedPlainSeedStillParsed();
 
   private:
     static QByteArray makeFrame(std::initializer_list<uint8_t> bytes) {
@@ -104,6 +106,56 @@ void TestTelnetSubnegotiation::testEscapedIacOutsideSubnegotiationFlowsAsAppData
         received.append(args.at(0).toByteArray());
     }
     QCOMPARE(received, QByteArray::fromHex("58FF59")); // X 0xFF Y
+}
+
+// Regression tests for issue #139: the NEW_ENVIRON SEND parser must
+// un-escape RFC 1572 ESC (0x02) sequences when reading the IBMRSEED
+// USERVAR name, otherwise seed bytes equal to VAR/VALUE/USERVAR markers
+// truncate the seed and silently disable RFC 4777 password encryption.
+void TestTelnetSubnegotiation::testIbmrseedSeedWithEscapedControlBytes() {
+    TN5250Client client;
+
+    // NEW_ENVIRON SEND payload: SEND USERVAR "IBMRSEED" <8-byte seed>
+    // USERVAR "IBMSUBSPW". The seed contains 0x00, 0x01, 0x02 and 0x03,
+    // each ESC-escaped per RFC 1572.
+    QByteArray sb;
+    sb.append(char(0x01)); // SEND
+    sb.append(char(0x03)); // USERVAR
+    sb.append("IBMRSEED");
+    const uint8_t seed[8] = {0xAA, 0x00, 0x01, 0x02, 0x03, 0xBB, 0xCC, 0xDD};
+    for (uint8_t b : seed) {
+        if (b == 0x00 || b == 0x01 || b == 0x02 || b == 0x03) {
+            sb.append(char(0x02)); // RFC 1572 ESC
+        }
+        sb.append(char(b));
+    }
+    sb.append(char(0x03)); // USERVAR
+    sb.append("IBMSUBSPW");
+
+    client.handleSubnegotiation(TelnetOption::NEW_ENVIRON, sb);
+
+    QCOMPARE(client.m_serverSeed.size(), 8);
+    QCOMPARE(client.m_serverSeed,
+             QByteArray(reinterpret_cast<const char *>(seed), 8));
+}
+
+// A seed without escapable bytes must parse exactly as before.
+void TestTelnetSubnegotiation::testIbmrseedPlainSeedStillParsed() {
+    TN5250Client client;
+
+    QByteArray sb;
+    sb.append(char(0x01)); // SEND
+    sb.append(char(0x03)); // USERVAR
+    sb.append("IBMRSEED");
+    const uint8_t seed[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+    sb.append(reinterpret_cast<const char *>(seed), 8);
+    sb.append(char(0x03)); // USERVAR
+    sb.append("IBMSUBSPW");
+
+    client.handleSubnegotiation(TelnetOption::NEW_ENVIRON, sb);
+
+    QCOMPARE(client.m_serverSeed,
+             QByteArray(reinterpret_cast<const char *>(seed), 8));
 }
 
 QTEST_MAIN(TestTelnetSubnegotiation)
