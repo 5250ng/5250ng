@@ -331,15 +331,28 @@ void TN5250Client::handleSubnegotiation(TelnetOption opt, const QByteArray &data
                     uint8_t sb = static_cast<uint8_t>(data[si]);
                     if (sb == 0x00 || sb == 0x03) { // VAR or USERVAR
                         if (!reqVars.isEmpty()) reqVars += ", ";
-                        // Read variable name + any trailing data until next marker
+                        // Read variable name + any trailing data until next
+                        // marker, un-escaping RFC 1572 ESC (0x02) sequences.
+                        // The IBMRSEED seed is 8 raw binary bytes embedded in
+                        // the USERVAR name: bytes equal to VAR/VALUE/ESC/
+                        // USERVAR arrive escaped, and treating them as
+                        // markers truncates the seed — which silently
+                        // downgrades the RFC 4777 password encryption to
+                        // cleartext (the seed fails the 8-byte check).
                         int nameStart = si + 1;
                         int nameEnd = nameStart;
+                        QByteArray rawName;
                         while (nameEnd < data.size()) {
                             uint8_t nb = static_cast<uint8_t>(data[nameEnd]);
+                            if (nb == 0x02 && nameEnd + 1 < data.size()) {
+                                rawName.append(data[nameEnd + 1]);
+                                nameEnd += 2;
+                                continue;
+                            }
                             if (nb == 0x00 || nb == 0x01 || nb == 0x03) break;
+                            rawName.append(static_cast<char>(nb));
                             nameEnd++;
                         }
-                        QByteArray rawName = data.mid(nameStart, nameEnd - nameStart);
                         // Check if this is IBMRSEED with embedded seed bytes
                         QByteArray ibmrseedTag("IBMRSEED");
                         if (rawName.startsWith(ibmrseedTag) &&

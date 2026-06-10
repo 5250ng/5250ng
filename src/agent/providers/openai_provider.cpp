@@ -102,6 +102,12 @@ void OpenAiProvider::sendRequest() {
     body["model"] = m_model;
     body["messages"] = messages;
     body["tools"] = openaiToolsArray();
+    // This client executes exactly one tool call per turn (handleResponse
+    // dispatches a single ToolCall and sendToolResult appends a single
+    // role:"tool" message). A turn with N>1 tool_calls would require N tool
+    // messages in the continuation or the API rejects it with a 400 — so
+    // tell the API not to emit parallel tool calls.
+    body["parallel_tool_calls"] = false;
 
     QNetworkRequest request(QUrl("https://api.openai.com/v1/chat/completions"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");

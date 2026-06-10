@@ -34,6 +34,7 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QStyleFactory>
+#include <QTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -97,6 +98,10 @@ int main(int argc, char *argv[]) {
     QCommandLineOption sessionFileOption(QStringList() << "f" << "load-session-from-file", "Load a session from a JSON file", "path");
     parser.addOption(sessionFileOption);
 
+    // PCAP replay option (replay a captured session instead of connecting)
+    QCommandLineOption replayPcapOption(QStringList() << "replay-pcap", "Replay a TN5250 session from a pcap/pcapng capture file", "path");
+    parser.addOption(replayPcapOption);
+
     // MCP server options
     QCommandLineOption mcpEnableOption(QStringList() << "enable-mcp-server", "Enable the MCP server on startup");
     parser.addOption(mcpEnableOption);
@@ -122,12 +127,25 @@ int main(int argc, char *argv[]) {
 
     int connectOptionCount = (parser.isSet(hostOption) ? 1 : 0)
                            + (parser.isSet(sessionOption) ? 1 : 0)
-                           + (parser.isSet(sessionFileOption) ? 1 : 0);
+                           + (parser.isSet(sessionFileOption) ? 1 : 0)
+                           + (parser.isSet(replayPcapOption) ? 1 : 0);
     if (connectOptionCount > 1) {
         logger::Logger::instance()->error(
-            "Options --host, --session, and --session-file are mutually exclusive"
+            "Options --host, --load-session-from-name, --load-session-from-file, "
+            "and --replay-pcap are mutually exclusive"
         );
         return 1;
+    }
+
+    QString replayPcapPath;
+    if (parser.isSet(replayPcapOption)) {
+        replayPcapPath = parser.value(replayPcapOption);
+        if (!QFile::exists(replayPcapPath)) {
+            logger::Logger::instance()->error(
+                QString("Capture file not found: %1").arg(replayPcapPath)
+            );
+            return 1;
+        }
     }
 
     if (parser.isSet(sessionOption)) {
@@ -252,6 +270,12 @@ int main(int argc, char *argv[]) {
     // Auto-connect if host was provided
     if (autoConnect) {
         win.autoConnect(autoConnectConfig);
+    } else if (!replayPcapPath.isEmpty()) {
+        // Open the replay tab once the event loop is running, mirroring
+        // the autoConnect() startup deferral.
+        QTimer::singleShot(100, &win, [&win, replayPcapPath]() {
+            win.startPcapReplay(replayPcapPath);
+        });
     }
 
     return app.exec();

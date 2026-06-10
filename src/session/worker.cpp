@@ -18,10 +18,19 @@
 #include "logger/logger.h"
 #include "tn5250/message/message.h"
 #include <QThread>
+#include <QTimer>
 #include <sstream>
 #include <vector>
 
 namespace tn5250::session {
+
+namespace {
+// Replay pacing: original capture timing, clamped so the replay neither
+// flashes past multi-record bursts nor stalls on operator think time.
+constexpr int kReplayInitialDelayMs = 250;
+constexpr qint64 kReplayMinStepMs = 40;
+constexpr qint64 kReplayMaxStepMs = 1000;
+} // namespace
 
 Worker::Worker(QObject *parent)
     : QObject(parent), m_client(nullptr) {}
@@ -35,6 +44,10 @@ void Worker::setConfig(const ::session::SessionConfig &cfg) {
 }
 
 void Worker::start() {
+    if (m_config.isReplay()) {
+        startReplay();
+        return;
+    }
     if (m_client) {
         return;
     }
@@ -71,6 +84,15 @@ void Worker::stop() {
     // Disconnect logger before destroying client to prevent use-after-free
     // from DirectConnection signals arriving from other threads
     disconnect(logger::Logger::instance(), nullptr, this, nullptr);
+    if (m_replayTimer) {
+        m_replayTimer->stop();
+        m_replayTimer->deleteLater();
+        m_replayTimer = nullptr;
+        m_replayRecords.clear();
+        m_replayIndex = 0;
+        emit stateChanged(tn5250::client::TN5250Client::ConnectionState::Disconnected);
+        emit disconnected();
+    }
     if (!m_client) {
         return;
     }
@@ -123,6 +145,60 @@ void Worker::onClientData(const QByteArray &data) {
     }
 
     emit appData(data);
+}
+
+void Worker::startReplay() {
+    if (m_replayTimer) {
+        return;
+    }
+    core::pcap::ReplaySession replay;
+    QString err;
+    if (!core::pcap::PcapReplayLoader::loadFile(m_config.replayPcapFile(), &replay, &err)) {
+        logger::Logger::instance()->error(
+            QString("[Worker] PCAP replay failed: %1").arg(err));
+        emit errorOccurred(err);
+        emit stateChanged(tn5250::client::TN5250Client::ConnectionState::Disconnected);
+        return;
+    }
+    logger::Logger::instance()->debug(
+        QString("[Worker] Replaying %1 records from %2 (server %3, client %4)")
+            .arg(replay.records.size())
+            .arg(m_config.replayPcapFile())
+            .arg(replay.serverEndpoint)
+            .arg(replay.clientEndpoint));
+
+    m_replayRecords = replay.records;
+    m_replayIndex = 0;
+    emit stateChanged(tn5250::client::TN5250Client::ConnectionState::Connected);
+    emit connected();
+
+    m_replayTimer = new QTimer(this);
+    m_replayTimer->setSingleShot(true);
+    connect(m_replayTimer, &QTimer::timeout, this, &Worker::onReplayTick);
+    m_replayTimer->start(kReplayInitialDelayMs);
+}
+
+void Worker::onReplayTick() {
+    if (m_replayIndex >= m_replayRecords.size()) {
+        return;
+    }
+    const QByteArray data = m_replayRecords[m_replayIndex].data;
+    const qint64 tsUsec = m_replayRecords[m_replayIndex].timestampUsec;
+    m_replayIndex++;
+
+    if (m_replayIndex < m_replayRecords.size()) {
+        const qint64 deltaMs =
+            (m_replayRecords[m_replayIndex].timestampUsec - tsUsec) / 1000;
+        m_replayTimer->start(
+            static_cast<int>(qBound(kReplayMinStepMs, deltaMs, kReplayMaxStepMs)));
+    }
+
+    onClientData(data);
+
+    if (m_replayIndex >= m_replayRecords.size()) {
+        logger::Logger::instance()->debug("[Worker] Replay finished");
+        emit replayFinished();
+    }
 }
 
 } // namespace tn5250::session

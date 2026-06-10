@@ -33,6 +33,7 @@ class TestScreenBuffer : public QObject {
     void testFieldManagement();
     void testClear();
     void testScroll();
+    void testScrollRegionOversizedLineCount();
     void testWriteOperations();
     void testAttributes();
     void testProtectedFields();
@@ -136,6 +137,40 @@ void TestScreenBuffer::testScroll() {
 
     // Last row should now be empty
     QCOMPARE(m_buffer->character(23, 0), static_cast<uint8_t>(0x40));
+}
+
+void TestScreenBuffer::testScrollRegionOversizedLineCount() {
+    // A Roll order carries a 5-bit line count (up to 31), which a host can
+    // set larger than the rolled window. scrollRegion must clamp it instead
+    // of indexing outside the buffer (issue #131).
+
+    // Region of 3 rows (1..3), line count far beyond the region height: the
+    // up-branch clear loop would otherwise start at row 3 - 31 + 1 = -27.
+    m_buffer->writeChar(1, 0, 0xC1);
+    m_buffer->writeChar(3, 0, 0xC2);
+    m_buffer->writeChar(0, 0, 0xC9); // outside the region, must survive
+    m_buffer->writeChar(4, 0, 0xC9);
+    m_buffer->scrollRegion(1, 3, 31, true);
+    // Whole region cleared, neighbours untouched
+    QCOMPARE(m_buffer->character(1, 0), static_cast<uint8_t>(0x40));
+    QCOMPARE(m_buffer->character(3, 0), static_cast<uint8_t>(0x40));
+    QCOMPARE(m_buffer->character(0, 0), static_cast<uint8_t>(0xC9));
+    QCOMPARE(m_buffer->character(4, 0), static_cast<uint8_t>(0xC9));
+
+    // Same for the down branch near the bottom of the screen: the clear loop
+    // would otherwise run from row 21 up to row 21 + 31 - 1 = 51 (rows = 24).
+    m_buffer->writeChar(21, 0, 0xC3);
+    m_buffer->writeChar(23, 0, 0xC4);
+    m_buffer->writeChar(20, 0, 0xC9);
+    m_buffer->scrollRegion(21, 23, 31, false);
+    QCOMPARE(m_buffer->character(21, 0), static_cast<uint8_t>(0x40));
+    QCOMPARE(m_buffer->character(23, 0), static_cast<uint8_t>(0x40));
+    QCOMPARE(m_buffer->character(20, 0), static_cast<uint8_t>(0xC9));
+
+    // Line count exactly the region height behaves the same as oversized
+    m_buffer->writeChar(5, 2, 0xC5);
+    m_buffer->scrollRegion(5, 7, 3, true);
+    QCOMPARE(m_buffer->character(5, 2), static_cast<uint8_t>(0x40));
 }
 
 void TestScreenBuffer::testWriteOperations() {

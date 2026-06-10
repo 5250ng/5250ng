@@ -40,7 +40,10 @@ class TestPasswordEncrypt : public QObject {
         QCOMPARE(PasswordEncrypt::authScheme(1), static_cast<uint8_t>(0x01)); // DES
         QCOMPARE(PasswordEncrypt::authScheme(2), static_cast<uint8_t>(0x03)); // SHA-1
         QCOMPARE(PasswordEncrypt::authScheme(3), static_cast<uint8_t>(0x03)); // SHA-1
-        QCOMPARE(PasswordEncrypt::authScheme(4), static_cast<uint8_t>(0x07)); // SHA-512
+        // Levels >= 4 (QPWDLVL 4, SHA-512/PBKDF2) are not implemented:
+        // encrypt() falls back to SHA-1, so the declared scheme must match
+        // the algorithm actually used (issue #149).
+        QCOMPARE(PasswordEncrypt::authScheme(4), static_cast<uint8_t>(0x03)); // SHA-1 fallback
     }
 
     void testEncryptDES() {

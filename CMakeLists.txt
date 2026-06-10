@@ -26,6 +26,23 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 find_package(OpenSSL REQUIRED)
 
+# TLS support gate. QSslSocket ships inside Qt6::Network (there is no
+# separate Qt6::Ssl module), but some Qt builds are compiled without SSL.
+# Probe that the header is present and usable; the TLS client code paths
+# (#ifdef HAVE_QT6_SSL) are compiled in only when this succeeds. Whether an
+# SSL backend is actually loadable is still checked at runtime via
+# QSslSocket::supportsSsl().
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_LIBRARIES Qt6::Network)
+check_cxx_source_compiles("
+#include <QSslSocket>
+int main() { return QSslSocket::supportsSsl() ? 0 : 1; }
+" HAVE_QT6_SSL)
+unset(CMAKE_REQUIRED_LIBRARIES)
+if(NOT HAVE_QT6_SSL)
+    message(WARNING "Qt6 Network was built without SSL support - TLS connections will be disabled")
+endif()
+
 # Generate version header from project version
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in
@@ -67,6 +84,8 @@ set(CORE_SOURCES
     src/core/macro_to_script.h
     src/core/command_runner.cpp
     src/core/command_runner.h
+    src/core/pcap_replay.cpp
+    src/core/pcap_replay.h
 )
 
 set(SESSION_SOURCES
@@ -289,6 +308,7 @@ set(UI_SOURCES
     src/ui/actions/onToggleAgentPanel.cpp
     src/ui/actions/onMatchReplace.cpp
     src/ui/actions/onVirtualKeyboard.cpp
+    src/ui/actions/onReplayPcap.cpp
     # setup
     src/ui/setup/setupUI.cpp
     src/ui/setup/setupMenuBar.cpp
@@ -338,8 +358,8 @@ target_link_libraries(5250ng
         5250script
 )
 
+# QSslSocket lives in Qt6::Network (already linked); only the define is needed
 if(HAVE_QT6_SSL)
-    target_link_libraries(5250ng PRIVATE Qt6::Ssl)
     target_compile_definitions(5250ng PRIVATE HAVE_QT6_SSL)
 endif()
 
@@ -387,7 +407,6 @@ if(BUILD_TESTS)
             5250script
     )
     if(HAVE_QT6_SSL)
-        target_link_libraries(tn5250_core PUBLIC Qt6::Ssl)
         target_compile_definitions(tn5250_core PUBLIC HAVE_QT6_SSL)
     endif()
     target_include_directories(tn5250_core PUBLIC
@@ -416,11 +435,27 @@ if(BUILD_TESTS)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
 
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
+    add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)
     add_tn5250_test(test_match_replace tests/unit/test_match_replace.cpp)
 
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
     add_tn5250_test(test_password_encrypt tests/unit/test_password_encrypt.cpp)
+
+    # Command handler tests
+    # TN5250CommandHandler / TN5250StreamRenderer live in the main
+    # application target (not tn5250_core), so compile them into the test
+    # binary directly.
+    add_executable(test_command_handler_soh
+        tests/unit/test_command_handler_soh.cpp
+        src/ui/rendering/tn5250_command_handler.cpp
+        src/ui/rendering/tn5250_stream_renderer.cpp
+        src/ui/dialogs/pc_command_confirm_dialog.cpp
+        src/ui/widgets/Frameless/BaseFramelessDialog.cpp
+        src/ui/widgets/Frameless/TitleBar.cpp
+        src/ui/themes/manager.cpp)
+    target_link_libraries(test_command_handler_soh PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_command_handler_soh COMMAND test_command_handler_soh)
 
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),
@@ -433,10 +468,12 @@ if(BUILD_TESTS)
 
     # Scripting tests
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
+    add_tn5250_test(test_script_escape tests/unit/test_script_escape.cpp)
     add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
+    add_tn5250_test(test_tn5250_tls_connection tests/integration/test_tn5250_tls_connection.cpp)
 
     message(STATUS "Testing enabled - unit and integration tests configured")
 endif()

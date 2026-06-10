@@ -453,6 +453,13 @@ void ScreenBuffer::scrollRegion(int topRow, int botRow, int lines, bool up) {
     if (topRow < 0) topRow = 0;
     if (botRow >= m_rows) botRow = m_rows - 1;
     if (topRow > botRow || lines <= 0) return;
+    // A line count >= the region height shifts everything out of the window:
+    // clamp so the clear loops below stay inside [topRow, botRow]. Without
+    // this, a host-controlled Roll order with lineCount up to 31 makes the
+    // up-branch clear loop start at a negative row (write before m_buffer)
+    // and the down-branch clear loop run past botRow (write after m_buffer).
+    const int regionHeight = botRow - topRow + 1;
+    if (lines > regionHeight) lines = regionHeight;
     LOG_DEBUG(QString("[ScreenBuffer] scrollRegion: top=%1 bot=%2 lines=%3 dir=%4")
         .arg(topRow).arg(botRow).arg(lines).arg(up ? "up" : "down"));
 
