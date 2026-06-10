@@ -61,6 +61,10 @@ class OAuthFlow : public QObject {
     QNetworkAccessManager m_nam;
     QByteArray m_codeVerifier;
     QByteArray m_state;
+    // Redirect URI sent in the authorization request. RFC 6749 §4.1.3
+    // requires the token request to repeat the identical value, and the
+    // callback server may already be closed by then, so it is kept here.
+    QString m_redirectUri;
     bool m_completed = false;
 };
 
