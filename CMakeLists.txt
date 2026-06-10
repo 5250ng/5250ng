@@ -432,6 +432,7 @@ if(BUILD_TESTS)
 
     # Scripting tests
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
+    add_tn5250_test(test_script_escape tests/unit/test_script_escape.cpp)
     add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
 
     # Integration tests

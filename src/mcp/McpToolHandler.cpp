@@ -16,6 +16,7 @@
 
 #include "McpToolHandler.h"
 #include "McpSessionRegistry.h"
+#include "script_escape.h"
 #include "agent/agent_script_runner.h"
 #include "agent/tool_definitions.h"
 #include "core/ebcdic.h"
@@ -770,8 +771,7 @@ QJsonObject McpToolHandler::handleSendKeys(const QJsonObject &args) {
     while (it.hasNext()) {
         auto match = it.next();
         if (!match.captured(1).isNull()) {
-            QString text = match.captured(1);
-            text.replace('"', "\\\"");
+            QString text = escapeScriptString(match.captured(1));
             scriptLines << QString("TYPE \"%1\"").arg(text);
         } else {
             QString key = match.captured(0).toUpper();
@@ -874,9 +874,8 @@ QJsonObject McpToolHandler::handleTypeText(const QJsonObject &args) {
     if (text.isEmpty())
         return makeResult("Missing required parameter: text", true);
 
-    // Escape double quotes for the 5250script TYPE command
-    QString safeText = text;
-    safeText.replace('"', "\\\"");
+    // Escape for the 5250script TYPE command (quotes, backslashes, newlines)
+    QString safeText = escapeScriptString(text);
 
     QJsonObject scriptArgs;
     scriptArgs["script"] = QString("TYPE \"%1\"").arg(safeText);
@@ -950,9 +949,8 @@ QJsonObject McpToolHandler::handleWaitForText(const QJsonObject &args) {
 
     int timeout = args.value("timeout").toInt(30000);
 
-    // Escape double quotes for 5250script
-    QString safeText = text;
-    safeText.replace('"', "\\\"");
+    // Escape for 5250script (quotes, backslashes, newlines)
+    QString safeText = escapeScriptString(text);
 
     QString script = QString(
         "GLOBAL EXPECT_TIMEOUT %1\n"
@@ -990,11 +988,12 @@ QJsonObject McpToolHandler::handleLogin(const QJsonObject &args) {
     if (username.isEmpty())
         return makeResult("No username provided.", true);
 
-    // Escape double quotes in credentials to prevent script injection
-    QString safeUser = username;
-    safeUser.replace('"', "\\\"");
-    QString safePass = password;
-    safePass.replace('"', "\\\"");
+    // Escape credentials for 5250script to prevent script injection
+    // (quotes, backslashes, and newlines — a newline would otherwise inject
+    // new script statements, a trailing backslash would unterminate the
+    // string literal).
+    QString safeUser = escapeScriptString(username);
+    QString safePass = escapeScriptString(password);
 
     // Login script with auto-signoff and display program messages handling.
     // Sets $SESSION_USERNAME and $SESSION_PASSWORD then calls the login flow.
