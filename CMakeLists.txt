@@ -425,6 +425,21 @@ if(BUILD_TESTS)
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
     add_tn5250_test(test_password_encrypt tests/unit/test_password_encrypt.cpp)
 
+    # Command handler tests
+    # TN5250CommandHandler / TN5250StreamRenderer live in the main
+    # application target (not tn5250_core), so compile them into the test
+    # binary directly.
+    add_executable(test_command_handler_soh
+        tests/unit/test_command_handler_soh.cpp
+        src/ui/rendering/tn5250_command_handler.cpp
+        src/ui/rendering/tn5250_stream_renderer.cpp
+        src/ui/dialogs/pc_command_confirm_dialog.cpp
+        src/ui/widgets/Frameless/BaseFramelessDialog.cpp
+        src/ui/widgets/Frameless/TitleBar.cpp
+        src/ui/themes/manager.cpp)
+    target_link_libraries(test_command_handler_soh PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_command_handler_soh COMMAND test_command_handler_soh)
+
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),
     # so compile it into the test binary directly.
