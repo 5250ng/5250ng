@@ -416,6 +416,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
 
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
+    add_tn5250_test(test_match_replace tests/unit/test_match_replace.cpp)
 
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
