@@ -436,6 +436,7 @@ if(BUILD_TESTS)
 
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
+    add_tn5250_test(test_tn5250_tls_connection tests/integration/test_tn5250_tls_connection.cpp)
 
     message(STATUS "Testing enabled - unit and integration tests configured")
 endif()
