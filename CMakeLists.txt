@@ -67,6 +67,8 @@ set(CORE_SOURCES
     src/core/macro_to_script.h
     src/core/command_runner.cpp
     src/core/command_runner.h
+    src/core/pcap_replay.cpp
+    src/core/pcap_replay.h
 )
 
 set(SESSION_SOURCES
@@ -289,6 +291,7 @@ set(UI_SOURCES
     src/ui/actions/onToggleAgentPanel.cpp
     src/ui/actions/onMatchReplace.cpp
     src/ui/actions/onVirtualKeyboard.cpp
+    src/ui/actions/onReplayPcap.cpp
     # setup
     src/ui/setup/setupUI.cpp
     src/ui/setup/setupMenuBar.cpp
@@ -416,6 +419,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
 
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
+    add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)
 
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)

@@ -113,6 +113,13 @@ class SessionConfig : public QObject {
     PcCommandPolicy pcCommandPolicy() const { return m_pcCommandPolicy; }
     void setPcCommandPolicy(PcCommandPolicy policy) { m_pcCommandPolicy = policy; }
 
+    // Path to a pcap/pcapng capture to replay instead of opening a live
+    // connection. Transient: never serialized to JSON — a replay session is
+    // bound to a file picked at open time, not a saved profile.
+    QString replayPcapFile() const { return m_replayPcapFile; }
+    void setReplayPcapFile(const QString &path) { m_replayPcapFile = path; }
+    bool isReplay() const { return !m_replayPcapFile.isEmpty(); }
+
     // Serialization
     QJsonObject toJson() const;
     bool fromJson(const QJsonObject &json);
@@ -141,6 +148,7 @@ class SessionConfig : public QObject {
     QString m_username;
     QString m_password;
     PcCommandPolicy m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
+    QString m_replayPcapFile;
 
 };
 

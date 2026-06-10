@@ -42,6 +42,7 @@
  - [x] Code page support: `CP037`, `CP273`, `CP277`, `CP278`, `CP280`, `CP284`, `CP285`, `CP297`, `CP500`, `CP870`, `CP420`, `CP424`, `CP838`
  - [x] Hotspot detection, screen history/scrollback, regex match & replace, session logging
  - [x] Session logging with configurable verbosity (screens only, screens + keys, full protocol)
+ - [x] Session replay from pcap/pcapng capture files with original timing
  - [x] Screenshot capture to PNG
  - [x] Cross-platform: Linux, macOS, and Windows
 
@@ -104,6 +105,7 @@ Options:
   --tls                            Use TLS/SSL encryption
   -s, --load-session-from-name     Load a saved session by name
   -f, --load-session-from-file     Load a session from a JSON file
+  --replay-pcap <path>             Replay a TN5250 session from a pcap/pcapng capture file
   --enable-mcp-server              Enable the MCP server on startup
   --mcp-server-port <port>         MCP server port (default: 9250)
   -d, --debug                      Enable debug output
@@ -127,6 +129,12 @@ Options:
 
     ```
     ./build/bin/5250ng --load-session-from-name "Production AS400"
+    ```
+
+ + Replay a captured session from a PCAP file (also available via File → Replay Session from PCAP):
+
+    ```
+    ./build/bin/5250ng --replay-pcap session-capture.pcapng
     ```
 
  + Start with the MCP server enabled:

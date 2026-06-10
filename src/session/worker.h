@@ -16,10 +16,13 @@
 
 #pragma once
 
+#include "core/pcap_replay.h"
 #include "network/tn5250_qt/client/client.h"
 #include "session/config.h"
 #include <QByteArray>
 #include <QObject>
+
+class QTimer;
 
 namespace tn5250::session {
 
@@ -45,12 +48,21 @@ class Worker : public QObject {
     void errorOccurred(const QString &error);
     void stateChanged(tn5250::client::TN5250Client::ConnectionState state);
     void appData(const QByteArray &data);
+    // Emitted by replay sessions once the last captured record was delivered.
+    void replayFinished();
 
   private:
     ::session::SessionConfig m_config;
     tn5250::client::TN5250Client *m_client;
 
+    // PCAP replay state (active when m_config.isReplay())
+    QTimer *m_replayTimer = nullptr;
+    QVector<core::pcap::ReplayRecord> m_replayRecords;
+    int m_replayIndex = 0;
+
     void onClientData(const QByteArray &data);
+    void startReplay();
+    void onReplayTick();
 };
 
 } // namespace tn5250::session
