@@ -41,6 +41,8 @@ void MainWindow::setupMenuBar() {
         fileMenu->addAction("&Reconnect", this, &MainWindow::onReconnect);
     m_reconnectAction->setEnabled(false);
     fileMenu->addSeparator();
+    fileMenu->addAction("Replay Session from &PCAP...", this, &MainWindow::onReplayPcap);
+    fileMenu->addSeparator();
     fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
     fileMenu->addSeparator();
     QMenu *mcpMenu = fileMenu->addMenu("&MCP Server");
