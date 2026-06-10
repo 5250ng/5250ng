@@ -504,6 +504,11 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         session->displayWidget->setReadOnly(true);
     }
 
+    // Replay sessions have no peer to answer input: lock the screen
+    if (config.isReplay()) {
+        session->displayWidget->setReadOnly(true);
+    }
+
     // Agent panel (hidden by default, second child of splitter)
     // Skipped for MCP-controlled sessions
     if (!session->mcpControlled) {
@@ -584,9 +589,11 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                 switch (state) {
                 case tn5250::client::TN5250Client::ConnectionState::Connected:
                     session->connectionStatus->setStatusText(
-                        QString("Connected to %1:%2")
-                            .arg(session->config.hostname())
-                            .arg(session->config.port()));
+                        session->config.isReplay()
+                            ? QString("Replaying %1").arg(session->config.name())
+                            : QString("Connected to %1:%2")
+                                  .arg(session->config.hostname())
+                                  .arg(session->config.port()));
                     // Run startup script once on first connect
                     if (!*startupScriptRan && !session->config.startupScriptSource().isEmpty()) {
                         *startupScriptRan = true;
@@ -646,6 +653,17 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         if (session->parser) {
             session->parser->parseData(bytes);
         } }, Qt::QueuedConnection);
+    // Replay end-of-capture: keep the final screen, update the status text
+    connect(session->worker, &tn5250::session::Worker::replayFinished, this,
+        [this, session]() {
+            if (session->connectionStatus) {
+                session->connectionStatus->setStatusText(
+                    QString("Replay finished — %1").arg(session->config.name()));
+            }
+            if (m_sessions.indexOf(session) == m_activeIndex && session->connectionStatus) {
+                m_globalConnectionStatus->setStatusText(session->connectionStatus->statusText());
+            }
+        });
     session->config = m_currentSession;
 
     // Use session name for saved sessions, ip:port for CLI/unsaved

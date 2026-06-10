@@ -34,6 +34,7 @@ class TestKeyboardEncoder : public QObject {
     void testGetPFKeyNumber();
     void testEnterKey();
     void testTabKeys();
+    void testPageKeysSendRollAids();
     void testArrowKeys();
 
   private:
@@ -126,6 +127,21 @@ void TestKeyboardEncoder::testTabKeys() {
     QKeyEvent backTabEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::ShiftModifier);
     QByteArray backTab = m_encoder->encodeKeyEvent(&backTabEvent);
     QVERIFY(backTab.isEmpty());
+}
+
+// Regression test for issue #141: 5250 Roll AIDs use window-movement
+// semantics — Page Up must send Roll Down (0xF4, previous page) and
+// Page Down must send Roll Up (0xF5, next page), not the other way round.
+void TestKeyboardEncoder::testPageKeysSendRollAids() {
+    QKeyEvent pageUpEvent(QEvent::KeyPress, Qt::Key_PageUp, Qt::NoModifier);
+    QByteArray pageUp = m_encoder->encodeKeyEvent(&pageUpEvent);
+    QCOMPARE(pageUp.size(), 1);
+    QCOMPARE(static_cast<uint8_t>(pageUp[0]), static_cast<uint8_t>(0xF4));
+
+    QKeyEvent pageDownEvent(QEvent::KeyPress, Qt::Key_PageDown, Qt::NoModifier);
+    QByteArray pageDown = m_encoder->encodeKeyEvent(&pageDownEvent);
+    QCOMPARE(pageDown.size(), 1);
+    QCOMPARE(static_cast<uint8_t>(pageDown[0]), static_cast<uint8_t>(0xF5));
 }
 
 void TestKeyboardEncoder::testArrowKeys() {

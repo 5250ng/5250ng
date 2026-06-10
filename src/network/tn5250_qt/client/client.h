@@ -28,9 +28,18 @@
 #include <QtNetwork/QTcpSocket>
 #include <memory>
 
+#ifdef HAVE_QT6_SSL
+// moc registers the onSslErrors slot parameter (QList<QSslError>) in the
+// metatype system, which requires the complete type, not a forward
+// declaration.
+#include <QtNetwork/QSslError>
+#endif
+
 // Forward declarations for optional SSL support
 class QSslSocket;
+#ifndef HAVE_QT6_SSL
 class QSslError;
+#endif
 
 // Forward-declared in the global namespace so the friend declaration below
 // names the test class defined at file scope in tests/unit/test_telnet_subnegotiation.cpp,

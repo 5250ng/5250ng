@@ -49,13 +49,13 @@ void OAuthFlow::start() {
     }
 
     quint16 port = m_server.serverPort();
-    QString redirectUri = QStringLiteral("http://127.0.0.1:%1/callback").arg(port);
+    m_redirectUri = QStringLiteral("http://127.0.0.1:%1/callback").arg(port);
 
     QUrl authUrl(m_config.authorizationEndpoint);
     QUrlQuery query;
     query.addQueryItem("response_type", "code");
     query.addQueryItem("client_id", m_config.clientId);
-    query.addQueryItem("redirect_uri", redirectUri);
+    query.addQueryItem("redirect_uri", m_redirectUri);
     query.addQueryItem("code_challenge", QString::fromLatin1(computeCodeChallenge(m_codeVerifier)));
     query.addQueryItem("code_challenge_method", "S256");
     query.addQueryItem("state", QString::fromLatin1(m_state));
@@ -143,12 +143,6 @@ void OAuthFlow::onNewConnection() {
 }
 
 void OAuthFlow::exchangeCode(const QString &code) {
-    // Server may already be closed, but we stored the port from the redirect_uri
-    // Reconstruct the redirect_uri used during authorization
-    // Note: we need the same redirect_uri that was used in the authorization request
-    // The server was on an ephemeral port, so we reconstruct it from the URL the browser hit.
-    // Since the server is closed now, we just build the same URI string.
-
     QUrl tokenUrl(m_config.tokenEndpoint);
     QNetworkRequest request(tokenUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
@@ -157,6 +151,10 @@ void OAuthFlow::exchangeCode(const QString &code) {
     params.addQueryItem("grant_type", "authorization_code");
     params.addQueryItem("code", code);
     params.addQueryItem("client_id", m_config.clientId);
+    // RFC 6749 §4.1.3: redirect_uri is REQUIRED here (and must be identical)
+    // because the authorization request included it. The callback server may
+    // already be closed, so the value was saved in start().
+    params.addQueryItem("redirect_uri", m_redirectUri);
     params.addQueryItem("code_verifier", QString::fromLatin1(m_codeVerifier));
 
     QNetworkReply *reply = m_nam.post(request, params.query(QUrl::FullyEncoded).toUtf8());

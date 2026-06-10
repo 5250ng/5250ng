@@ -66,11 +66,15 @@ QByteArray KeyboardEncoder::encodeKeyEvent(QKeyEvent *event, bool shiftPressed, 
     case Qt::Key_End:
         return encodeAction(KeyboardAction::End);
 
+    // 5250 Roll AIDs use window-movement semantics (SA21-9247): Roll Down
+    // (0xF4) shows the previous page, Roll Up (0xF5) shows the next page.
+    // PC Page Up therefore maps to Roll Down and Page Down to Roll Up,
+    // matching the AID comments in keyboard_encoder.h.
     case Qt::Key_PageUp:
-        return encodeAction(KeyboardAction::RollUp);
+        return encodeAction(KeyboardAction::RollDown);
 
     case Qt::Key_PageDown:
-        return encodeAction(KeyboardAction::RollDown);
+        return encodeAction(KeyboardAction::RollUp);
 
     case Qt::Key_Up:
         return encodeAction(KeyboardAction::ArrowUp);

@@ -16,6 +16,7 @@
 
 #include "../main_window.h"
 #include "mcp/McpServer.h"
+#include <QCoreApplication>
 
 void MainWindow::onCloseTabRequested(int index) {
     if (index < 0 || index >= m_sessions.size()) {
@@ -86,6 +87,16 @@ void MainWindow::onCloseTabRequested(int index) {
         s->container->deleteLater();
         s->container = nullptr;
     }
+    // The worker emitted its signals via queued connections from its own
+    // thread, so QMetaCallEvents holding the per-session lambdas (which
+    // capture the raw Session*) may already sit in this thread's event
+    // queue. disconnect() does not remove already-posted events, and they
+    // are only auto-discarded when the receiver (MainWindow) dies — not
+    // when the captured Session is freed. Deliver them now, while the
+    // struct is still alive: the nulled pointers above and the removed
+    // m_sessions entry make every stale lambda a no-op. The worker thread
+    // has been stopped, so no new events can arrive after this point.
+    QCoreApplication::sendPostedEvents(this, QEvent::MetaCall);
     delete s;
     if (!m_sessions.isEmpty()) {
         int newIndex = qMin(index, m_sessions.size() - 1);

@@ -59,6 +59,10 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     // Auto-connect on startup
     void autoConnect(const session::SessionConfig &config);
 
+    // Opens a replay tab for a pcap/pcapng capture file (also used by the
+    // --replay-pcap command line option).
+    void startPcapReplay(const QString &path);
+
   protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
@@ -68,6 +72,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
   private slots:
     void onConnect();
     void onDisconnect();
+    void onReplayPcap();
     void onConnectRequested(const session::SessionConfig &config);
     void onLogMessage(logger::LogLevel level, const QString &message);
     void onCurrentTabChanged(int index);
