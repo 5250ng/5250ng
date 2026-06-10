@@ -373,7 +373,16 @@ void TN5250CommandHandler::onSohReceived(uint8_t errorRow, uint8_t ckm1,
         return;
     }
     if (errorRow > 0) {
-        m_displayWidget->setErrorLineRow(errorRow - 1);
+        // The SOH error row is a raw host byte; everything that later indexes
+        // the screen with errorLineRow() (Write Error Code save/clear, error
+        // reset restore) goes through ScreenBuffer::cell(), which has no
+        // release-mode bounds check. Clamp to the last screen row.
+        int row = errorRow - 1;
+        if (m_displayWidget->screenBuffer()
+            && row >= m_displayWidget->screenBuffer()->rows()) {
+            row = m_displayWidget->screenBuffer()->rows() - 1;
+        }
+        m_displayWidget->setErrorLineRow(row);
     }
     m_displayWidget->setCmdKeyMask(ckm1, ckm2, ckm3);
     logger::Logger::instance()->debug(
@@ -399,7 +408,7 @@ void TN5250CommandHandler::onWriteErrorCode(const QByteArray &errorData) {
     }
     auto *screen = m_displayWidget->screenBuffer();
     int errRow = m_displayWidget->errorLineRow();
-    if (errRow < 0) errRow = screen->rows() - 1;
+    if (errRow < 0 || errRow >= screen->rows()) errRow = screen->rows() - 1;
 
     QVector<ui::widgets::ScreenCell> savedLine;
     for (int c = 0; c < screen->cols(); ++c) {

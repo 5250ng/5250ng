@@ -112,6 +112,9 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
             // Error Reset: restore error line and unlock keyboard
             if (!m_savedErrorLine.isEmpty() && m_screenBuffer) {
                 int errRow = (m_errorLineRow >= 0) ? m_errorLineRow : (m_screenBuffer->rows() - 1);
+                // The screen may have been resized since the row was stored
+                // (24x80 <-> 27x132); cell() has no release-mode bounds check
+                if (errRow >= m_screenBuffer->rows()) errRow = m_screenBuffer->rows() - 1;
                 for (int c = 0; c < m_screenBuffer->cols() && c < m_savedErrorLine.size(); ++c) {
                     m_screenBuffer->cell(errRow, c) = m_savedErrorLine[c];
                 }
@@ -244,6 +247,8 @@ void Q5250ScreenWidget::dispatchMappedAction(core::MappedAction action) {
             if (!m_savedErrorLine.isEmpty() && m_screenBuffer) {
                 int errRow = (m_errorLineRow >= 0) ? m_errorLineRow
                                                     : (m_screenBuffer->rows() - 1);
+                // Clamp: screen may have been resized since the row was stored
+                if (errRow >= m_screenBuffer->rows()) errRow = m_screenBuffer->rows() - 1;
                 for (int c = 0; c < m_screenBuffer->cols() && c < m_savedErrorLine.size(); ++c) {
                     m_screenBuffer->cell(errRow, c) = m_savedErrorLine[c];
                 }
