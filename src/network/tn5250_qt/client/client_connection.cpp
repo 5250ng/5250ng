@@ -61,6 +61,13 @@ void TN5250Client::connectToHost(const QString &hostname, quint16 port, bool use
         m_socket = m_sslSocket;
 
         connect(m_sslSocket, &QSslSocket::connected, this, &TN5250Client::onSocketConnected);
+        // QSslSocket emits connected() at TCP establishment, before the TLS
+        // handshake; onSocketConnected early-returns there because
+        // isEncrypted() is still false. encrypted() is the actual
+        // "link ready" event for implicit TLS — route it to the same
+        // handler, which then enters Negotiating and performs the telnet
+        // handshake.
+        connect(m_sslSocket, &QSslSocket::encrypted, this, &TN5250Client::onSocketConnected);
         connect(m_sslSocket, &QSslSocket::disconnected, this, &TN5250Client::onSocketDisconnected);
         connect(m_sslSocket, &QSslSocket::readyRead, this, &TN5250Client::onSocketReadyRead);
         connect(
