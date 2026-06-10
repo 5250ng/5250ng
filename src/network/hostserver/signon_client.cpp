@@ -251,6 +251,13 @@ void SignonClient::sendSignonInfo() {
     }
 
     uint8_t authScheme = PasswordEncrypt::authScheme(m_passwordLevel);
+    if (m_passwordLevel >= 4) {
+        logger::Logger::instance()->warning(
+            QString("[SignonClient] Server reports password level %1 "
+                    "(SHA-512/PBKDF2 substitution), which is not implemented; "
+                    "attempting SHA-1 substitution instead")
+                .arg(m_passwordLevel));
+    }
 
     // Build template: 1 byte auth scheme
     QByteArray templateData;

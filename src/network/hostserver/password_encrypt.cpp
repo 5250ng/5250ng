@@ -43,9 +43,13 @@ QByteArray PasswordEncrypt::generateSeed() {
 }
 
 uint8_t PasswordEncrypt::authScheme(uint8_t passwordLevel) {
+    // Must always describe the algorithm encrypt() actually uses for the
+    // same level. SHA-512/PBKDF2 substitution (scheme 0x07, QPWDLVL 4) is
+    // not implemented, and encrypt() falls back to SHA-1 for levels >= 2 —
+    // declaring 0x07 while sending a SHA-1 digest makes the server reject
+    // the signon with a mismatched credential.
     if (passwordLevel <= 1) return 0x01; // DES
-    if (passwordLevel <= 3) return 0x03; // SHA-1
-    return 0x07; // SHA-512/PBKDF2
+    return 0x03;                         // SHA-1
 }
 
 QByteArray PasswordEncrypt::encrypt(const QString &userId,
