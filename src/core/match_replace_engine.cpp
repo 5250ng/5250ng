@@ -49,15 +49,19 @@ void MatchReplaceEngine::rebuildOverlay(const QVector<QString> &decodedLines, in
         if (replaced == original) continue;
 
         int base = r * cols;
-        int len = qMin(replaced.size(), cols);
+        // Cover the full extent of both lines: when the replacement shrinks
+        // the row, the cells past the end of `replaced` must be overlaid
+        // with blanks, otherwise the original (now shifted-out) characters
+        // keep showing there — leaking exactly the text the rule rewrote.
+        int len = qMin(qMax(replaced.size(), original.size()), qsizetype(cols));
         for (int c = 0; c < len; ++c) {
             QChar origCh = (c < original.size()) ? original[c] : QChar(' ');
-            if (replaced[c] != origCh) {
-                m_overlay[base + c] = replaced[c];
+            QChar replCh = (c < replaced.size()) ? replaced[c] : QChar(' ');
+            if (replCh != origCh) {
+                m_overlay[base + c] = replCh;
                 m_overlayActive[base + c] = true;
             }
         }
-        // If replacement is shorter than original, remaining cells stay original
         // If replacement is longer than cols, truncated (grid is fixed-width)
     }
 }

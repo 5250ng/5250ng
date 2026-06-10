@@ -436,6 +436,7 @@ if(BUILD_TESTS)
 
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
     add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)
+    add_tn5250_test(test_match_replace tests/unit/test_match_replace.cpp)
 
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)
