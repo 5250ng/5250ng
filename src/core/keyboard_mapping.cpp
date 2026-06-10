@@ -125,8 +125,9 @@ void KeyboardMapping::resetToDefaults() {
     m_chordToAction.insert({Qt::Key_Enter, Qt::NoModifier}, MappedAction::Enter);
     m_chordToAction.insert({Qt::Key_Escape, Qt::ControlModifier}, MappedAction::Attn);
     m_chordToAction.insert({Qt::Key_SysReq, Qt::NoModifier}, MappedAction::SysReq);
-    m_chordToAction.insert({Qt::Key_PageUp, Qt::NoModifier}, MappedAction::RollUp);
-    m_chordToAction.insert({Qt::Key_PageDown, Qt::NoModifier}, MappedAction::RollDown);
+    // Page Up = Roll Down (previous page), Page Down = Roll Up (next page)
+    m_chordToAction.insert({Qt::Key_PageUp, Qt::NoModifier}, MappedAction::RollDown);
+    m_chordToAction.insert({Qt::Key_PageDown, Qt::NoModifier}, MappedAction::RollUp);
     m_chordToAction.insert({Qt::Key_Tab, Qt::NoModifier}, MappedAction::Tab);
     m_chordToAction.insert({Qt::Key_Backtab, Qt::NoModifier}, MappedAction::BackTab);
     m_chordToAction.insert({Qt::Key_Tab, Qt::ShiftModifier}, MappedAction::BackTab);

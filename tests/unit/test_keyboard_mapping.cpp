@@ -29,6 +29,7 @@ class TestKeyboardMapping : public QObject {
     void init();
 
     void testDefaultsContainExpectedActions();
+    void testDefaultPageKeysMapToRollActions();
     void testShiftF1IsPF13();
     void testCtrlEscapeIsAttn();
     void testSetAndLookup();
@@ -71,6 +72,15 @@ void TestKeyboardMapping::testDefaultsContainExpectedActions() {
         KeyChord c = m.chordFor(action);
         QVERIFY2(c.isValid(), qPrintable(QString("PF%1 should have a default chord").arg(i)));
     }
+}
+
+// Regression test for issue #141: Page Up pages backward (Roll Down),
+// Page Down pages forward (Roll Up).
+void TestKeyboardMapping::testDefaultPageKeysMapToRollActions() {
+    KeyboardMapping &m = KeyboardMapping::instance();
+    m.resetToDefaults();
+    QCOMPARE(m.lookup(Qt::Key_PageUp, Qt::NoModifier), MappedAction::RollDown);
+    QCOMPARE(m.lookup(Qt::Key_PageDown, Qt::NoModifier), MappedAction::RollUp);
 }
 
 void TestKeyboardMapping::testShiftF1IsPF13() {
