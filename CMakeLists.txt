@@ -26,6 +26,23 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 find_package(OpenSSL REQUIRED)
 
+# TLS support gate. QSslSocket ships inside Qt6::Network (there is no
+# separate Qt6::Ssl module), but some Qt builds are compiled without SSL.
+# Probe that the header is present and usable; the TLS client code paths
+# (#ifdef HAVE_QT6_SSL) are compiled in only when this succeeds. Whether an
+# SSL backend is actually loadable is still checked at runtime via
+# QSslSocket::supportsSsl().
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_LIBRARIES Qt6::Network)
+check_cxx_source_compiles("
+#include <QSslSocket>
+int main() { return QSslSocket::supportsSsl() ? 0 : 1; }
+" HAVE_QT6_SSL)
+unset(CMAKE_REQUIRED_LIBRARIES)
+if(NOT HAVE_QT6_SSL)
+    message(WARNING "Qt6 Network was built without SSL support - TLS connections will be disabled")
+endif()
+
 # Generate version header from project version
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in
@@ -341,8 +358,8 @@ target_link_libraries(5250ng
         5250script
 )
 
+# QSslSocket lives in Qt6::Network (already linked); only the define is needed
 if(HAVE_QT6_SSL)
-    target_link_libraries(5250ng PRIVATE Qt6::Ssl)
     target_compile_definitions(5250ng PRIVATE HAVE_QT6_SSL)
 endif()
 
@@ -390,7 +407,6 @@ if(BUILD_TESTS)
             5250script
     )
     if(HAVE_QT6_SSL)
-        target_link_libraries(tn5250_core PUBLIC Qt6::Ssl)
         target_compile_definitions(tn5250_core PUBLIC HAVE_QT6_SSL)
     endif()
     target_include_directories(tn5250_core PUBLIC
