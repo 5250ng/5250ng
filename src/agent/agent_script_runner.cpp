@@ -93,8 +93,10 @@ void AgentScriptRunner::runScript(const QString &scriptText) {
                 else if (aid >= 0x31 && aid <= 0x3C) { qtKey = Qt::Key_F1 + (aid - 0x31); }
                 else if (aid >= 0xB1 && aid <= 0xBC) { qtKey = Qt::Key_F1 + (aid - 0xB1); mods = Qt::ShiftModifier; }
                 else if (aid == 0xF3) { qtKey = Qt::Key_F1; mods = Qt::ControlModifier; }
-                else if (aid == 0xF4) { qtKey = Qt::Key_PageDown; }
-                else if (aid == 0xF5) { qtKey = Qt::Key_PageUp; }
+                // Must be the inverse of KeyboardEncoder, which maps PC PageUp
+                // to Roll Down (0xF4) and PageDown to Roll Up (0xF5).
+                else if (aid == 0xF4) { qtKey = Qt::Key_PageUp; }
+                else if (aid == 0xF5) { qtKey = Qt::Key_PageDown; }
                 else if (aid == 0xF6) { qtKey = Qt::Key_Print; }
                 else if (aid == 0xBD) { qtKey = Qt::Key_Pause; mods = Qt::ControlModifier; }
                 else return;

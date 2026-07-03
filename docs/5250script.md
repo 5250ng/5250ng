@@ -93,8 +93,8 @@ AID (Attention Identifier) keys send data to the host and lock the keyboard unti
 | `F22`       | Function key 22            |
 | `F23`       | Function key 23            |
 | `F24`       | Function key 24            |
-| `PAGEUP`    | Page Up (Roll Down)        |
-| `PAGEDOWN`  | Page Down (Roll Up)        |
+| `PAGEUP`    | Previous page (Roll Down)  |
+| `PAGEDOWN`  | Next page (Roll Up)        |
 | `ATTN`      | Attention                  |
 | `SYSREQ`    | System Request             |
 | `HELP`      | Help                       |

@@ -318,6 +318,9 @@ class Client5250:
         INSERT, HOME, END, ESCAPE, PAGEUP, PAGEDOWN, FIELDPLUS, FIELDMINUS,
         FIELDEXIT, DUP, ERASEINPUT, ERASEFIELD, ERASEEOF, ATTN, SYSREQ,
         HELP, CLEAR, PRINT, UP, DOWN, LEFT, RIGHT.
+
+        PAGEDOWN shows the next page (5250 Roll Up), PAGEUP the previous
+        page (Roll Down).
         """
         return self._call_tool("press_key", {
             "session_id": session_id,
@@ -354,6 +357,8 @@ class Client5250:
 
         Supported keys: ENTER, F1-F24, TAB, BACKSPACE, PAGEUP, PAGEDOWN,
         HOME, END, INSERT, DELETE, ESCAPE, UP, DOWN, LEFT, RIGHT, FIELDEXIT.
+        PAGEDOWN shows the next page (5250 Roll Up), PAGEUP the previous
+        page (Roll Down).
         """
         return self._call_tool("send_keys", {
             "session_id": session_id,
