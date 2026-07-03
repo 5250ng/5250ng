@@ -64,6 +64,7 @@ set(CORE_SOURCES
     src/core/ebcdic.h
     src/core/codepage.cpp
     src/core/codepage.h
+    src/core/aid_key_map.h
     src/core/keyboard_encoder.cpp
     src/core/keyboard_encoder.h
     src/core/keyboard_mapping.cpp
@@ -426,6 +427,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_screen_buffer tests/unit/test_screen_buffer.cpp)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
+    add_tn5250_test(test_aid_key_map tests/unit/test_aid_key_map.cpp)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
     add_tn5250_test(test_command_runner tests/unit/test_command_runner.cpp)
 

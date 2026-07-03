@@ -128,6 +128,13 @@ void KeyboardMapping::resetToDefaults() {
     // Page Up = Roll Down (previous page), Page Down = Roll Up (next page)
     m_chordToAction.insert({Qt::Key_PageUp, Qt::NoModifier}, MappedAction::RollDown);
     m_chordToAction.insert({Qt::Key_PageDown, Qt::NoModifier}, MappedAction::RollUp);
+    // AID keys without a dedicated key on PC keyboards. Script/MCP AID
+    // replay depends on these chords: core::aidToQtKey() (aid_key_map.h)
+    // synthesizes them when a script presses HELP, PRINT, or CLEAR, so
+    // they must stay in sync with that reverse map.
+    m_chordToAction.insert({Qt::Key_F1, Qt::ControlModifier}, MappedAction::Help);
+    m_chordToAction.insert({Qt::Key_Print, Qt::NoModifier}, MappedAction::Print);
+    m_chordToAction.insert({Qt::Key_Pause, Qt::ControlModifier}, MappedAction::Clear);
     m_chordToAction.insert({Qt::Key_Tab, Qt::NoModifier}, MappedAction::Tab);
     m_chordToAction.insert({Qt::Key_Backtab, Qt::NoModifier}, MappedAction::BackTab);
     m_chordToAction.insert({Qt::Key_Tab, Qt::ShiftModifier}, MappedAction::BackTab);
