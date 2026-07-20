@@ -20,6 +20,30 @@
 
 namespace ui::widgets {
 
+namespace {
+
+void shiftFields(QVector<ScreenBuffer::Field> &fields, int cellDelta,
+                 int rows, int cols) {
+    const int totalCells = rows * cols;
+    for (int i = fields.size() - 1; i >= 0; --i) {
+        ScreenBuffer::Field &field = fields[i];
+        const int shiftedStart = field.startRow * cols + field.startCol
+                                 + cellDelta;
+        const int shiftedEnd = shiftedStart + field.length;
+        const int visibleStart = qMax(0, shiftedStart);
+        const int visibleEnd = qMin(totalCells, shiftedEnd);
+        if (visibleStart >= visibleEnd) {
+            fields.removeAt(i);
+            continue;
+        }
+        field.startRow = visibleStart / cols;
+        field.startCol = visibleStart % cols;
+        field.length = visibleEnd - visibleStart;
+    }
+}
+
+} // namespace
+
 ScreenBuffer::ScreenBuffer(int rows, int cols, QObject *parent) : QObject(parent), m_rows(rows), m_cols(cols), m_cursorPos(0, 0), m_cursorVisible(true) {
     m_buffer.resize(m_rows * m_cols);
     clear();
@@ -249,16 +273,12 @@ void ScreenBuffer::scrollUp(int lines) {
 
     // Clear bottom lines
     for (int row = m_rows - lines; row < m_rows; ++row) {
-        clearRow(row);
-    }
-
-    // Update field positions
-    for (Field &field : m_fields) {
-        field.startRow -= lines;
-        if (field.startRow < 0) {
-            field.startRow = 0;
+        for (int col = 0; col < m_cols; ++col) {
+            m_buffer[index(row, col)] = ScreenCell();
         }
     }
+
+    shiftFields(m_fields, -lines * m_cols, m_rows, m_cols);
 
     emit screenChanged();
 }
@@ -278,16 +298,12 @@ void ScreenBuffer::scrollDown(int lines) {
 
     // Clear top lines
     for (int row = 0; row < lines; ++row) {
-        clearRow(row);
-    }
-
-    // Update field positions
-    for (Field &field : m_fields) {
-        field.startRow += lines;
-        if (field.startRow >= m_rows) {
-            field.startRow = m_rows - 1;
+        for (int col = 0; col < m_cols; ++col) {
+            m_buffer[index(row, col)] = ScreenCell();
         }
     }
+
+    shiftFields(m_fields, lines * m_cols, m_rows, m_cols);
 
     emit screenChanged();
 }
