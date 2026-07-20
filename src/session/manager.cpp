@@ -82,6 +82,16 @@ bool SessionManager::saveSession(const SessionConfig &config) {
         return false;
     }
 
+    const QFileDevice::Permissions ownerOnly =
+        QFileDevice::ReadOwner | QFileDevice::WriteOwner;
+    if (!file.setPermissions(ownerOnly)) {
+        logger::Logger::instance()->warning(
+            QString("SessionManager: Cannot restrict file permissions: %1")
+                .arg(filePath));
+        file.close();
+        return false;
+    }
+
     QJsonObject json = config.toJson();
     QJsonDocument doc(json);
     file.write(doc.toJson());

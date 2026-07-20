@@ -15,6 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "session/config.h"
+#include "session/manager.h"
+#include <QFile>
+#include <QFileInfo>
+#include <QStandardPaths>
+#include <QUuid>
 #include <QtTest/QtTest>
 
 using namespace session;
@@ -37,6 +42,7 @@ class TestSessionConfig : public QObject {
     void testPcCommandPolicyDefaults();
     void testPcCommandPolicyRoundTrip();
     void testPcCommandPolicyLegacyConfigCompat();
+    void testSavedSessionPermissions();
 
   private:
     SessionConfig *m_config;
@@ -421,6 +427,40 @@ void TestSessionConfig::testPcCommandPolicyLegacyConfigCompat() {
         QVERIFY(cfg.fromJson(j));
         QCOMPARE(cfg.pcCommandPolicy(), PcCommandPolicy::Deny);
     }
+}
+
+void TestSessionConfig::testSavedSessionPermissions() {
+    QStandardPaths::setTestModeEnabled(true);
+
+    const QString name = QStringLiteral("permission-test-")
+                         + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    SessionConfig config;
+    config.setName(name);
+    config.setHostname(QStringLiteral("example.com"));
+    config.setPassword(QStringLiteral("secret"));
+
+    SessionManager manager;
+    QVERIFY(manager.saveSession(config));
+
+    const QString path = QStandardPaths::writableLocation(
+                             QStandardPaths::AppDataLocation)
+                         + QStringLiteral("/sessions/") + name
+                         + QStringLiteral(".json");
+    const QFileInfo fileInfo(path);
+    QVERIFY(fileInfo.exists());
+
+    const QFileDevice::Permissions permissions = fileInfo.permissions();
+    QVERIFY(permissions.testFlag(QFileDevice::ReadOwner));
+    QVERIFY(permissions.testFlag(QFileDevice::WriteOwner));
+#ifdef Q_OS_UNIX
+    const QFileDevice::Permissions nonOwnerPermissions =
+        QFileDevice::ReadGroup | QFileDevice::WriteGroup
+        | QFileDevice::ExeGroup | QFileDevice::ReadOther
+        | QFileDevice::WriteOther | QFileDevice::ExeOther;
+    QCOMPARE(permissions & nonOwnerPermissions, QFileDevice::Permissions{});
+#endif
+
+    QVERIFY(QFile::remove(path));
 }
 
 // Make the enum visible to QCOMPARE's diagnostics (the registration is only
