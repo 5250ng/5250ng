@@ -358,6 +358,8 @@ inline QJsonObject toolCreateSessionSchema() {
     QJsonObject portProp;
     portProp["type"] = "integer";
     portProp["description"] = "TCP port number (default 23)";
+    portProp["minimum"] = 1;
+    portProp["maximum"] = 65535;
 
     QJsonObject tlsProp;
     tlsProp["type"] = "boolean";

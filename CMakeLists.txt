@@ -465,6 +465,7 @@ if(BUILD_TESTS)
         src/mcp/McpHttpParser.cpp)
     target_link_libraries(test_mcp_http_parser PRIVATE tn5250_core Qt6::Test)
     add_test(NAME test_mcp_http_parser COMMAND test_mcp_http_parser)
+    add_tn5250_test(test_mcp_validation tests/unit/test_mcp_validation.cpp)
 
     # Scripting tests
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)

@@ -16,6 +16,7 @@
 
 #include "McpToolHandler.h"
 #include "McpSessionRegistry.h"
+#include "mcp_validation.h"
 #include "script_escape.h"
 #include "agent/agent_script_runner.h"
 #include "agent/tool_definitions.h"
@@ -256,7 +257,10 @@ QJsonObject McpToolHandler::handleCreateSession(const QJsonObject &args) {
     if (hostname.isEmpty())
         return makeResult("No hostname provided.", true);
 
-    quint16 port = static_cast<quint16>(args.value("port").toInt(23));
+    quint16 port = 0;
+    if (!parseTcpPort(args.value("port"), &port)) {
+        return makeResult("Port must be an integer between 1 and 65535.", true);
+    }
     bool useTLS = args.value("useTLS").toBool(false);
 
     MCP_LOG(QString("Creating session to %1:%2 (TLS=%3)").arg(hostname).arg(port).arg(useTLS));
