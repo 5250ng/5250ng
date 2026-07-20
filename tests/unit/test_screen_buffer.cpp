@@ -33,6 +33,7 @@ class TestScreenBuffer : public QObject {
     void testFieldManagement();
     void testClear();
     void testScroll();
+    void testScrollMaintainsFieldState();
     void testScrollRegionOversizedLineCount();
     void testWriteOperations();
     void testAttributes();
@@ -137,6 +138,42 @@ void TestScreenBuffer::testScroll() {
 
     // Last row should now be empty
     QCOMPARE(m_buffer->character(23, 0), static_cast<uint8_t>(0x40));
+}
+
+void TestScreenBuffer::testScrollMaintainsFieldState() {
+    m_buffer->setField(0, 0, 5, false);
+    m_buffer->setField(2, 10, 5, false);
+    m_buffer->setField(23, 20, 5, false);
+
+    m_buffer->scrollUp(1);
+
+    QVERIFY(!m_buffer->isInField(0, 0));
+    QVERIFY(m_buffer->isInField(1, 10));
+    QVERIFY(m_buffer->isInField(22, 20));
+    QCOMPARE(m_buffer->fields().size(), 2);
+
+    m_buffer->clear();
+    m_buffer->setField(0, 10, 5, false);
+    m_buffer->setField(21, 20, 5, false);
+    m_buffer->setField(23, 30, 5, false);
+
+    m_buffer->scrollDown(1);
+
+    QVERIFY(m_buffer->isInField(1, 10));
+    QVERIFY(m_buffer->isInField(22, 20));
+    QVERIFY(!m_buffer->isInField(23, 30));
+    QCOMPARE(m_buffer->fields().size(), 2);
+
+    // A wrapping field that is only partly shifted off the top retains the
+    // visible suffix at its new linear address.
+    m_buffer->clear();
+    m_buffer->setField(0, 78, 4, true);
+    m_buffer->scrollUp(1);
+    QVERIFY(m_buffer->isInField(0, 0));
+    QVERIFY(m_buffer->isInField(0, 1));
+    QVERIFY(!m_buffer->isInField(0, 2));
+    QVERIFY(m_buffer->isProtected(0, 0));
+    QCOMPARE(m_buffer->fields().first().length, 2);
 }
 
 void TestScreenBuffer::testScrollRegionOversizedLineCount() {
