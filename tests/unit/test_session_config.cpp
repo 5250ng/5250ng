@@ -18,6 +18,7 @@
 #include "session/manager.h"
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -46,6 +47,7 @@ class TestSessionConfig : public QObject {
     void testPcCommandPolicyLegacyConfigCompat();
     void testDistinctNamesDoNotCollideOnDisk();
     void testLegacySessionFilenameLoads();
+    void testSavedSessionPermissions();
 
   private:
     SessionConfig *m_config;
@@ -493,6 +495,48 @@ void TestSessionConfig::testLegacySessionFilenameLoads() {
     QVERIFY(reader.loadSession(name, loaded));
     QCOMPARE(loaded.hostname(), QStringLiteral("legacy.example.com"));
     QVERIFY(reader.deleteSession(name));
+}
+
+void TestSessionConfig::testSavedSessionPermissions() {
+    QStandardPaths::setTestModeEnabled(true);
+
+    const QString name = QStringLiteral("permission-test-")
+                         + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    SessionConfig config;
+    config.setName(name);
+    config.setHostname(QStringLiteral("example.com"));
+    config.setPassword(QStringLiteral("secret"));
+
+    SessionManager manager;
+    const QDir sessionsDir(QStandardPaths::writableLocation(
+                               QStandardPaths::AppDataLocation)
+                           + QStringLiteral("/sessions"));
+    const QStringList filesBefore =
+        sessionsDir.entryList({QStringLiteral("*.json")}, QDir::Files);
+    QVERIFY(manager.saveSession(config));
+
+    QStringList newFiles =
+        sessionsDir.entryList({QStringLiteral("*.json")}, QDir::Files);
+    for (const QString &existingFile : filesBefore) {
+        newFiles.removeAll(existingFile);
+    }
+    QCOMPARE(newFiles.size(), 1);
+
+    const QFileInfo fileInfo(sessionsDir.filePath(newFiles.constFirst()));
+    QVERIFY(fileInfo.exists());
+
+    const QFileDevice::Permissions permissions = fileInfo.permissions();
+    QVERIFY(permissions.testFlag(QFileDevice::ReadOwner));
+    QVERIFY(permissions.testFlag(QFileDevice::WriteOwner));
+#ifdef Q_OS_UNIX
+    const QFileDevice::Permissions nonOwnerPermissions =
+        QFileDevice::ReadGroup | QFileDevice::WriteGroup
+        | QFileDevice::ExeGroup | QFileDevice::ReadOther
+        | QFileDevice::WriteOther | QFileDevice::ExeOther;
+    QCOMPARE(permissions & nonOwnerPermissions, QFileDevice::Permissions{});
+#endif
+
+    QVERIFY(manager.deleteSession(name));
 }
 
 // Make the enum visible to QCOMPARE's diagnostics (the registration is only
