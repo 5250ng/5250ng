@@ -15,6 +15,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "session/config.h"
+#include "session/manager.h"
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QRegularExpression>
+#include <QStandardPaths>
+#include <QUuid>
 #include <QtTest/QtTest>
 
 using namespace session;
@@ -37,6 +44,8 @@ class TestSessionConfig : public QObject {
     void testPcCommandPolicyDefaults();
     void testPcCommandPolicyRoundTrip();
     void testPcCommandPolicyLegacyConfigCompat();
+    void testDistinctNamesDoNotCollideOnDisk();
+    void testLegacySessionFilenameLoads();
 
   private:
     SessionConfig *m_config;
@@ -421,6 +430,69 @@ void TestSessionConfig::testPcCommandPolicyLegacyConfigCompat() {
         QVERIFY(cfg.fromJson(j));
         QCOMPARE(cfg.pcCommandPolicy(), PcCommandPolicy::Deny);
     }
+}
+
+void TestSessionConfig::testDistinctNamesDoNotCollideOnDisk() {
+    QStandardPaths::setTestModeEnabled(true);
+
+    const QString base = QStringLiteral("collision-")
+                         + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString firstName = base + QStringLiteral("/profile");
+    const QString secondName = base + QStringLiteral("?profile");
+
+    SessionConfig first;
+    first.setName(firstName);
+    first.setHostname(QStringLiteral("first.example.com"));
+    SessionConfig second;
+    second.setName(secondName);
+    second.setHostname(QStringLiteral("second.example.com"));
+
+    SessionManager writer;
+    QVERIFY(writer.saveSession(first));
+    QVERIFY(writer.saveSession(second));
+
+    SessionManager reader;
+    QVERIFY(reader.sessionExists(firstName));
+    QVERIFY(reader.sessionExists(secondName));
+
+    SessionConfig loadedFirst;
+    SessionConfig loadedSecond;
+    QVERIFY(reader.loadSession(firstName, loadedFirst));
+    QVERIFY(reader.loadSession(secondName, loadedSecond));
+    QCOMPARE(loadedFirst.hostname(), QStringLiteral("first.example.com"));
+    QCOMPARE(loadedSecond.hostname(), QStringLiteral("second.example.com"));
+
+    QVERIFY(reader.deleteSession(firstName));
+    QVERIFY(reader.deleteSession(secondName));
+}
+
+void TestSessionConfig::testLegacySessionFilenameLoads() {
+    QStandardPaths::setTestModeEnabled(true);
+
+    const QString name = QStringLiteral("legacy profile ")
+                         + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    SessionConfig legacy;
+    legacy.setName(name);
+    legacy.setHostname(QStringLiteral("legacy.example.com"));
+
+    QString legacyBase = name;
+    legacyBase.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
+    const QString sessionsDir = QStandardPaths::writableLocation(
+                                    QStandardPaths::AppDataLocation)
+                                + QStringLiteral("/sessions");
+    QVERIFY(QDir().mkpath(sessionsDir));
+    QFile file(sessionsDir + QStringLiteral("/") + legacyBase
+               + QStringLiteral(".json"));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QVERIFY(file.write(QJsonDocument(legacy.toJson()).toJson()) > 0);
+    file.close();
+
+    SessionManager reader;
+    QVERIFY(reader.sessionExists(name));
+    SessionConfig loaded;
+    QVERIFY(reader.loadSession(name, loaded));
+    QCOMPARE(loaded.hostname(), QStringLiteral("legacy.example.com"));
+    QVERIFY(reader.deleteSession(name));
 }
 
 // Make the enum visible to QCOMPARE's diagnostics (the registration is only

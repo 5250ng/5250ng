@@ -50,6 +50,8 @@ class SessionManager : public QObject {
   private:
     QString sessionsDirectory() const;
     QString sessionFilePath(const QString &name) const;
+    QString legacySessionFilePath(const QString &name) const;
+    bool loadSessionFile(const QString &filePath, SessionConfig &config) const;
     void ensureSessionsDirectory() const;
 
     QMap<QString, SessionConfig> m_sessions;
