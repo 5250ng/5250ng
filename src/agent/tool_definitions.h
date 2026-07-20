@@ -185,6 +185,7 @@ inline const QString kToolSendKeysDescription = QStringLiteral(
     "Accepts a space-separated list of key names. "
     "Supported keys: ENTER, F1-F24, TAB, BACKSPACE, PAGEUP, PAGEDOWN, "
     "HOME, END, INSERT, DELETE, ESCAPE, UP, DOWN, LEFT, RIGHT, FIELDEXIT. "
+    "PAGEDOWN shows the next page (5250 Roll Up), PAGEUP the previous page (Roll Down). "
     "Text can be typed by wrapping in quotes, e.g. send_keys with keys='\"hello\" ENTER'. "
     "This is lighter weight than run_5250script for simple key presses.");
 
@@ -455,7 +456,8 @@ inline const QString kToolPressKeyDescription = QStringLiteral(
     "FIELDPLUS, FIELDMINUS, FIELDEXIT, DUP, "
     "ERASEINPUT, ERASEFIELD, ERASEEOF, "
     "ATTN, SYSREQ, HELP, CLEAR, PRINT, "
-    "UP, DOWN, LEFT, RIGHT.");
+    "UP, DOWN, LEFT, RIGHT. "
+    "PAGEDOWN shows the next page (5250 Roll Up), PAGEUP the previous page (Roll Down).");
 
 inline QJsonObject toolPressKeySchema() {
     QJsonObject keyProp;
@@ -513,7 +515,8 @@ inline const QString kToolPressKeysDescription = QStringLiteral(
     "FIELDPLUS, FIELDMINUS, FIELDEXIT, DUP, "
     "ERASEINPUT, ERASEFIELD, ERASEEOF, "
     "ATTN, SYSREQ, HELP, CLEAR, PRINT, "
-    "UP, DOWN, LEFT, RIGHT.");
+    "UP, DOWN, LEFT, RIGHT. "
+    "PAGEDOWN shows the next page (5250 Roll Up), PAGEUP the previous page (Roll Down).");
 
 inline QJsonObject toolPressKeysSchema() {
     QJsonObject keyItem;

@@ -30,6 +30,7 @@ class TestKeyboardMapping : public QObject {
 
     void testDefaultsContainExpectedActions();
     void testDefaultPageKeysMapToRollActions();
+    void testDefaultHelpPrintClearChords();
     void testShiftF1IsPF13();
     void testCtrlEscapeIsAttn();
     void testSetAndLookup();
@@ -81,6 +82,16 @@ void TestKeyboardMapping::testDefaultPageKeysMapToRollActions() {
     m.resetToDefaults();
     QCOMPARE(m.lookup(Qt::Key_PageUp, Qt::NoModifier), MappedAction::RollDown);
     QCOMPARE(m.lookup(Qt::Key_PageDown, Qt::NoModifier), MappedAction::RollUp);
+}
+
+// Help, Print, and Clear have no dedicated PC key. Their default chords
+// exist so script/MCP AID replay works end-to-end; they must stay in sync
+// with the reverse map in core/aid_key_map.h.
+void TestKeyboardMapping::testDefaultHelpPrintClearChords() {
+    auto &m = KeyboardMapping::instance();
+    QCOMPARE(m.lookup(Qt::Key_F1, Qt::ControlModifier), MappedAction::Help);
+    QCOMPARE(m.lookup(Qt::Key_Print, Qt::NoModifier), MappedAction::Print);
+    QCOMPARE(m.lookup(Qt::Key_Pause, Qt::ControlModifier), MappedAction::Clear);
 }
 
 void TestKeyboardMapping::testShiftF1IsPF13() {
@@ -194,10 +205,13 @@ void TestKeyboardMapping::testMultipleChordsCanBindSameAction() {
 
 void TestKeyboardMapping::testMultipleChordsPersistViaQSettings() {
     auto &m = KeyboardMapping::instance();
+    // Bind to Reset, which has no default chord, so the exact-count check
+    // below stays independent of the default table (Clear gained a default
+    // chord for script/MCP AID replay).
     KeyChord a{Qt::Key_Q, Qt::ControlModifier};
     KeyChord b{Qt::Key_L, Qt::ControlModifier | Qt::AltModifier};
-    m.setBinding(a, MappedAction::Clear);
-    m.setBinding(b, MappedAction::Clear);
+    m.setBinding(a, MappedAction::Reset);
+    m.setBinding(b, MappedAction::Reset);
     m.save();
 
     m.resetToDefaults();
@@ -206,9 +220,9 @@ void TestKeyboardMapping::testMultipleChordsPersistViaQSettings() {
     QCOMPARE(m.lookup(b), MappedAction::None);
 
     m.load();
-    QCOMPARE(m.lookup(a), MappedAction::Clear);
-    QCOMPARE(m.lookup(b), MappedAction::Clear);
-    QCOMPARE(m.chordsFor(MappedAction::Clear).size(), 2);
+    QCOMPARE(m.lookup(a), MappedAction::Reset);
+    QCOMPARE(m.lookup(b), MappedAction::Reset);
+    QCOMPARE(m.chordsFor(MappedAction::Reset).size(), 2);
 }
 
 QTEST_MAIN(TestKeyboardMapping)
