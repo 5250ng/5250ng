@@ -17,6 +17,7 @@
 #include "session/manager.h"
 #include "logger/logger.h"
 #include "session/config.h"
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -42,10 +43,12 @@ SessionManager::SessionManager(QObject *parent) : QObject(parent) {
     QStringList files = dir.entryList(filters, QDir::Files);
 
     for (const QString &file : files) {
-        QString sessionName = QFileInfo(file).baseName();
         SessionConfig config;
-        if (loadSession(sessionName, config)) {
-            m_sessions[sessionName] = config;
+        const QString filePath = dir.filePath(file);
+        if (loadSessionFile(filePath, config)
+            && (!m_sessions.contains(config.name())
+                || filePath == sessionFilePath(config.name()))) {
+            m_sessions[config.name()] = config;
         }
     }
 }
@@ -55,7 +58,17 @@ SessionManager::~SessionManager() {}
 QString SessionManager::sessionsDirectory() const { return m_sessionsDir; }
 
 QString SessionManager::sessionFilePath(const QString &name) const {
-    // Sanitize name for filename
+    QString safeName = name;
+    safeName.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
+    safeName.truncate(80);
+    const QByteArray digest = QCryptographicHash::hash(
+                                  name.toUtf8(), QCryptographicHash::Sha256)
+                                  .toHex();
+    return m_sessionsDir + "/" + safeName + "-"
+           + QString::fromLatin1(digest) + ".json";
+}
+
+QString SessionManager::legacySessionFilePath(const QString &name) const {
     QString safeName = name;
     safeName.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
     return m_sessionsDir + "/" + safeName + ".json";
@@ -82,10 +95,31 @@ bool SessionManager::saveSession(const SessionConfig &config) {
         return false;
     }
 
+    const QFileDevice::Permissions ownerOnly =
+        QFileDevice::ReadOwner | QFileDevice::WriteOwner;
+    if (!file.setPermissions(ownerOnly)) {
+        logger::Logger::instance()->warning(
+            QString("SessionManager: Cannot restrict file permissions: %1")
+                .arg(filePath));
+        file.close();
+        return false;
+    }
+
     QJsonObject json = config.toJson();
     QJsonDocument doc(json);
     file.write(doc.toJson());
     file.close();
+
+    // Remove the old lossy path only when it belongs to this profile. A
+    // colliding legacy file may contain a different session and must survive.
+    const QString legacyPath = legacySessionFilePath(config.name());
+    if (legacyPath != filePath && QFile::exists(legacyPath)) {
+        SessionConfig legacyConfig;
+        if (loadSessionFile(legacyPath, legacyConfig)
+            && legacyConfig.name() == config.name()) {
+            QFile::remove(legacyPath);
+        }
+    }
 
     m_sessions[config.name()] = config;
     emit sessionSaved(config.name());
@@ -95,11 +129,18 @@ bool SessionManager::saveSession(const SessionConfig &config) {
 
 bool SessionManager::loadSession(const QString &name, SessionConfig &config) {
     QString filePath = sessionFilePath(name);
-    QFile file(filePath);
-
-    if (!file.exists()) {
-        return false;
+    if (QFile::exists(filePath)) {
+        return loadSessionFile(filePath, config) && config.name() == name;
     }
+
+    filePath = legacySessionFilePath(name);
+    return loadSessionFile(filePath, config) && config.name() == name;
+}
+
+bool SessionManager::loadSessionFile(const QString &filePath,
+                                     SessionConfig &config) const {
+    QFile file(filePath);
+    if (!file.exists()) return false;
 
     if (!file.open(QIODevice::ReadOnly)) {
         logger::Logger::instance()->warning(QString("SessionManager: Cannot open file for reading: %1").arg(filePath));
@@ -125,6 +166,19 @@ bool SessionManager::deleteSession(const QString &name) {
     if (file.exists()) {
         if (!file.remove()) {
             logger::Logger::instance()->warning(QString("SessionManager: Cannot delete session file: %1").arg(filePath));
+            return false;
+        }
+    }
+
+    const QString legacyPath = legacySessionFilePath(name);
+    if (QFile::exists(legacyPath)) {
+        SessionConfig legacyConfig;
+        if (loadSessionFile(legacyPath, legacyConfig)
+            && legacyConfig.name() == name
+            && !QFile::remove(legacyPath)) {
+            logger::Logger::instance()->warning(
+                QString("SessionManager: Cannot delete legacy session file: %1")
+                    .arg(legacyPath));
             return false;
         }
     }
