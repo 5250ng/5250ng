@@ -26,7 +26,7 @@
 #include <QFileInfo>
 #include <QGroupBox>
 #include <QStandardPaths>
-#include <QInputDialog>
+#include "ui/widgets/Frameless/StyledInputDialog.h"
 #include "ui/widgets/Frameless/StyledMessageBox.h"
 
 ConnectDialog::ConnectDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
@@ -416,7 +416,7 @@ void ConnectDialog::loadSession(const QString &sessionName) {
 
 void ConnectDialog::saveCurrentAsSession() {
     bool ok;
-    QString sessionName = QInputDialog::getText(
+    QString sessionName = ui::widgets::StyledInputDialog::getText(
         this, "Save Session", "Session name:", QLineEdit::Normal,
         m_currentConfig.name(), &ok
     );
