@@ -81,7 +81,17 @@ class AgentConfig {
     bool mcpServerEnabled() const { return m_mcpServerEnabled; }
     void setMcpServerEnabled(bool enabled) { m_mcpServerEnabled = enabled; }
     quint16 mcpServerPort() const { return m_mcpServerPort; }
-    void setMcpServerPort(quint16 port) { m_mcpServerPort = port; }
+    // Explicit user-driven change (e.g. the settings dialog): releases any CLI
+    // pin so the value tracks the persisted setting again.
+    void setMcpServerPort(quint16 port) {
+        m_mcpServerPort = port;
+        m_mcpServerPortPinned = false;
+    }
+    // CLI override: pinned so a later load() cannot discard it.
+    void pinMcpServerPort(quint16 port) {
+        m_mcpServerPort = port;
+        m_mcpServerPortPinned = true;
+    }
 
     // MCP auto-start on launch (persisted)
     bool mcpAutoStart() const { return m_mcpAutoStart; }
@@ -109,6 +119,7 @@ class AgentConfig {
     bool m_mcpServerEnabled = false;
     bool m_mcpAutoStart = false;
     quint16 m_mcpServerPort = 9250;
+    bool m_mcpServerPortPinned = false;
 };
 
 } // namespace agent

@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
             bool portOk = false;
             int mcpPort = parser.value(mcpPortOption).toInt(&portOk);
             if (portOk && mcpPort >= 1024 && mcpPort <= 65535) {
-                agentCfg.setMcpServerPort(static_cast<quint16>(mcpPort));
+                agentCfg.pinMcpServerPort(static_cast<quint16>(mcpPort));
             } else {
                 logger::Logger::instance()->error(
                     QString("Invalid MCP port number: %1").arg(parser.value(mcpPortOption)));

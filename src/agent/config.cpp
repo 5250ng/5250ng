@@ -99,7 +99,10 @@ void AgentConfig::load() {
     // mcpServerEnabled is runtime-only — never persisted.
     settings.remove("mcpServerEnabled"); // clean up stale key from older versions
     m_mcpAutoStart = settings.value("mcpAutoStart", false).toBool();
-    m_mcpServerPort = static_cast<quint16>(settings.value("mcpServerPort", 9250).toUInt());
+    // A CLI-pinned port must survive this reload (MainWindow calls load() again
+    // after main() has applied the --mcp-server-port override).
+    if (!m_mcpServerPortPinned)
+        m_mcpServerPort = static_cast<quint16>(settings.value("mcpServerPort", 9250).toUInt());
 
     // Per-tool config
     const QStringList toolNames = {
