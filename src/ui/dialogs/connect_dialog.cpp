@@ -24,7 +24,9 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFrame>
 #include <QGroupBox>
+#include <QSplitter>
 #include <QStandardPaths>
 #include "ui/widgets/Frameless/StyledInputDialog.h"
 #include "ui/widgets/Frameless/StyledMessageBox.h"
@@ -39,11 +41,32 @@ ConnectDialog::~ConnectDialog() {}
 void ConnectDialog::setupUI() {
     setWindowTitle("Connect to Server");
     setModal(true);
-    resize(400, 300);
+    resize(850, 600);
 
     QVBoxLayout *mainLayout = contentLayout();
     mainLayout->setContentsMargins(8, 8, 8, 8);
     mainLayout->setSpacing(6);
+
+    QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+
+    // Match the Settings dialog: categories on the left, one focused page on
+    // the right. Parent categories select their first page as well.
+    m_categoryTree = new QTreeWidget(this);
+    m_categoryTree->setObjectName("sessionCategoryTree");
+    m_categoryTree->setHeaderHidden(true);
+    m_categoryTree->setRootIsDecorated(true);
+
+    m_pages = new QStackedWidget(this);
+    m_pages->setObjectName("sessionPages");
+
+    auto addPage = [this](QWidget *contents) {
+        QWidget *page = new QWidget(this);
+        QVBoxLayout *layout = new QVBoxLayout(page);
+        layout->setContentsMargins(12, 12, 12, 12);
+        layout->addWidget(contents);
+        layout->addStretch();
+        return m_pages->addWidget(page);
+    };
 
     // Session management group
     QGroupBox *sessionGroup = new QGroupBox("Saved Sessions", this);
@@ -69,7 +92,7 @@ void ConnectDialog::setupUI() {
     sessionLayout->addLayout(sessionButtonsLayout);
 
     sessionGroup->setLayout(sessionLayout);
-    mainLayout->addWidget(sessionGroup);
+    const int savedSessionsPage = addPage(sessionGroup);
 
     // Connection settings group
     QGroupBox *connectionGroup = new QGroupBox("Connection Settings", this);
@@ -129,7 +152,7 @@ void ConnectDialog::setupUI() {
     formLayout->addRow("Device Name:", m_deviceNameEdit);
 
     connectionGroup->setLayout(formLayout);
-    mainLayout->addWidget(connectionGroup);
+    const int connectionPage = addPage(connectionGroup);
 
     // Display settings group
     m_displayGroup = new QGroupBox("Display Settings", this);
@@ -160,7 +183,7 @@ void ConnectDialog::setupUI() {
     displayLayout->addRow(dimsRow);
 
     m_displayGroup->setLayout(displayLayout);
-    mainLayout->addWidget(m_displayGroup);
+    const int displayPage = addPage(m_displayGroup);
 
     // Code page group
     QGroupBox *codePageGroup = new QGroupBox("Code Page", this);
@@ -172,7 +195,7 @@ void ConnectDialog::setupUI() {
     }
     codePageLayout->addRow("EBCDIC Code Page:", m_codePageCombo);
     codePageGroup->setLayout(codePageLayout);
-    mainLayout->addWidget(codePageGroup);
+    const int codePage = addPage(codePageGroup);
 
     // PC Command Execution (STRPCCMD) — three-way policy. Off by default
     // because this is the mechanism behind CVE-2005-0868: the host can ask
@@ -216,7 +239,7 @@ void ConnectDialog::setupUI() {
     // Default selection mirrors the SessionConfig default (DenyAndAlert).
     m_pcCmdDenyAlertRadio->setChecked(true);
     pcCmdGroup->setLayout(pcCmdLayout);
-    mainLayout->addWidget(pcCmdGroup);
+    const int pcCommandsPage = addPage(pcCmdGroup);
 
     // Terminal theme group
     QGroupBox *themeGroup = new QGroupBox("Terminal Theme", this);
@@ -232,7 +255,7 @@ void ConnectDialog::setupUI() {
     }
     themeLayout->addRow("Theme:", m_themeCombo);
     themeGroup->setLayout(themeLayout);
-    mainLayout->addWidget(themeGroup);
+    const int themePage = addPage(themeGroup);
 
     // Startup script group
     QGroupBox *scriptGroup = new QGroupBox("Startup Script", this);
@@ -247,14 +270,65 @@ void ConnectDialog::setupUI() {
     scriptButtonsLayout->addWidget(m_detachScriptButton);
     scriptLayout->addRow(scriptButtonsLayout);
     scriptGroup->setLayout(scriptLayout);
-    mainLayout->addWidget(scriptGroup);
 
     // Script variables group (dynamic, initially hidden)
     m_scriptVarsGroup = new QGroupBox("Script Variables", this);
     m_scriptVarsLayout = new QFormLayout(m_scriptVarsGroup);
     m_scriptVarsGroup->setLayout(m_scriptVarsLayout);
     m_scriptVarsGroup->setVisible(false);
-    mainLayout->addWidget(m_scriptVarsGroup);
+
+    QWidget *scriptPageContents = new QWidget(this);
+    QVBoxLayout *scriptPageLayout = new QVBoxLayout(scriptPageContents);
+    scriptPageLayout->setContentsMargins(0, 0, 0, 0);
+    scriptPageLayout->addWidget(scriptGroup);
+    scriptPageLayout->addWidget(m_scriptVarsGroup);
+    const int scriptPage = addPage(scriptPageContents);
+
+    auto addCategory = [this](QTreeWidgetItem *parent, const QString &label,
+                              int pageIndex) {
+        QTreeWidgetItem *item = parent
+            ? new QTreeWidgetItem(parent, QStringList() << label)
+            : new QTreeWidgetItem(m_categoryTree, QStringList() << label);
+        item->setData(0, Qt::UserRole, pageIndex);
+        return item;
+    };
+
+    QTreeWidgetItem *sessionCategory = addCategory(nullptr, "Session", savedSessionsPage);
+    addCategory(sessionCategory, "Saved Sessions", savedSessionsPage);
+    addCategory(sessionCategory, "Startup Script", scriptPage);
+    sessionCategory->setExpanded(true);
+
+    QTreeWidgetItem *connectionCategory = addCategory(nullptr, "Connection", connectionPage);
+    QTreeWidgetItem *serverItem = addCategory(connectionCategory, "Server", connectionPage);
+    addCategory(connectionCategory, "PC Commands", pcCommandsPage);
+    connectionCategory->setExpanded(true);
+
+    QTreeWidgetItem *terminalCategory = addCategory(nullptr, "Terminal", displayPage);
+    addCategory(terminalCategory, "Display", displayPage);
+    addCategory(terminalCategory, "Code Page", codePage);
+    addCategory(terminalCategory, "Theme", themePage);
+    terminalCategory->setExpanded(true);
+
+    connect(m_categoryTree, &QTreeWidget::currentItemChanged, this,
+            [this](QTreeWidgetItem *current, QTreeWidgetItem *) {
+                if (current)
+                    m_pages->setCurrentIndex(current->data(0, Qt::UserRole).toInt());
+            });
+    m_categoryTree->setCurrentItem(serverItem);
+
+    QFrame *pagesFrame = new QFrame(this);
+    pagesFrame->setFrameShape(QFrame::StyledPanel);
+    pagesFrame->setFrameShadow(QFrame::Sunken);
+    QVBoxLayout *pagesFrameLayout = new QVBoxLayout(pagesFrame);
+    pagesFrameLayout->setContentsMargins(0, 0, 0, 0);
+    pagesFrameLayout->addWidget(m_pages);
+
+    splitter->addWidget(m_categoryTree);
+    splitter->addWidget(pagesFrame);
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 4);
+    splitter->setSizes({170, 680});
+    mainLayout->addWidget(splitter, 1);
 
     // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
