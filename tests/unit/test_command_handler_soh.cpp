@@ -35,6 +35,9 @@ class TestCommandHandlerSoh : public QObject {
     void testSohErrorRowClampedToScreen();
     void testWriteErrorCodeWithHostileErrorRow();
     void testSohValidErrorRowKept();
+    void testGddmBlockBypassesAlphanumericRendererAndPaces();
+    void testGddmSuppressPacingOrder();
+    void testGddmReadStatusWithAlphanumericPrefix();
 
   private:
     Q5250ScreenWidget *m_widget = nullptr;
@@ -86,6 +89,69 @@ void TestCommandHandlerSoh::testSohValidErrorRowKept() {
     QCOMPARE(m_widget->errorLineRow(), 23);
     m_handler->onSohReceived(1, 0, 0, 0);
     QCOMPARE(m_widget->errorLineRow(), 0);
+}
+
+void TestCommandHandlerSoh::testGddmBlockBypassesAlphanumericRendererAndPaces() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex(
+        "ff93b041a04040404a41644072425640599295"));
+
+    QVERIFY(m_widget->gddmGraphicsVisible());
+    QCOMPARE(m_widget->gddmGraphicsPlane().pixelColor(0, 277), QColor(255, 0, 0));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 0), static_cast<uint8_t>(0x40));
+    QCOMPARE(responses.size(), 1);
+    QCOMPARE(responses[0].size(), 3);
+    QCOMPARE(static_cast<uint8_t>(responses[0][2]), static_cast<uint8_t>(0x3C));
+
+    m_widget->resize(800, 480);
+    QImage composed(m_widget->size(), QImage::Format_ARGB32_Premultiplied);
+    composed.fill(Qt::black);
+    m_widget->render(&composed);
+    bool foundRedGraphicsPixel = false;
+    for (int y = 0; y < composed.height() && !foundRedGraphicsPixel; ++y) {
+        for (int x = 0; x < composed.width(); ++x) {
+            const QColor pixel = composed.pixelColor(x, y);
+            if (pixel.red() > 200 && pixel.green() < 40 && pixel.blue() < 40) {
+                foundRedGraphicsPixel = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundRedGraphicsPixel);
+}
+
+void TestCommandHandlerSoh::testGddmSuppressPacingOrder() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff9695"));
+
+    QVERIFY(responses.isEmpty());
+    QCOMPARE(m_widget->screenBuffer()->character(0, 0), static_cast<uint8_t>(0x40));
+}
+
+void TestCommandHandlerSoh::testGddmReadStatusWithAlphanumericPrefix() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex(
+        "1101031d4800270032ff804043959090909090"));
+
+    QCOMPARE(responses.size(), 1);
+    QCOMPARE(static_cast<uint8_t>(responses[0][2]), static_cast<uint8_t>(0x3C));
+    QVERIFY(responses[0].size() > 10);
+    QCOMPARE(static_cast<uint8_t>(responses[0][3]), static_cast<uint8_t>(0x11));
+    QCOMPARE(static_cast<uint8_t>(responses[0][6]), static_cast<uint8_t>(0xFF));
+    QCOMPARE(static_cast<uint8_t>(responses[0][8]), static_cast<uint8_t>(0xFF));
+    QCOMPARE(static_cast<uint8_t>(responses[0][9]), static_cast<uint8_t>(0xF2));
+    QCOMPARE(static_cast<uint8_t>(responses[0][10]), static_cast<uint8_t>(0x80));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 3), static_cast<uint8_t>(0xFF));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 6), static_cast<uint8_t>(0xF2));
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)

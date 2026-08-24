@@ -292,6 +292,12 @@ void Q5250ScreenWidget::setForegroundColor(const QColor &color) {
  */
 void Q5250ScreenWidget::updateScreen() { update(); }
 
+void Q5250ScreenWidget::setGddmGraphicsPlane(const QImage &plane, bool visible) {
+    m_gddmGraphicsPlane = plane;
+    m_gddmGraphicsVisible = visible;
+    update();
+}
+
 /**
  * @brief Renders the full 5250 screen: cells, underlines, grid, selection, cursor rules, hotspots.
  * @param painter Painter already set up for this widget; clipping and translation applied here.
@@ -319,6 +325,17 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
             const ScreenCell &cell = m_screenBuffer->cell(row, col);
             renderCell(painter, row, col, cell);
         }
+    }
+
+    if (m_gddmGraphicsVisible && !m_gddmGraphicsPlane.isNull()) {
+        const QSizeF presentationSize(cols * m_cellWidthF, rows * m_cellHeightF);
+        QSizeF graphicsSize = m_gddmGraphicsPlane.size();
+        graphicsSize.scale(presentationSize, Qt::KeepAspectRatio);
+        const QRectF target((presentationSize.width() - graphicsSize.width()) / 2.0,
+                            (presentationSize.height() - graphicsSize.height()) / 2.0,
+                            graphicsSize.width(), graphicsSize.height());
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+        painter.drawImage(target, m_gddmGraphicsPlane);
     }
 
     // Draw contiguous underlines: scan each row for runs of underlined cells

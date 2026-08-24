@@ -194,6 +194,8 @@ set(UTILS_SOURCES
 )
 
 set(DISPLAY_SOURCES
+    src/ui/rendering/gddm_5292_decoder.cpp
+    src/ui/rendering/gddm_5292_decoder.h
     src/ui/widgets/Q5250ScreenWidget/screen_buffer.cpp
     src/ui/widgets/Q5250ScreenWidget/screen_buffer.h
     src/ui/widgets/Q5250ScreenWidget/screen_buffer_adapter.cpp
@@ -439,6 +441,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
     add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)
     add_tn5250_test(test_match_replace tests/unit/test_match_replace.cpp)
+    add_tn5250_test(test_gddm_5292 tests/unit/test_gddm_5292.cpp)
 
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)

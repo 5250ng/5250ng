@@ -366,10 +366,17 @@ inline QJsonObject toolCreateSessionSchema() {
     tlsProp["type"] = "boolean";
     tlsProp["description"] = "Use TLS/SSL encryption (default false)";
 
+    QJsonObject deviceTypeProp;
+    deviceTypeProp["type"] = "string";
+    deviceTypeProp["description"] =
+        "TN5250 terminal type (default IBM-3179-2; use IBM-5292-2 for GDDM graphics)";
+    deviceTypeProp["default"] = "IBM-3179-2";
+
     QJsonObject properties;
     properties["hostname"] = hostProp;
     properties["port"] = portProp;
     properties["useTLS"] = tlsProp;
+    properties["deviceType"] = deviceTypeProp;
 
     QJsonObject schema;
     schema["type"] = "object";

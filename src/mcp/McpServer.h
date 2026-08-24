@@ -53,7 +53,7 @@ class McpServer : public QObject {
     void error(const QString &msg);
     /// Emitted when create_session tool is called.
     void createSessionRequested(const QString &sessionId, const QString &hostname,
-                                quint16 port, bool useTLS);
+                                quint16 port, bool useTLS, const QString &deviceType);
     /// Emitted when close_session tool is called.
     void closeSessionRequested(const QString &sessionId);
     void requestLog(const QString &entry);

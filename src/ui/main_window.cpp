@@ -270,11 +270,13 @@ MainWindow::MainWindow(QWidget *parent)
     // MCP server
     m_mcpServer = new mcp::McpServer(this);
     connect(m_mcpServer, &mcp::McpServer::createSessionRequested, this,
-            [this](const QString &sessionId, const QString &hostname, quint16 port, bool useTLS) {
+            [this](const QString &sessionId, const QString &hostname, quint16 port,
+                   bool useTLS, const QString &deviceType) {
         session::SessionConfig cfg;
         cfg.setHostname(hostname);
         cfg.setPort(port);
         cfg.setUseTLS(useTLS);
+        cfg.setDeviceType(deviceType);
         cfg.setName(QString("MCP: %1").arg(hostname));
         connectToServer(cfg, sessionId);
     });
@@ -1417,4 +1419,3 @@ void MainWindow::fillSessionsCombo(QComboBox *combo, const QString &placeholder)
     }
     combo->blockSignals(false);
 }
-
