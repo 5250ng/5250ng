@@ -29,6 +29,8 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
+#include <QStackedWidget>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QHash>
 #include <QVector>
@@ -102,6 +104,8 @@ class ConnectDialog : public ui::widgets::BaseFramelessDialog {
     QGroupBox *m_scriptVarsGroup;
     QFormLayout *m_scriptVarsLayout;
     QHash<QString, QLineEdit*> m_scriptVarEdits;
+    QTreeWidget *m_categoryTree;
+    QStackedWidget *m_pages;
 
     session::SessionConfig m_currentConfig;
     QVector<tn5250::devices::Device> m_supported;
