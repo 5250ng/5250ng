@@ -41,6 +41,14 @@ class TestMcpValidation : public QObject {
         QCOMPARE(port.value("minimum").toInt(), 1);
         QCOMPARE(port.value("maximum").toInt(), 65535);
     }
+
+    void schemaPublishesGraphicsDeviceType() {
+        const QJsonObject schema = agent::toolCreateSessionSchema();
+        const QJsonObject deviceType = schema.value("properties").toObject()
+                                           .value("deviceType").toObject();
+        QCOMPARE(deviceType.value("type").toString(), QString("string"));
+        QCOMPARE(deviceType.value("default").toString(), QString("IBM-3179-2"));
+    }
 };
 
 QTEST_MAIN(TestMcpValidation)

@@ -47,7 +47,7 @@ class McpToolHandler : public QObject {
 
   signals:
     void createSessionRequested(const QString &sessionId, const QString &hostname,
-                                quint16 port, bool useTLS);
+                                quint16 port, bool useTLS, const QString &deviceType);
     void closeSessionRequested(const QString &sessionId);
 
   private:

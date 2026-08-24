@@ -25,6 +25,7 @@
 #include "screen_buffer.h"
 #include "ui/themes/terminal_theme.h"
 #include <QClipboard>
+#include <QImage>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QTimer>
@@ -90,6 +91,12 @@ class Q5250ScreenWidget : public QWidget {
     // Screen buffer access
     ScreenBuffer *screenBuffer() { return m_screenBuffer; }
     const ScreenBuffer *screenBuffer() const { return m_screenBuffer; }
+
+    // IBM 5292 Model 2 graphics are retained independently from the
+    // alphanumeric presentation space and composited during painting.
+    void setGddmGraphicsPlane(const QImage &plane, bool visible);
+    const QImage &gddmGraphicsPlane() const { return m_gddmGraphicsPlane; }
+    bool gddmGraphicsVisible() const { return m_gddmGraphicsVisible; }
 
     // Display configuration
     void setScreenSize(int rows, int cols);
@@ -311,6 +318,8 @@ class Q5250ScreenWidget : public QWidget {
     bool m_showInputFields;
     bool m_showCellGrid = false;
     QColor m_cellGridColor = QColor(255, 255, 255, 40);
+    QImage m_gddmGraphicsPlane;
+    bool m_gddmGraphicsVisible = false;
 
     // 5250 terminal state
     KeyboardState m_keyboardState;

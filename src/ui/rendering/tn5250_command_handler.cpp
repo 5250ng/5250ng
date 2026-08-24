@@ -183,7 +183,57 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
             logger::Logger::instance()->debug(QString::fromStdString(line));
         }
 
-        if (m_renderer) {
+        QByteArray graphicsData = data;
+        if (!m_gddmDecoder.recognizes(data)) {
+            const int beginGraphics = data.indexOf(static_cast<char>(0xFF));
+            if (beginGraphics > 0) {
+                if (m_renderer)
+                    m_renderer->render(data.left(beginGraphics));
+                graphicsData = data.mid(beginGraphics);
+            }
+        }
+
+        const Gddm5292Decoder::Result graphics = m_gddmDecoder.process(graphicsData);
+        if (graphics.handled) {
+            m_displayWidget->setGddmGraphicsPlane(m_gddmDecoder.graphicsPlane(),
+                                                  m_gddmDecoder.displayEnabled());
+            if (graphics.error) {
+                logger::Logger::instance()->error(
+                    QString("CommandHandler: 5292 graphics error: %1")
+                        .arg(graphics.errorMessage));
+            } else if (graphics.pacingResponse && m_sendToHost) {
+                bool includeModifiedFields = false;
+                if (graphics.readStatusOffset >= 0) {
+                    // Successful 5292 Model 2 Level 2 status. The read order
+                    // writes these bytes into the alphanumeric buffer so the
+                    // enclosing 5250 Read MDT can return them to GDDM.
+                    const QByteArray status = QByteArray::fromHex(
+                        "fffffff280ffff4040404040404040404040404040");
+                    auto *screen = m_displayWidget->screenBuffer();
+                    const int cells = screen->rows() * screen->cols();
+                    for (int index = 0; index < status.size(); ++index) {
+                        const int address = graphics.readStatusOffset + index;
+                        if (address >= cells)
+                            break;
+                        screen->writeChar(address / screen->cols(), address % screen->cols(),
+                                          static_cast<uint8_t>(status[index]));
+                    }
+                    if (graphics.readStatusOffset < cells) {
+                        screen->markFieldModified(graphics.readStatusOffset / screen->cols(),
+                                                  graphics.readStatusOffset % screen->cols());
+                    }
+                    includeModifiedFields = true;
+                }
+                // Command-12/PF12 is the documented successful 5292 block
+                // completion response. Read Status additionally returns the
+                // host-created MDT field containing the status bytes.
+                m_sendToHost(buildFieldResponse(0x3C, includeModifiedFields));
+            }
+            logger::Logger::instance()->debug(
+                QString("CommandHandler: 5292 graphics block %1 (%2 bytes, mode=%3, display=%4)")
+                    .arg(m_gddmDecoder.blockCount()).arg(data.size())
+                    .arg(m_gddmDecoder.graphicsMode()).arg(m_gddmDecoder.displayEnabled()));
+        } else if (m_renderer) {
             m_renderer->render(data);
         }
     }
@@ -595,7 +645,8 @@ void TN5250CommandHandler::onClearFormatTableRequested() {
     logger::Logger::instance()->debug("CommandHandler: Format table cleared");
 }
 
-QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
+QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte,
+                                                    bool includeModifiedFields) {
     QByteArray response;
 
     if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
@@ -613,7 +664,9 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte) {
     response.append(static_cast<char>(aidByte));
 
     // SBA address points to the field data start position
-    QVector<ui::widgets::ScreenBuffer::Field> modFields = screen->getModifiedFields();
+    QVector<ui::widgets::ScreenBuffer::Field> modFields;
+    if (includeModifiedFields)
+        modFields = screen->getModifiedFields();
     LOG_DEBUG(QString("CommandHandler: buildFieldResponse: aid=0x%1 cursor=(%2,%3) modifiedFields=%4")
         .arg(aidByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
         .arg(modFields.size()));

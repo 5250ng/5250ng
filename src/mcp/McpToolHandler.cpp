@@ -262,8 +262,12 @@ QJsonObject McpToolHandler::handleCreateSession(const QJsonObject &args) {
         return makeResult("Port must be an integer between 1 and 65535.", true);
     }
     bool useTLS = args.value("useTLS").toBool(false);
+    QString deviceType = args.value("deviceType").toString("IBM-3179-2").trimmed();
+    if (deviceType.isEmpty())
+        return makeResult("Device type must not be empty.", true);
 
-    MCP_LOG(QString("Creating session to %1:%2 (TLS=%3)").arg(hostname).arg(port).arg(useTLS));
+    MCP_LOG(QString("Creating session to %1:%2 (TLS=%3, device=%4)")
+                .arg(hostname).arg(port).arg(useTLS).arg(deviceType));
 
     // Generate session ID
     QString sessionId = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -287,7 +291,7 @@ QJsonObject McpToolHandler::handleCreateSession(const QJsonObject &args) {
 
     // Emit the request — MainWindow creates the tab synchronously on the
     // same thread, which calls onSessionCreated() before we reach loop.exec()
-    emit createSessionRequested(sessionId, hostname, port, useTLS);
+    emit createSessionRequested(sessionId, hostname, port, useTLS, deviceType);
 
     if (!m_sessionCreated)
         loop.exec();

@@ -20,6 +20,7 @@
 #include "core/command_runner.h"
 #include "network/tn5250_qt/client/decoder_adapter.h"
 #include "session/config.h"
+#include "gddm_5292_decoder.h"
 #include "tn5250_stream_renderer.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
@@ -89,7 +90,7 @@ class TN5250CommandHandler : public QObject {
 
     void sendNegResponse(uint8_t category, uint8_t modifier, uint8_t uByte1, uint8_t uByte2);
 
-    QByteArray buildFieldResponse(uint8_t aidByte);
+    QByteArray buildFieldResponse(uint8_t aidByte, bool includeModifiedFields = true);
     QByteArray buildReadScreenResponse(bool includeAttributes);
     QByteArray buildQueryResponse();
     QByteArray buildSaveScreenResponse();
@@ -108,6 +109,7 @@ class TN5250CommandHandler : public QObject {
   private:
     ui::widgets::Q5250ScreenWidget *m_displayWidget = nullptr;
     TN5250StreamRenderer *m_renderer = nullptr;
+    Gddm5292Decoder m_gddmDecoder;
     SendToHostFn m_sendToHost;
     SendGDSFn m_sendGDS;
     uint8_t m_pendingCC2 = 0;
