@@ -12,6 +12,27 @@
 
 using ui::rendering::Gddm5292Decoder;
 
+namespace {
+
+QByteArray coordinate(int x, int y) {
+    QByteArray data;
+    data.append(static_cast<char>(0x40 | ((x >> 6) & 0x0F)));
+    data.append(static_cast<char>(0x40 | (x & 0x3F)));
+    data.append(static_cast<char>(0x40 | ((y >> 6) & 0x0F)));
+    data.append(static_cast<char>(0x40 | (y & 0x3F)));
+    return data;
+}
+
+QByteArray variableOrder(uint8_t order, const QVector<QPoint> &points) {
+    QByteArray data(1, static_cast<char>(order));
+    for (const QPoint &point : points)
+        data.append(coordinate(point.x(), point.y()));
+    data.append(static_cast<char>(0x92));
+    return data;
+}
+
+} // namespace
+
 class TestGddm5292 : public QObject {
     Q_OBJECT
 
@@ -29,6 +50,12 @@ class TestGddm5292 : public QObject {
     void classifiesUndefinedAndInvalidSetOrders();
     void suppressesFatalErrorCompletionWhenRequested();
     void decodesCapturedGddmDemoBlock();
+    void appliesLineStyleAndOffset();
+    void drawsScanlinePelPatterns();
+    void drawsSelectedMarkerAndRecoversFromG5();
+    void appliesFillModeReferenceShift();
+    void appliesNestedShieldAreasOnce();
+    void rejectsTooManyPolygonEdges();
 };
 
 void TestGddm5292::ignoresAlphanumericWrites() {
@@ -194,6 +221,124 @@ void TestGddm5292::decodesCapturedGddmDemoBlock() {
     QVERIFY(!decoder.graphicsMode());
     QCOMPARE(decoder.graphicsPlane().pixelColor(0, 287), QColor(0, 255, 0));
     QCOMPARE(decoder.graphicsPlane().pixelColor(431, 29), QColor(0, 255, 0));
+}
+
+void TestGddm5292::appliesLineStyleAndOffset() {
+    Gddm5292Decoder decoder;
+    QByteArray block = QByteArray::fromHex("ff93b142424040b260");
+    block.append(variableOrder(0xA0, {{0, 0}, {10, 0}}));
+    block.append(static_cast<char>(0x95));
+
+    const auto result = decoder.process(block);
+
+    QVERIFY(!result.error);
+    QCOMPARE(decoder.graphicsPlane().pixelColor(0, 287), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(1, 287), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(2, 287), QColor(0, 0, 0));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(3, 287), QColor(0, 0, 0));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(4, 287), QColor(255, 255, 255));
+
+    Gddm5292Decoder offsetDecoder;
+    QByteArray offsetBlock = QByteArray::fromHex("ff93b144424242b261");
+    offsetBlock.append(variableOrder(0xA0, {{0, 0}, {8, 0}}));
+    offsetBlock.append(static_cast<char>(0x95));
+    offsetDecoder.process(offsetBlock);
+    QCOMPARE(offsetDecoder.graphicsPlane().pixelColor(0, 287), QColor(255, 255, 255));
+    QCOMPARE(offsetDecoder.graphicsPlane().pixelColor(1, 287), QColor(0, 0, 0));
+    QCOMPARE(offsetDecoder.graphicsPlane().pixelColor(2, 287), QColor(0, 0, 0));
+    QCOMPARE(offsetDecoder.graphicsPlane().pixelColor(3, 287), QColor(255, 255, 255));
+
+    Gddm5292Decoder backgroundDecoder;
+    backgroundDecoder.process(QByteArray::fromHex("ff93b141414040a34795"));
+    QCOMPARE(backgroundDecoder.graphicsPlane().pixelColor(0, 100), QColor(255, 255, 255));
+    QCOMPARE(backgroundDecoder.graphicsPlane().pixelColor(1, 100), QColor(0, 0, 0));
+    QCOMPARE(backgroundDecoder.graphicsPlane().pixelColor(2, 100), QColor(255, 255, 255));
+}
+
+void TestGddm5292::drawsScanlinePelPatterns() {
+    Gddm5292Decoder decoder;
+    QByteArray block = QByteArray::fromHex("ff93b041a1");
+    block.append(coordinate(10, 20));
+    block.append(QByteArray::fromHex("7c479295"));
+
+    const auto result = decoder.process(block);
+
+    QVERIFY(!result.error);
+    for (int x = 10; x <= 13; ++x)
+        QCOMPARE(decoder.graphicsPlane().pixelColor(x, 267), QColor(255, 0, 0));
+    for (int x = 14; x <= 18; ++x)
+        QCOMPARE(decoder.graphicsPlane().pixelColor(x, 267), QColor(0, 0, 0));
+    for (int x = 19; x <= 21; ++x)
+        QCOMPARE(decoder.graphicsPlane().pixelColor(x, 267), QColor(255, 0, 0));
+}
+
+void TestGddm5292::drawsSelectedMarkerAndRecoversFromG5() {
+    Gddm5292Decoder decoder;
+    QByteArray block = QByteArray::fromHex("ff93b543");
+    block.append(variableOrder(0xA4, {{0, 0}, {10, 10}}));
+    block.append(static_cast<char>(0x95));
+
+    const auto result = decoder.process(block);
+
+    QVERIFY(result.error);
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::RecoverableError);
+    QCOMPARE(decoder.statusBytes().left(2), QByteArray::fromHex("c7f5"));
+    QVERIFY(!decoder.graphicsMode());
+    QCOMPARE(decoder.graphicsPlane().pixelColor(10, 277), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(10, 275), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(8, 277), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(8, 275), QColor(0, 0, 0));
+}
+
+void TestGddm5292::appliesFillModeReferenceShift() {
+    Gddm5292Decoder decoder;
+    QByteArray block = QByteArray::fromHex("ff93b141414040b74241");
+    block.append(variableOrder(0xA5, {{10, 10}, {30, 10}, {30, 30}, {10, 30}}));
+    block.append(static_cast<char>(0x95));
+
+    const auto result = decoder.process(block);
+
+    QVERIFY(!result.error);
+    QCOMPARE(decoder.graphicsPlane().pixelColor(12, 267), QColor(0, 0, 0));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(13, 267), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(13, 277), QColor(0, 0, 0));
+}
+
+void TestGddm5292::appliesNestedShieldAreasOnce() {
+    Gddm5292Decoder decoder;
+    const QVector<QPoint> fill{{10, 10}, {30, 10}, {30, 30}, {10, 30}};
+    QByteArray first = QByteArray::fromHex("ff93");
+    first.append(variableOrder(0xA6, {{14, 14}, {26, 14}, {26, 26}, {14, 26}}));
+    first.append(variableOrder(0xA6, {{18, 18}, {22, 18}, {22, 22}, {18, 22}}));
+    first.append(variableOrder(0xA5, fill));
+
+    const auto shielded = decoder.process(first);
+
+    QVERIFY(!shielded.error);
+    QCOMPARE(decoder.graphicsPlane().pixelColor(12, 267), QColor(255, 255, 255));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(16, 267), QColor(0, 0, 0));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(20, 267), QColor(255, 255, 255));
+
+    QByteArray second = variableOrder(0xA5, fill);
+    second.append(static_cast<char>(0x95));
+    decoder.process(second);
+    QCOMPARE(decoder.graphicsPlane().pixelColor(16, 267), QColor(255, 255, 255));
+}
+
+void TestGddm5292::rejectsTooManyPolygonEdges() {
+    Gddm5292Decoder decoder;
+    QVector<QPoint> points;
+    for (int x = 0; x < 130; ++x)
+        points.append(QPoint(x, 10 + (x & 1)));
+    QByteArray block(1, static_cast<char>(0xFF));
+    block.append(variableOrder(0xA5, points));
+
+    const auto result = decoder.process(block);
+
+    QVERIFY(result.error);
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::FatalError);
+    QCOMPARE(decoder.statusBytes().left(2), QByteArray::fromHex("c7f4"));
+    QVERIFY(!decoder.graphicsMode());
 }
 
 QTEST_MAIN(TestGddm5292)
