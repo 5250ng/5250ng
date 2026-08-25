@@ -56,6 +56,7 @@ class TestGddm5292 : public QObject {
     void appliesFillModeReferenceShift();
     void appliesNestedShieldAreasOnce();
     void rejectsTooManyPolygonEdges();
+    void surfacesIoFeatureOrders();
 };
 
 void TestGddm5292::ignoresAlphanumericWrites() {
@@ -339,6 +340,31 @@ void TestGddm5292::rejectsTooManyPolygonEdges() {
     QCOMPARE(result.completion, Gddm5292Decoder::Completion::FatalError);
     QCOMPARE(decoder.statusBytes().left(2), QByteArray::fromHex("c7f4"));
     QVERIFY(!decoder.graphicsMode());
+}
+
+void TestGddm5292::surfacesIoFeatureOrders() {
+    Gddm5292Decoder decoder;
+    const auto result = decoder.process(QByteArray::fromHex(
+        "ff93c0414292c2434492c3454692c44bc195"));
+
+    QVERIFY(!result.error);
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::Success);
+    QVERIFY(result.screenCopyRequested);
+    QCOMPARE(result.printerData, QByteArray::fromHex("4142"));
+    QCOMPARE(result.printerColorTableAN, QByteArray::fromHex("4344"));
+    QCOMPARE(result.printerColorTableGraphics, QByteArray::fromHex("4546"));
+    QCOMPARE(result.printerTimeout, 0x0B);
+
+    Gddm5292Decoder spanning;
+    const auto first = spanning.process(QByteArray::fromHex("ff93c04191"));
+    QVERIFY(!first.error);
+    QVERIFY(first.printerData.isEmpty());
+    QVERIFY(spanning.graphicsMode());
+
+    const auto second = spanning.process(QByteArray::fromHex("42429295"));
+    QVERIFY(!second.error);
+    QCOMPARE(second.printerData, QByteArray::fromHex("414242"));
+    QVERIFY(!spanning.graphicsMode());
 }
 
 QTEST_MAIN(TestGddm5292)

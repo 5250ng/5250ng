@@ -69,6 +69,8 @@ void Gddm5292Decoder::reset(bool clearPlane) {
     m_fillReference = FillReference::Vertical;
     m_fillMode = FillMode::SolidBoundaryAndFill;
     m_fillReferenceShift = 0;
+    // The 5292 default is three five-and-a-half-second time units.
+    m_printerTimeout = 3;
     m_rasterFunction = RasterFunction::Replace;
     m_lastError = ErrorCode::None;
     m_lastErrorOffset = -1;
@@ -513,6 +515,12 @@ bool Gddm5292Decoder::completePending(Result &result, int offset) {
                 result.changed = true;
             }
         }
+    } else if (m_pendingOrder == PendingOrder::PrinterData) {
+        result.printerData = m_pendingData;
+    } else if (m_pendingOrder == PendingOrder::PrinterColorTableAN) {
+        result.printerColorTableAN = m_pendingData;
+    } else if (m_pendingOrder == PendingOrder::PrinterColorTableGraphics) {
+        result.printerColorTableGraphics = m_pendingData;
     }
     m_pendingOrder = PendingOrder::None;
     m_pendingData.clear();
@@ -739,16 +747,25 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             ++offset;
             break;
         case 0xC0:
+            m_pendingOrder = PendingOrder::PrinterData;
+            ++offset;
+            break;
         case 0xC2:
+            m_pendingOrder = PendingOrder::PrinterColorTableAN;
+            ++offset;
+            break;
         case 0xC3:
-            m_pendingOrder = PendingOrder::Ignore;
+            m_pendingOrder = PendingOrder::PrinterColorTableGraphics;
             ++offset;
             break;
         case 0xC1:
+            result.screenCopyRequested = true;
             ++offset;
             break;
         case 0xC4:
             if (!readFixedData(1, values)) return result;
+            m_printerTimeout = static_cast<uint8_t>(values[0]) & 0x3F;
+            result.printerTimeout = m_printerTimeout;
             break;
         default:
             fail(result, ErrorCode::G2, offset, QString("unsupported graphics order 0x%1")

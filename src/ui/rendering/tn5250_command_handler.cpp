@@ -100,6 +100,14 @@ void TN5250CommandHandler::setSendGDSCallback(SendGDSFn fn) {
     m_sendGDS = std::move(fn);
 }
 
+void TN5250CommandHandler::setGddmScreenCopyCallback(GddmScreenCopyFn fn) {
+    m_gddmScreenCopy = std::move(fn);
+}
+
+void TN5250CommandHandler::setGddmPrinterDataCallback(GddmPrinterDataFn fn) {
+    m_gddmPrinterData = std::move(fn);
+}
+
 void TN5250CommandHandler::connectDecoder(tn5250::client::DecoderAdapter *parser) {
     if (!parser) return;
     connect(parser, &tn5250::client::DecoderAdapter::commandReceived,
@@ -255,6 +263,23 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
         if (graphics.handled) {
             m_displayWidget->setGddmGraphicsPlane(m_gddmDecoder.graphicsPlane(),
                                                   m_gddmDecoder.displayEnabled());
+            if (graphics.screenCopyRequested && m_gddmScreenCopy) {
+                QImage composite(m_displayWidget->size(),
+                                 QImage::Format_ARGB32_Premultiplied);
+                composite.fill(Qt::black);
+                m_displayWidget->render(&composite);
+                m_gddmScreenCopy(composite);
+            }
+            if (m_gddmPrinterData
+                && (!graphics.printerData.isEmpty()
+                    || !graphics.printerColorTableAN.isEmpty()
+                    || !graphics.printerColorTableGraphics.isEmpty()
+                    || graphics.printerTimeout >= 0)) {
+                m_gddmPrinterData(graphics.printerData,
+                                  graphics.printerColorTableAN,
+                                  graphics.printerColorTableGraphics,
+                                  graphics.printerTimeout);
+            }
             bool includeModifiedFields = false;
             auto *screen = m_displayWidget->screenBuffer();
             const int cells = screen->rows() * screen->cols();

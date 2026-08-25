@@ -42,6 +42,7 @@ class TestCommandHandlerSoh : public QObject {
     void testGddmResetAndErrorUseDocumentedAids();
     void testEBCDICffInTextDoesNotBeginGraphics();
     void testGddmGraphicsRemainBehindAlphanumericPlane();
+    void testGddmIoFeatureCallbacks();
 
   private:
     Q5250ScreenWidget *m_widget = nullptr;
@@ -178,6 +179,45 @@ void TestCommandHandlerSoh::testGddmGraphicsRemainBehindAlphanumericPlane() {
     QCOMPARE(composed.pixelColor(blankCellCenter), QColor(0, 0, 0));
     QCOMPARE(composed.pixelColor(presentationLeftEdge), QColor(0, 0, 0));
     QCOMPARE(m_widget->screenBuffer()->character(0, 0), static_cast<uint8_t>(0xC1));
+}
+
+void TestCommandHandlerSoh::testGddmIoFeatureCallbacks() {
+    m_widget->resize(160, 96);
+    QImage screenCopy;
+    QByteArray printerData;
+    QByteArray printerColorAN;
+    QByteArray printerColorGraphics;
+    int printerTimeout = -1;
+    int copyCount = 0;
+    int printerCount = 0;
+    m_handler->setGddmScreenCopyCallback([&](const QImage &image) {
+        screenCopy = image;
+        ++copyCount;
+    });
+    m_handler->setGddmPrinterDataCallback(
+        [&](const QByteArray &data, const QByteArray &colorAN,
+            const QByteArray &colorGraphics, int timeout) {
+            printerData = data;
+            printerColorAN = colorAN;
+            printerColorGraphics = colorGraphics;
+            printerTimeout = timeout;
+            ++printerCount;
+        });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff93a341c195"));
+
+    QCOMPARE(copyCount, 1);
+    QCOMPARE(screenCopy.size(), QSize(160, 96));
+    QCOMPARE(screenCopy.pixelColor(80, 48), QColor(255, 0, 0));
+
+    m_handler->handleRawScreenData(QByteArray::fromHex(
+        "ff93c0414292c2434492c3454692c44b95"));
+
+    QCOMPARE(printerCount, 1);
+    QCOMPARE(printerData, QByteArray::fromHex("4142"));
+    QCOMPARE(printerColorAN, QByteArray::fromHex("4344"));
+    QCOMPARE(printerColorGraphics, QByteArray::fromHex("4546"));
+    QCOMPARE(printerTimeout, 0x0B);
 }
 
 void TestCommandHandlerSoh::testGddmSuppressPacingOrder() {
