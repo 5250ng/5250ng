@@ -38,6 +38,9 @@ class TestCommandHandlerSoh : public QObject {
     void testGddmBlockBypassesAlphanumericRendererAndPaces();
     void testGddmSuppressPacingOrder();
     void testGddmReadStatusWithAlphanumericPrefix();
+    void testGddmStatusWriteIsIndependentOfPacing();
+    void testGddmResetAndErrorUseDocumentedAids();
+    void testEBCDICffInTextDoesNotBeginGraphics();
 
   private:
     Q5250ScreenWidget *m_widget = nullptr;
@@ -152,6 +155,47 @@ void TestCommandHandlerSoh::testGddmReadStatusWithAlphanumericPrefix() {
     QCOMPARE(static_cast<uint8_t>(responses[0][10]), static_cast<uint8_t>(0x80));
     QCOMPARE(m_widget->screenBuffer()->character(0, 3), static_cast<uint8_t>(0xFF));
     QCOMPARE(m_widget->screenBuffer()->character(0, 6), static_cast<uint8_t>(0xF2));
+}
+
+void TestCommandHandlerSoh::testGddmStatusWriteIsIndependentOfPacing() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex(
+        "1101031d4800270032ff8040439695"));
+
+    QVERIFY(responses.isEmpty());
+    QCOMPARE(m_widget->screenBuffer()->character(0, 3), static_cast<uint8_t>(0xFF));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 6), static_cast<uint8_t>(0xF2));
+}
+
+void TestCommandHandlerSoh::testGddmResetAndErrorUseDocumentedAids() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("ffff"));
+    QCOMPARE(responses.size(), 1);
+    QCOMPARE(static_cast<uint8_t>(responses[0][2]), static_cast<uint8_t>(0x38));
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("ffa04040404a92"));
+    QCOMPARE(responses.size(), 2);
+    QCOMPARE(static_cast<uint8_t>(responses[1][2]), static_cast<uint8_t>(0x3A));
+}
+
+void TestCommandHandlerSoh::testEBCDICffInTextDoesNotBeginGraphics() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("c1ffc2"));
+
+    QVERIFY(responses.isEmpty());
+    QVERIFY(!m_widget->gddmGraphicsVisible());
+    QCOMPARE(m_widget->screenBuffer()->character(0, 0), static_cast<uint8_t>(0xC1));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 1), static_cast<uint8_t>(0xFF));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 2), static_cast<uint8_t>(0xC2));
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)

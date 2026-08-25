@@ -25,6 +25,64 @@
 
 namespace ui::rendering {
 
+namespace {
+
+// A Begin Graphics byte is meaningful only where a 5250 display order may
+// begin. IBM i precedes Read Status graphics blocks with SBA/SF orders that
+// define the MDT field; an 0xFF after ordinary EBCDIC text is character data.
+int findGddmStart(const QByteArray &data) {
+    int offset = 0;
+    while (offset < data.size()) {
+        const uint8_t byte = static_cast<uint8_t>(data[offset]);
+        if (byte == 0xFF)
+            return offset;
+
+        if (byte == 0x11) { // SBA
+            if (offset + 2 >= data.size())
+                return -1;
+            offset += 3;
+            continue;
+        }
+
+        if (byte == 0x1D) { // SF, including any optional FCW pairs
+            if (offset + 4 >= data.size())
+                return -1;
+            int fieldOffset = offset + 3;
+            while (fieldOffset < data.size()
+                   && (static_cast<uint8_t>(data[fieldOffset]) & 0xE0) != 0x20) {
+                if (fieldOffset + 1 >= data.size())
+                    return -1;
+                fieldOffset += 2;
+            }
+            if (fieldOffset + 2 >= data.size())
+                return -1;
+            offset = fieldOffset + 3;
+            continue;
+        }
+
+        return -1;
+    }
+    return -1;
+}
+
+uint8_t completionAid(Gddm5292Decoder::Completion completion) {
+    switch (completion) {
+    case Gddm5292Decoder::Completion::SystemReset:
+        return 0x38; // Command-8
+    case Gddm5292Decoder::Completion::RecoverableError:
+        return 0x39; // Command-9
+    case Gddm5292Decoder::Completion::FatalError:
+        return 0x3A; // Command-10
+    case Gddm5292Decoder::Completion::Success:
+        return 0x3C; // Command-12
+    case Gddm5292Decoder::Completion::None:
+        return 0;
+    }
+    return 0;
+}
+
+} // namespace
+
 TN5250CommandHandler::TN5250CommandHandler(QObject *parent)
     : QObject(parent) {}
 
@@ -185,7 +243,7 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
 
         QByteArray graphicsData = data;
         if (!m_gddmDecoder.recognizes(data)) {
-            const int beginGraphics = data.indexOf(static_cast<char>(0xFF));
+            const int beginGraphics = findGddmStart(data);
             if (beginGraphics > 0) {
                 if (m_renderer)
                     m_renderer->render(data.left(beginGraphics));
@@ -197,38 +255,27 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
         if (graphics.handled) {
             m_displayWidget->setGddmGraphicsPlane(m_gddmDecoder.graphicsPlane(),
                                                   m_gddmDecoder.displayEnabled());
+            bool includeModifiedFields = false;
+            auto *screen = m_displayWidget->screenBuffer();
+            const int cells = screen->rows() * screen->cols();
+            for (const auto &statusWrite : graphics.statusWrites) {
+                for (int index = 0; index < statusWrite.data.size(); ++index) {
+                    const int address = (statusWrite.offset + index) % cells;
+                    screen->writeChar(address / screen->cols(), address % screen->cols(),
+                                      static_cast<uint8_t>(statusWrite.data[index]));
+                    screen->markFieldModified(address / screen->cols(),
+                                              address % screen->cols());
+                }
+                includeModifiedFields = true;
+            }
             if (graphics.error) {
                 logger::Logger::instance()->error(
                     QString("CommandHandler: 5292 graphics error: %1")
                         .arg(graphics.errorMessage));
-            } else if (graphics.pacingResponse && m_sendToHost) {
-                bool includeModifiedFields = false;
-                if (graphics.readStatusOffset >= 0) {
-                    // Successful 5292 Model 2 Level 2 status. The read order
-                    // writes these bytes into the alphanumeric buffer so the
-                    // enclosing 5250 Read MDT can return them to GDDM.
-                    const QByteArray status = QByteArray::fromHex(
-                        "fffffff280ffff4040404040404040404040404040");
-                    auto *screen = m_displayWidget->screenBuffer();
-                    const int cells = screen->rows() * screen->cols();
-                    for (int index = 0; index < status.size(); ++index) {
-                        const int address = graphics.readStatusOffset + index;
-                        if (address >= cells)
-                            break;
-                        screen->writeChar(address / screen->cols(), address % screen->cols(),
-                                          static_cast<uint8_t>(status[index]));
-                    }
-                    if (graphics.readStatusOffset < cells) {
-                        screen->markFieldModified(graphics.readStatusOffset / screen->cols(),
-                                                  graphics.readStatusOffset % screen->cols());
-                    }
-                    includeModifiedFields = true;
-                }
-                // Command-12/PF12 is the documented successful 5292 block
-                // completion response. Read Status additionally returns the
-                // host-created MDT field containing the status bytes.
-                m_sendToHost(buildFieldResponse(0x3C, includeModifiedFields));
             }
+            const uint8_t aid = completionAid(graphics.completion);
+            if (aid != 0 && m_sendToHost)
+                m_sendToHost(buildFieldResponse(aid, includeModifiedFields));
             logger::Logger::instance()->debug(
                 QString("CommandHandler: 5292 graphics block %1 (%2 bytes, mode=%3, display=%4)")
                     .arg(m_gddmDecoder.blockCount()).arg(data.size())

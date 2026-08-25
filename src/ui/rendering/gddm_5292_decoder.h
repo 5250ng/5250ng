@@ -12,6 +12,7 @@
 #include <QColor>
 #include <QImage>
 #include <QString>
+#include <QVector>
 #include <array>
 #include <cstdint>
 
@@ -22,12 +23,25 @@ class Gddm5292Decoder {
     static constexpr int kWidth = 480;
     static constexpr int kHeight = 288;
 
+    enum class Completion {
+        None,
+        Success,
+        SystemReset,
+        RecoverableError,
+        FatalError
+    };
+
+    struct StatusWrite {
+        int offset = 0;
+        QByteArray data;
+    };
+
     struct Result {
         bool handled = false;
-        bool pacingResponse = false;
         bool changed = false;
         bool error = false;
-        int readStatusOffset = -1;
+        Completion completion = Completion::None;
+        QVector<StatusWrite> statusWrites;
         QString errorMessage;
     };
 
@@ -40,8 +54,24 @@ class Gddm5292Decoder {
     bool displayEnabled() const { return m_displayEnabled; }
     const QImage &graphicsPlane() const { return m_plane; }
     quint64 blockCount() const { return m_blockCount; }
+    QByteArray statusBytes() const;
 
   private:
+    enum class ErrorCode {
+        None,
+        G1,
+        G2,
+        G3,
+        G4,
+        G5
+    };
+
+    enum class RasterFunction {
+        Or = 1,
+        Xor = 2,
+        Replace = 3
+    };
+
     enum class PendingOrder {
         None,
         Polyline,
@@ -50,11 +80,16 @@ class Gddm5292Decoder {
     };
 
     void reset(bool clearPlane);
-    bool completePending(Result &result);
+    bool completePending(Result &result, int offset);
     bool drawPolyline(Result &result);
-    bool fail(Result &result, int offset, const QString &message);
+    bool fail(Result &result, ErrorCode code, int offset, const QString &message);
+    void applyPalette();
+    void writePel(int x, int y, int colorIndex);
+    void drawLine(int x0, int y0, int x1, int y1);
+    static QByteArray encodedErrorCode(ErrorCode code);
     static bool isGraphicsData(uint8_t byte);
     static int decodeCoordinate(uint8_t high, uint8_t low);
+    static int decodeBufferOffset(uint8_t high, uint8_t low);
 
     bool m_graphicsMode = false;
     bool m_displayEnabled = false;
@@ -64,6 +99,9 @@ class Gddm5292Decoder {
     std::array<QColor, 8> m_palette;
     int m_colorIndex = 7;
     int m_lineWeight = 1;
+    RasterFunction m_rasterFunction = RasterFunction::Replace;
+    ErrorCode m_lastError = ErrorCode::None;
+    int m_lastErrorOffset = -1;
     QImage m_plane;
     quint64 m_blockCount = 0;
 };
