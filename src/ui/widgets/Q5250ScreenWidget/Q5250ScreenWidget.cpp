@@ -320,22 +320,21 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
     int rows = m_screenBuffer->rows();
     int cols = m_screenBuffer->cols();
 
+    if (m_gddmGraphicsVisible && !m_gddmGraphicsPlane.isNull()) {
+        // A 5292 presents graphics as the background to ALWGPH alphanumeric
+        // fields. Map the device plane to the complete logical character grid
+        // so device coordinates stay aligned with display-file positions.
+        const QRectF presentationRect(0.0, 0.0, cols * m_cellWidthF,
+                                      rows * m_cellHeightF);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+        painter.drawImage(presentationRect, m_gddmGraphicsPlane);
+    }
+
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < cols; ++col) {
             const ScreenCell &cell = m_screenBuffer->cell(row, col);
             renderCell(painter, row, col, cell);
         }
-    }
-
-    if (m_gddmGraphicsVisible && !m_gddmGraphicsPlane.isNull()) {
-        const QSizeF presentationSize(cols * m_cellWidthF, rows * m_cellHeightF);
-        QSizeF graphicsSize = m_gddmGraphicsPlane.size();
-        graphicsSize.scale(presentationSize, Qt::KeepAspectRatio);
-        const QRectF target((presentationSize.width() - graphicsSize.width()) / 2.0,
-                            (presentationSize.height() - graphicsSize.height()) / 2.0,
-                            graphicsSize.width(), graphicsSize.height());
-        painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
-        painter.drawImage(target, m_gddmGraphicsPlane);
     }
 
     // Draw contiguous underlines: scan each row for runs of underlined cells
@@ -420,8 +419,13 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
         qSwap(bgColor, fgColor);
     }
 
-    // Fill background
-    painter.fillRect(cellRect, bgColor);
+    // In 5292 graphics display mode, ordinary cell backgrounds are
+    // transparent so the graphics picture remains visible behind A/N data.
+    // Reverse video still supplies an explicit alphanumeric background.
+    if (!m_gddmGraphicsVisible
+        || (cell.attributes.reverse && !cell.attributes.nonDisplay)) {
+        painter.fillRect(cellRect, bgColor);
+    }
 
     // Field protection overlay
     if (m_showFieldProtection) {

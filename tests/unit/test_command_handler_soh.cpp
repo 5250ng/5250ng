@@ -41,6 +41,7 @@ class TestCommandHandlerSoh : public QObject {
     void testGddmStatusWriteIsIndependentOfPacing();
     void testGddmResetAndErrorUseDocumentedAids();
     void testEBCDICffInTextDoesNotBeginGraphics();
+    void testGddmGraphicsRemainBehindAlphanumericPlane();
 
   private:
     Q5250ScreenWidget *m_widget = nullptr;
@@ -124,6 +125,59 @@ void TestCommandHandlerSoh::testGddmBlockBypassesAlphanumericRendererAndPaces() 
         }
     }
     QVERIFY(foundRedGraphicsPixel);
+}
+
+void TestCommandHandlerSoh::testGddmGraphicsRemainBehindAlphanumericPlane() {
+    m_widget->resize(480, 288);
+    m_widget->screenBuffer()->setCursorVisible(false);
+    m_widget->screenBuffer()->writeChar(0, 0, 0xC1); // EBCDIC 'A'
+    auto &reverseCell = m_widget->screenBuffer()->cell(0, 1);
+    reverseCell.character = 0x40;
+    reverseCell.attributes.reverse = true;
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff93a34195"));
+
+    QImage composed(m_widget->size(), QImage::Format_ARGB32_Premultiplied);
+    composed.fill(Qt::black);
+    m_widget->render(&composed);
+
+    const qreal cellWidth = m_widget->cellWidthF();
+    const qreal cellHeight = m_widget->cellHeightF();
+    const int presentationWidth = qRound(cellWidth * 80);
+    const int offsetX = qMax(0, (composed.width() - presentationWidth) / 2);
+    const int offsetY = 0;
+
+    const QPoint blankCellCenter(offsetX + qRound(2.5 * cellWidth),
+                                 offsetY + qRound(0.5 * cellHeight));
+    QCOMPARE(composed.pixelColor(blankCellCenter), QColor(255, 0, 0));
+    const QPoint presentationLeftEdge(offsetX + 1,
+                                      offsetY + qRound(1.5 * cellHeight));
+    QCOMPARE(composed.pixelColor(presentationLeftEdge), QColor(255, 0, 0));
+
+    const QPoint reverseCellCenter(offsetX + qRound(1.5 * cellWidth),
+                                   offsetY + qRound(0.5 * cellHeight));
+    QCOMPARE(composed.pixelColor(reverseCellCenter), QColor(0, 255, 0));
+
+    bool foundAlphanumericPixel = false;
+    const int firstCellRight = offsetX + qRound(cellWidth);
+    const int firstCellBottom = offsetY + qRound(cellHeight);
+    for (int y = offsetY; y < firstCellBottom && !foundAlphanumericPixel; ++y) {
+        for (int x = offsetX; x < firstCellRight; ++x) {
+            const QColor pixel = composed.pixelColor(x, y);
+            if (pixel.green() > 150 && pixel.green() > pixel.red()) {
+                foundAlphanumericPixel = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundAlphanumericPixel);
+
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff9495"));
+    composed.fill(Qt::black);
+    m_widget->render(&composed);
+    QCOMPARE(composed.pixelColor(blankCellCenter), QColor(0, 0, 0));
+    QCOMPARE(composed.pixelColor(presentationLeftEdge), QColor(0, 0, 0));
+    QCOMPARE(m_widget->screenBuffer()->character(0, 0), static_cast<uint8_t>(0xC1));
 }
 
 void TestCommandHandlerSoh::testGddmSuppressPacingOrder() {
