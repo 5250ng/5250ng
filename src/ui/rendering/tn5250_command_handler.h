@@ -46,12 +46,18 @@ class TN5250CommandHandler : public QObject {
   public:
     using SendToHostFn = std::function<void(const QByteArray &)>;
     using SendGDSFn = std::function<void(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload)>;
+    using GddmScreenCopyFn = std::function<void(const QImage &)>;
+    using GddmPrinterDataFn = std::function<void(const QByteArray &,
+                                                 const QByteArray &,
+                                                 const QByteArray &, int)>;
 
     explicit TN5250CommandHandler(QObject *parent = nullptr);
 
     void setDisplayWidget(ui::widgets::Q5250ScreenWidget *widget);
     void setSendToHostCallback(SendToHostFn fn);
     void setSendGDSCallback(SendGDSFn fn);
+    void setGddmScreenCopyCallback(GddmScreenCopyFn fn);
+    void setGddmPrinterDataCallback(GddmPrinterDataFn fn);
 
     // Connect all decoder signals to this handler
     void connectDecoder(tn5250::client::DecoderAdapter *parser);
@@ -112,6 +118,8 @@ class TN5250CommandHandler : public QObject {
     Gddm5292Decoder m_gddmDecoder;
     SendToHostFn m_sendToHost;
     SendGDSFn m_sendGDS;
+    GddmScreenCopyFn m_gddmScreenCopy;
+    GddmPrinterDataFn m_gddmPrinterData;
     uint8_t m_pendingCC2 = 0;
     uint8_t m_readType = 0; // 0x52=READ_MDT, 0x42=READ_INPUT
     core::CommandRunner *m_commandRunner = nullptr;

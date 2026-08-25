@@ -43,6 +43,11 @@ class Gddm5292Decoder {
         bool changed = false;
         bool error = false;
         Completion completion = Completion::None;
+        bool screenCopyRequested = false;
+        QByteArray printerData;
+        QByteArray printerColorTableAN;
+        QByteArray printerColorTableGraphics;
+        int printerTimeout = -1;
         QVector<StatusWrite> statusWrites;
         QString errorMessage;
     };
@@ -82,6 +87,9 @@ class Gddm5292Decoder {
         FillPolygon,
         ShieldArea,
         ColorTable,
+        PrinterData,
+        PrinterColorTableAN,
+        PrinterColorTableGraphics,
         Ignore
     };
 
@@ -151,6 +159,7 @@ class Gddm5292Decoder {
     FillReference m_fillReference = FillReference::Vertical;
     FillMode m_fillMode = FillMode::SolidBoundaryAndFill;
     int m_fillReferenceShift = 0;
+    int m_printerTimeout = 3;
     RasterFunction m_rasterFunction = RasterFunction::Replace;
     ErrorCode m_lastError = ErrorCode::None;
     int m_lastErrorOffset = -1;
