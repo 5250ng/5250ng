@@ -11,6 +11,7 @@
 #include <QByteArray>
 #include <QColor>
 #include <QImage>
+#include <QPoint>
 #include <QString>
 #include <QVector>
 #include <array>
@@ -22,6 +23,9 @@ class Gddm5292Decoder {
   public:
     static constexpr int kWidth = 480;
     static constexpr int kHeight = 288;
+
+    // The device raises G4 on a fill polygon with more nonhorizontal edges.
+    static constexpr int kMaxFillEdges = 128;
 
     enum class Completion {
         None,
@@ -75,17 +79,57 @@ class Gddm5292Decoder {
     enum class PendingOrder {
         None,
         Polyline,
+        FillPolygon,
         ColorTable,
         Ignore
+    };
+
+    // Set Style (order B1): alternating visible and gap run lengths in PELs.
+    // The device runs these across the interior fill lines of a polygon, which
+    // is what turns a fill into a hatch rather than a solid block.
+    struct LineStyle {
+        int visible1 = 15;
+        int gap1 = 0;
+        int visible2 = 15;
+        int gap2 = 0;
+
+        int period() const { return visible1 + gap1 + visible2 + gap2; }
+        bool solid() const { return gap1 == 0 && gap2 == 0; }
+        bool covers(int offset) const;
+    };
+
+    // Set Fill Mode (order B7) bits aa: the direction the interior fill lines
+    // run.
+    enum class FillReference {
+        Vertical,
+        PolygonEdge,
+        Plus45,
+        Minus45
+    };
+
+    struct FillMode {
+        FillReference reference = FillReference::Vertical;
+        bool boundary = true;        // draw the polygon edge
+        bool interior = true;        // shade the interior
+        bool styledBoundary = false; // edge uses the current style, not solid
+        int referenceShift = 0;      // bits cccccc: reference line moved left
     };
 
     void reset(bool clearPlane);
     bool completePending(Result &result, int offset);
     bool drawPolyline(Result &result);
+    bool fillPolygon(Result &result, int offset);
+    // Decodes m_pendingData into plane coordinates, failing G1 on a short or
+    // ragged payload and on a coordinate outside the surface.
+    bool decodePoints(Result &result, int offset, const char *what,
+                      int minimumPoints, QVector<QPoint> *out);
+    void drawClosedOutline(const QVector<QPoint> &points, bool styled);
+    // Offset along the current style for the interior PEL at (x, deviceY).
+    int stylePhase(int x, int deviceY) const;
     bool fail(Result &result, ErrorCode code, int offset, const QString &message);
     void applyPalette();
     void writePel(int x, int y, int colorIndex);
-    void drawLine(int x0, int y0, int x1, int y1);
+    void drawLine(int x0, int y0, int x1, int y1, bool styled = false);
     static QByteArray encodedErrorCode(ErrorCode code);
     static bool isGraphicsData(uint8_t byte);
     static int decodeCoordinate(uint8_t high, uint8_t low);
@@ -100,6 +144,8 @@ class Gddm5292Decoder {
     int m_colorIndex = 7;
     int m_lineWeight = 1;
     RasterFunction m_rasterFunction = RasterFunction::Replace;
+    LineStyle m_style;
+    FillMode m_fillMode;
     ErrorCode m_lastError = ErrorCode::None;
     int m_lastErrorOffset = -1;
     QImage m_plane;

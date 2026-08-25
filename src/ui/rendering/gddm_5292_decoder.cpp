@@ -9,6 +9,7 @@
 #include "gddm_5292_decoder.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 namespace ui::rendering {
@@ -37,6 +38,8 @@ void Gddm5292Decoder::reset(bool clearPlane) {
     m_colorIndex = 7;
     m_lineWeight = 1;
     m_rasterFunction = RasterFunction::Replace;
+    m_style = LineStyle();
+    m_fillMode = FillMode();
     m_lastError = ErrorCode::None;
     m_lastErrorOffset = -1;
     applyPalette();
@@ -100,6 +103,51 @@ bool Gddm5292Decoder::fail(Result &result, ErrorCode code, int offset,
     return false;
 }
 
+bool Gddm5292Decoder::LineStyle::covers(int offset) const {
+    const int span = period();
+    if (span <= 0)
+        return true;
+    int phase = offset % span;
+    if (phase < 0)
+        phase += span;
+    if (phase < visible1)
+        return true;
+    if (phase < visible1 + gap1)
+        return false;
+    if (phase < visible1 + gap1 + visible2)
+        return true;
+    return false;
+}
+
+int Gddm5292Decoder::stylePhase(int x, int deviceY) const {
+    // The style runs across the fill lines, so the offset advances
+    // perpendicular to the direction those lines take. A diagonal line keeps
+    // x - y (or x + y) constant along itself, so that difference is what
+    // advances across them. Which diagonal the manual calls "+45 degrees from
+    // vertical" is unsettled: no captured stream has requested either, so the
+    // two may be swapped. The vertical reference, all IBM i has been seen to
+    // use, is unaffected.
+    int phase = x;
+    switch (m_fillMode.reference) {
+    case FillReference::Vertical:
+        phase = x;
+        break;
+    case FillReference::Plus45:
+        phase = x - deviceY;
+        break;
+    case FillReference::Minus45:
+        phase = x + deviceY;
+        break;
+    case FillReference::PolygonEdge:
+        // Following the polygon edge needs per-edge distance fields, which no
+        // captured stream asks for. Approximated by the vertical reference
+        // rather than refusing the order.
+        phase = x;
+        break;
+    }
+    return phase + m_fillMode.referenceShift;
+}
+
 void Gddm5292Decoder::writePel(int x, int y, int colorIndex) {
     if (x < 0 || x >= kWidth || y < 0 || y >= kHeight)
         return;
@@ -120,17 +168,20 @@ void Gddm5292Decoder::writePel(int x, int y, int colorIndex) {
     line[x] = static_cast<uchar>(next);
 }
 
-void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1) {
+void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1, bool styled) {
     const int dx = std::abs(x1 - x0);
     const int sx = x0 < x1 ? 1 : -1;
     const int dy = -std::abs(y1 - y0);
     const int sy = y0 < y1 ? 1 : -1;
     int error = dx + dy;
+    int along = 0;
 
     for (;;) {
-        for (int weightY = 0; weightY < m_lineWeight; ++weightY) {
-            for (int weightX = 0; weightX < m_lineWeight; ++weightX)
-                writePel(x0 + weightX, y0 + weightY, m_colorIndex);
+        if (!styled || m_style.covers(along)) {
+            for (int weightY = 0; weightY < m_lineWeight; ++weightY) {
+                for (int weightX = 0; weightX < m_lineWeight; ++weightX)
+                    writePel(x0 + weightX, y0 + weightY, m_colorIndex);
+            }
         }
         if (x0 == x1 && y0 == y1)
             break;
@@ -143,43 +194,127 @@ void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1) {
             error += dx;
             y0 += sy;
         }
+        ++along;
     }
 }
 
-bool Gddm5292Decoder::drawPolyline(Result &result) {
-    if (m_pendingData.size() < 8 || (m_pendingData.size() % 4) != 0) {
-        return fail(result, ErrorCode::G1, m_pendingData.size(),
-                    "polyline requires complete coordinate pairs");
+bool Gddm5292Decoder::decodePoints(Result &result, int offset, const char *what,
+                                  int minimumPoints, QVector<QPoint> *out) {
+    if (m_pendingData.size() < minimumPoints * 4 || (m_pendingData.size() % 4) != 0) {
+        return fail(result, ErrorCode::G1, offset,
+                    QString("%1 requires at least %2 complete coordinate pairs")
+                        .arg(what).arg(minimumPoints));
     }
 
-    auto pointAt = [this, &result](int offset, int &x, int &y) {
-        x = decodeCoordinate(static_cast<uint8_t>(m_pendingData[offset]),
-                             static_cast<uint8_t>(m_pendingData[offset + 1]));
+    out->clear();
+    out->reserve(m_pendingData.size() / 4);
+    for (int index = 0; index < m_pendingData.size(); index += 4) {
+        const int x = decodeCoordinate(static_cast<uint8_t>(m_pendingData[index]),
+                                       static_cast<uint8_t>(m_pendingData[index + 1]));
         const int graphicsY = decodeCoordinate(
-            static_cast<uint8_t>(m_pendingData[offset + 2]),
-            static_cast<uint8_t>(m_pendingData[offset + 3]));
+            static_cast<uint8_t>(m_pendingData[index + 2]),
+            static_cast<uint8_t>(m_pendingData[index + 3]));
         if (x >= kWidth || graphicsY >= kHeight) {
-            fail(result, ErrorCode::G1, offset, "coordinate is outside the 480x288 PEL buffer");
-            return false;
+            return fail(result, ErrorCode::G1, offset,
+                        "coordinate is outside the 480x288 PEL buffer");
         }
-        y = kHeight - 1 - graphicsY;
-        return true;
-    };
+        out->append(QPoint(x, kHeight - 1 - graphicsY));
+    }
+    return true;
+}
 
-    int previousX = 0;
-    int previousY = 0;
-    if (!pointAt(0, previousX, previousY))
+bool Gddm5292Decoder::drawPolyline(Result &result) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, m_pendingData.size(), "polyline", 2, &points))
         return false;
-    for (int offset = 4; offset < m_pendingData.size(); offset += 4) {
-        int nextX = 0;
-        int nextY = 0;
-        if (!pointAt(offset, nextX, nextY))
-            return false;
-        drawLine(previousX, previousY, nextX, nextY);
-        previousX = nextX;
-        previousY = nextY;
+
+    for (int index = 1; index < points.size(); ++index) {
+        drawLine(points[index - 1].x(), points[index - 1].y(),
+                 points[index].x(), points[index].y());
     }
     result.changed = true;
+    return true;
+}
+
+void Gddm5292Decoder::drawClosedOutline(const QVector<QPoint> &points, bool styled) {
+    for (int index = 0; index < points.size(); ++index) {
+        const QPoint &from = points[index];
+        const QPoint &to = points[(index + 1) % points.size()];
+        drawLine(from.x(), from.y(), to.x(), to.y(), styled);
+    }
+}
+
+// Fill Polygon (order A5). The last vertex closes back onto the first, and the
+// interior is shaded by the even-odd rule: a PEL is inside when a ray leaving
+// it crosses an odd number of boundary lines. IBM i relies on the device to
+// work the interior out, so a convex or nonzero-winding fill is not a valid
+// substitute. The interior is painted through the current style, which is what
+// makes a non-solid GSPAT arrive as a hatch.
+bool Gddm5292Decoder::fillPolygon(Result &result, int offset) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, offset, "fill polygon", 3, &points))
+        return false;
+
+    int nonHorizontal = 0;
+    for (int index = 0; index < points.size(); ++index) {
+        if (points[index].y() != points[(index + 1) % points.size()].y())
+            ++nonHorizontal;
+    }
+    if (nonHorizontal > kMaxFillEdges) {
+        return fail(result, ErrorCode::G4, offset,
+                    QString("fill polygon has %1 nonhorizontal edges, the device "
+                            "limit is %2").arg(nonHorizontal).arg(kMaxFillEdges));
+    }
+
+    if (m_fillMode.interior) {
+        int top = points.front().y();
+        int bottom = top;
+        for (const QPoint &point : points) {
+            top = qMin(top, point.y());
+            bottom = qMax(bottom, point.y());
+        }
+        top = qMax(top, 0);
+        bottom = qMin(bottom, kHeight - 1);
+
+        QVector<double> crossings;
+        for (int y = top; y <= bottom; ++y) {
+            // Sample at the PEL centre so a vertex sitting exactly on the scan
+            // line is counted once rather than twice.
+            const double scan = y + 0.5;
+            crossings.clear();
+            for (int index = 0; index < points.size(); ++index) {
+                const QPoint &from = points[index];
+                const QPoint &to = points[(index + 1) % points.size()];
+                const double y0 = from.y();
+                const double y1 = to.y();
+                if ((y0 <= scan && y1 > scan) || (y1 <= scan && y0 > scan)) {
+                    const double along = (scan - y0) / (y1 - y0);
+                    crossings.append(from.x() + along * (to.x() - from.x()));
+                }
+            }
+            if (crossings.size() < 2)
+                continue;
+            std::sort(crossings.begin(), crossings.end());
+
+            const int deviceY = kHeight - 1 - y;
+            for (int pair = 0; pair + 1 < crossings.size(); pair += 2) {
+                int first = static_cast<int>(std::ceil(crossings[pair] - 0.5));
+                int last = static_cast<int>(std::floor(crossings[pair + 1] - 0.5));
+                first = qMax(first, 0);
+                last = qMin(last, kWidth - 1);
+                for (int x = first; x <= last; ++x) {
+                    if (m_style.covers(stylePhase(x, deviceY)))
+                        writePel(x, y, m_colorIndex);
+                }
+            }
+        }
+        result.changed = true;
+    }
+
+    if (m_fillMode.boundary) {
+        drawClosedOutline(points, m_fillMode.styledBoundary);
+        result.changed = true;
+    }
     return true;
 }
 
@@ -191,6 +326,8 @@ bool Gddm5292Decoder::completePending(Result &result, int offset) {
     bool ok = true;
     if (m_pendingOrder == PendingOrder::Polyline) {
         ok = drawPolyline(result);
+    } else if (m_pendingOrder == PendingOrder::FillPolygon) {
+        ok = fillPolygon(result, offset);
     } else if (m_pendingOrder == PendingOrder::ColorTable) {
         if ((m_pendingData.size() % 3) != 0) {
             ok = fail(result, ErrorCode::G1, offset,
@@ -358,6 +495,10 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             break;
         case 0xB1:
             if (!readFixedData(4, values)) return result;
+            m_style.visible1 = static_cast<uint8_t>(values[0]) & 0x3F;
+            m_style.gap1 = static_cast<uint8_t>(values[1]) & 0x3F;
+            m_style.visible2 = static_cast<uint8_t>(values[2]) & 0x3F;
+            m_style.gap2 = static_cast<uint8_t>(values[3]) & 0x3F;
             break;
         case 0xB2:
             if (!readFixedData(1, values)) return result;
@@ -388,9 +529,45 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             if (!readFixedData(1, values)) return result;
             m_lineWeight = ((static_cast<uint8_t>(values[0]) & 0x3F) == 0) ? 1 : 2;
             break;
-        case 0xB7:
+        case 0xB7: {
             if (!readFixedData(2, values)) return result;
+            const int control = static_cast<uint8_t>(values[0]) & 0x3F;
+            switch ((control >> 4) & 0x03) { // bits aa: fill line direction
+            case 0: m_fillMode.reference = FillReference::Vertical; break;
+            case 1: m_fillMode.reference = FillReference::PolygonEdge; break;
+            case 2: m_fillMode.reference = FillReference::Plus45; break;
+            default: m_fillMode.reference = FillReference::Minus45; break;
+            }
+            // Bits bb select which of the boundary and interior are drawn and
+            // whether the boundary is solid or styled. The Functions Reference
+            // prints "10" twice and omits "01"; this is the reading consistent
+            // with the live stream, where GSAREA(1) emits bb=00 and GSAREA(0)
+            // emits bb=10.
+            switch (control & 0x03) {
+            case 0: // solid boundary plus styled interior
+                m_fillMode.boundary = true;
+                m_fillMode.interior = true;
+                m_fillMode.styledBoundary = false;
+                break;
+            case 1: // solid boundary only
+                m_fillMode.boundary = true;
+                m_fillMode.interior = false;
+                m_fillMode.styledBoundary = false;
+                break;
+            case 2: // styled interior only
+                m_fillMode.boundary = false;
+                m_fillMode.interior = true;
+                m_fillMode.styledBoundary = false;
+                break;
+            default: // styled boundary only
+                m_fillMode.boundary = true;
+                m_fillMode.interior = false;
+                m_fillMode.styledBoundary = true;
+                break;
+            }
+            m_fillMode.referenceShift = static_cast<uint8_t>(values[1]) & 0x3F;
             break;
+        }
         case 0xA0:
             m_pendingOrder = PendingOrder::Polyline;
             ++offset;
@@ -410,9 +587,12 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             result.changed = true;
             break;
         }
+        case 0xA5:
+            m_pendingOrder = PendingOrder::FillPolygon;
+            ++offset;
+            break;
         case 0xA1:
         case 0xA4:
-        case 0xA5:
         case 0xA6:
             fail(result, ErrorCode::G2, offset, QString("unsupported drawing order 0x%1")
                                                     .arg(byte, 2, 16, QChar('0')));
