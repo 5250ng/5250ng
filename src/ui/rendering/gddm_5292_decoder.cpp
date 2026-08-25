@@ -39,7 +39,9 @@ void Gddm5292Decoder::reset(bool clearPlane) {
     m_lineWeight = 1;
     m_rasterFunction = RasterFunction::Replace;
     m_style = LineStyle();
+    m_styleOffset = StyleOffset();
     m_fillMode = FillMode();
+    m_marker = 0;
     m_lastError = ErrorCode::None;
     m_lastErrorOffset = -1;
     applyPalette();
@@ -103,20 +105,40 @@ bool Gddm5292Decoder::fail(Result &result, ErrorCode code, int offset,
     return false;
 }
 
-bool Gddm5292Decoder::LineStyle::covers(int offset) const {
-    const int span = period();
-    if (span <= 0)
+void Gddm5292Decoder::noteRecoverable(Result &result, ErrorCode code, int offset,
+                                     const QString &message) {
+    m_lastError = code;
+    m_lastErrorOffset = std::max(0, offset);
+    result.error = true;
+    result.errorMessage = QString("G%1 at offset %2: %3")
+                              .arg(static_cast<int>(code)).arg(offset).arg(message);
+    // The completion is decided at the end of the block: the device shows the
+    // code, sounds the alarm, finishes processing and only then answers Cmd-9.
+}
+
+bool Gddm5292Decoder::LineStyle::covers(int offset, int segment,
+                                        int overrideLength) const {
+    // The style is four alternating runs: visible, gap, visible, gap. Set Style
+    // Offset picks which run a line starts on and may override its length.
+    const int lengths[4] = {visible1, gap1, visible2, gap2};
+    const bool visible[4] = {true, false, true, false};
+    if (period() <= 0 || offset < 0)
         return true;
-    int phase = offset % span;
-    if (phase < 0)
-        phase += span;
-    if (phase < visible1)
-        return true;
-    if (phase < visible1 + gap1)
-        return false;
-    if (phase < visible1 + gap1 + visible2)
-        return true;
-    return false;
+
+    int run = segment & 0x03;
+    int remaining = overrideLength > 0 ? overrideLength : lengths[run];
+    // period() > 0 guarantees a nonzero run, so this terminates; the bound is
+    // belt and braces against a hostile style.
+    for (int guard = 0; guard < 4096; ++guard) {
+        if (remaining > 0) {
+            if (offset < remaining)
+                return visible[run];
+            offset -= remaining;
+        }
+        run = (run + 1) & 0x03;
+        remaining = lengths[run];
+    }
+    return true;
 }
 
 int Gddm5292Decoder::stylePhase(int x, int deviceY) const {
@@ -177,7 +199,8 @@ void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1, bool styled) {
     int along = 0;
 
     for (;;) {
-        if (!styled || m_style.covers(along)) {
+        if (!styled || m_style.covers(along, m_styleOffset.segment,
+                                      m_styleOffset.overrideLength)) {
             for (int weightY = 0; weightY < m_lineWeight; ++weightY) {
                 for (int weightX = 0; weightX < m_lineWeight; ++weightX)
                     writePel(x0 + weightX, y0 + weightY, m_colorIndex);
@@ -244,6 +267,100 @@ void Gddm5292Decoder::drawClosedOutline(const QVector<QPoint> &points, bool styl
     }
 }
 
+namespace {
+
+// 5x5 marker shapes, bit 4 of each row being the leftmost PEL, indexed by the
+// Set Marker value. Verified against the Functions Reference's glyph column,
+// rendered from the PDF because it does not survive text extraction: solid 5x5
+// box, solid 3x3 box, empty 5x5 box, plus, cross, solid diamond, hollow
+// diamond, three-segment asterisk, four-segment asterisk.
+constexpr uint8_t kMarkerShapes[9][5] = {
+    {0b11111, 0b11111, 0b11111, 0b11111, 0b11111},
+    {0b00000, 0b01110, 0b01110, 0b01110, 0b00000},
+    {0b11111, 0b10001, 0b10001, 0b10001, 0b11111},
+    {0b00100, 0b00100, 0b11111, 0b00100, 0b00100},
+    {0b10001, 0b01010, 0b00100, 0b01010, 0b10001},
+    {0b00100, 0b01110, 0b11111, 0b01110, 0b00100},
+    {0b00100, 0b01010, 0b10001, 0b01010, 0b00100},
+    {0b10101, 0b01110, 0b00100, 0b01110, 0b10101},
+    {0b10101, 0b01110, 0b11111, 0b01110, 0b10101},
+};
+
+} // namespace
+
+const uint8_t *Gddm5292Decoder::markerShape() const {
+    const int index = (m_marker >= 0 && m_marker < kMarkerCount) ? m_marker : 0;
+    return kMarkerShapes[index];
+}
+
+// Draw Scanline (order A1). Two coordinate pairs give the leftmost PEL, then
+// the pattern follows. Each graphics-data byte carries six pattern bits, most
+// significant first, advancing in +X; a 1 sets the PEL using the current colour
+// and function and a 0 leaves it alone. So an 8-PEL row arrives as two bytes
+// with the second zero-padded, which is what a capture of GSIMG with a known
+// bit pattern confirms. GDDM uses this for images and for mode-2 text.
+bool Gddm5292Decoder::drawScanline(Result &result, int offset) {
+    if (m_pendingData.size() < 5) {
+        return fail(result, ErrorCode::G1, offset,
+                    "scanline requires a coordinate pair and a pattern byte");
+    }
+
+    const int x = decodeCoordinate(static_cast<uint8_t>(m_pendingData[0]),
+                                   static_cast<uint8_t>(m_pendingData[1]));
+    const int graphicsY = decodeCoordinate(static_cast<uint8_t>(m_pendingData[2]),
+                                           static_cast<uint8_t>(m_pendingData[3]));
+    if (x >= kWidth || graphicsY >= kHeight) {
+        return fail(result, ErrorCode::G1, offset,
+                    "coordinate is outside the 480x288 PEL buffer");
+    }
+    const int y = kHeight - 1 - graphicsY;
+
+    int pel = 0;
+    for (int index = 4; index < m_pendingData.size(); ++index) {
+        const uint8_t bits = static_cast<uint8_t>(m_pendingData[index]) & 0x3F;
+        for (int bit = 5; bit >= 0; --bit, ++pel) {
+            if ((bits >> bit) & 0x01)
+                writePel(x + pel, y, m_colorIndex);
+        }
+    }
+    result.changed = true;
+    return true;
+}
+
+// Write Polymarker (order A4). Draws the marker selected by Set Marker centred
+// on each coordinate pair. A marker whose box will not fit raises G5, the one
+// recoverable graphics error: the device skips it, finishes the block and
+// answers Cmd-9. Centring is confirmed by GDDM's own scanline fallback, which
+// places an equivalent marker's top-left at the centre minus two.
+bool Gddm5292Decoder::drawPolymarker(Result &result, int offset) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, offset, "polymarker", 1, &points))
+        return false;
+
+    const uint8_t *shape = markerShape();
+    const int half = kMarkerSize / 2;
+
+    for (const QPoint &centre : points) {
+        if (centre.x() - half < 0 || centre.x() + half >= kWidth
+            || centre.y() - half < 0 || centre.y() + half >= kHeight) {
+            noteRecoverable(result, ErrorCode::G5, offset,
+                            QString("marker at (%1,%2) does not fit inside the display")
+                                .arg(centre.x()).arg(kHeight - 1 - centre.y()));
+            continue;
+        }
+        for (int row = 0; row < kMarkerSize; ++row) {
+            for (int column = 0; column < kMarkerSize; ++column) {
+                if ((shape[row] >> (kMarkerSize - 1 - column)) & 0x01) {
+                    writePel(centre.x() - half + column,
+                             centre.y() - half + row, m_colorIndex);
+                }
+            }
+        }
+        result.changed = true;
+    }
+    return true;
+}
+
 // Fill Polygon (order A5). The last vertex closes back onto the first, and the
 // interior is shaded by the even-odd rule: a PEL is inside when a ray leaving
 // it crosses an odd number of boundary lines. IBM i relies on the device to
@@ -303,7 +420,8 @@ bool Gddm5292Decoder::fillPolygon(Result &result, int offset) {
                 first = qMax(first, 0);
                 last = qMin(last, kWidth - 1);
                 for (int x = first; x <= last; ++x) {
-                    if (m_style.covers(stylePhase(x, deviceY)))
+                    if (m_style.covers(stylePhase(x, deviceY), m_styleOffset.segment,
+                                       m_styleOffset.overrideLength))
                         writePel(x, y, m_colorIndex);
                 }
             }
@@ -328,6 +446,10 @@ bool Gddm5292Decoder::completePending(Result &result, int offset) {
         ok = drawPolyline(result);
     } else if (m_pendingOrder == PendingOrder::FillPolygon) {
         ok = fillPolygon(result, offset);
+    } else if (m_pendingOrder == PendingOrder::Scanline) {
+        ok = drawScanline(result, offset);
+    } else if (m_pendingOrder == PendingOrder::Polymarker) {
+        ok = drawPolymarker(result, offset);
     } else if (m_pendingOrder == PendingOrder::ColorTable) {
         if ((m_pendingData.size() % 3) != 0) {
             ok = fail(result, ErrorCode::G1, offset,
@@ -500,12 +622,21 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             m_style.visible2 = static_cast<uint8_t>(values[2]) & 0x3F;
             m_style.gap2 = static_cast<uint8_t>(values[3]) & 0x3F;
             break;
-        case 0xB2:
+        case 0xB2: {
             if (!readFixedData(1, values)) return result;
+            const int control = static_cast<uint8_t>(values[0]) & 0x3F;
+            // Bits aa choose which Set Style run begins the line; the low four
+            // bits override that run's length, zero meaning keep it.
+            m_styleOffset.segment = (control >> 4) & 0x03;
+            m_styleOffset.overrideLength = control & 0x0F;
             break;
+        }
         case 0xB5:
             if (!readFixedData(1, values)) return result;
-            if ((static_cast<uint8_t>(values[0]) & 0x3F) > 8) {
+            // The order's bit diagram lays byte 2 out as 0100aaaa, so the
+            // marker is the low four bits rather than the whole payload.
+            m_marker = static_cast<uint8_t>(values[0]) & 0x0F;
+            if (m_marker >= kMarkerCount) {
                 fail(result, ErrorCode::G3, offset - 1, "marker index must be in 0..8");
                 return result;
             }
@@ -592,11 +723,19 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             ++offset;
             break;
         case 0xA1:
+            m_pendingOrder = PendingOrder::Scanline;
+            ++offset;
+            break;
         case 0xA4:
+            m_pendingOrder = PendingOrder::Polymarker;
+            ++offset;
+            break;
         case 0xA6:
-            fail(result, ErrorCode::G2, offset, QString("unsupported drawing order 0x%1")
-                                                    .arg(byte, 2, 16, QChar('0')));
-            return result;
+            // Parsed but not rendered: IBM i GDDM has never been seen to emit
+            // it, decomposing areas with holes into scanlines host-side.
+            m_pendingOrder = PendingOrder::Ignore;
+            ++offset;
+            break;
         case 0xC0:
         case 0xC2:
         case 0xC3:
@@ -622,7 +761,15 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
         return result;
     }
 
-    result.completion = m_suppressPacing ? Completion::None : Completion::Success;
+    if (m_suppressPacing) {
+        result.completion = Completion::None;
+    } else if (result.error) {
+        // A fatal error returns early, so an error still set here was
+        // recoverable: the block ran to completion and answers Cmd-9.
+        result.completion = Completion::RecoverableError;
+    } else {
+        result.completion = Completion::Success;
+    }
     return result;
 }
 

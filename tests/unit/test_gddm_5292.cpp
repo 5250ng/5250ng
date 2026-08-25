@@ -35,6 +35,12 @@ class TestGddm5292 : public QObject {
     void appliesStyleToCapturedStarFill();
     void resumesFillPolygonAcrossBlocks();
     void rejectsFillPolygonOverEdgeLimit();
+    void drawsCapturedImageScanlines();
+    void scanlinePatternIsSixBitsMsbFirst();
+    void drawsCapturedPolymarkers();
+    void rejectsMarkerAboveEight();
+    void markerOutsideDisplayIsRecoverable();
+    void styleOffsetSelectsStartingSegment();
 };
 
 namespace {
@@ -334,6 +340,123 @@ void TestGddm5292::rejectsFillPolygonOverEdgeLimit() {
     // G4 is nonrecoverable, so the block and graphics mode both end.
     QCOMPARE(result.completion, Gddm5292Decoder::Completion::FatalError);
     QVERIFY(!decoder.graphicsMode());
+}
+
+// The primitive fixtures below are the exact bytes IBM i sent for a probe that
+// draws markers, text in both character modes and a GSIMG image, taken from
+// GDDM/captures/gddm-primitives.pcap.
+
+void TestGddm5292::drawsCapturedImageScanlines() {
+    Gddm5292Decoder decoder;
+    // GSIMG of an 8x8 image whose first row is EBCDIC 'A' (0xC1) and whose
+    // remaining rows are blanks (0x40). IBM i lowers it to eight A1 orders at
+    // device x=47, rows y=57 down to y=50: top row first, decreasing Y.
+    const auto result = decoder.process(QByteArray::fromHex("ff93b047"
+        "a1406f4079705092" "a1406f4078504092" "a1406f4077504092"
+        "a1406f4076504092" "a1406f4075504092" "a1406f4074504092"
+        "a1406f4073504092" "a1406f4072504092" "95"));
+
+    QVERIFY(!result.error);
+    QVERIFY(result.changed);
+
+    const QImage &plane = decoder.graphicsPlane();
+    // Row 0 is 11000001: PELs at offsets 0, 1 and 7.
+    const int top = planeY(57);
+    QCOMPARE(plane.pixelColor(47, top), QColor(255, 255, 255));
+    QCOMPARE(plane.pixelColor(48, top), QColor(255, 255, 255));
+    QCOMPARE(plane.pixelColor(49, top), QColor(0, 0, 0));
+    QCOMPARE(plane.pixelColor(54, top), QColor(255, 255, 255));
+    // The remaining rows are 01000000: one PEL at offset 1 only.
+    for (int row = 1; row < 8; ++row) {
+        const int y = planeY(57 - row);
+        QCOMPARE(plane.pixelColor(47, y), QColor(0, 0, 0));
+        QCOMPARE(plane.pixelColor(48, y), QColor(255, 255, 255));
+    }
+}
+
+void TestGddm5292::scanlinePatternIsSixBitsMsbFirst() {
+    Gddm5292Decoder decoder;
+    // One data byte carries six PELs, most significant bit leftmost, so 0x2A
+    // (101010) paints alternating PELs from the start coordinate.
+    const auto result = decoder.process(
+        QByteArray::fromHex("ff93b047" "a1404a404a" "6a" "92" "95"));
+
+    QVERIFY(!result.error);
+    const QImage &plane = decoder.graphicsPlane();
+    const int y = planeY(10);
+    QCOMPARE(plane.pixelColor(10, y), QColor(255, 255, 255));
+    QCOMPARE(plane.pixelColor(11, y), QColor(0, 0, 0));
+    QCOMPARE(plane.pixelColor(12, y), QColor(255, 255, 255));
+    QCOMPARE(plane.pixelColor(14, y), QColor(255, 255, 255));
+    // Nothing beyond the six PELs the byte describes.
+    QCOMPARE(plane.pixelColor(16, y), QColor(0, 0, 0));
+}
+
+void TestGddm5292::drawsCapturedPolymarkers() {
+    Gddm5292Decoder decoder;
+    // Set Marker 4 then Write Polymarker at device (95,229), as captured.
+    // Marker 4 is the 5x5 cross.
+    const auto result = decoder.process(
+        QByteArray::fromHex("ff93" "b544b047b343" "a4415f436592" "95"));
+
+    QVERIFY(!result.error);
+    const QImage &plane = decoder.graphicsPlane();
+    const int cy = planeY(229);
+    QCOMPARE(plane.pixelColor(93, cy - 2), QColor(255, 255, 255)); // corner
+    QCOMPARE(plane.pixelColor(95, cy), QColor(255, 255, 255));     // centre
+    QCOMPARE(plane.pixelColor(97, cy + 2), QColor(255, 255, 255)); // corner
+    QCOMPARE(plane.pixelColor(94, cy), QColor(0, 0, 0));           // arm gap
+    QCOMPARE(plane.pixelColor(95, cy - 2), QColor(0, 0, 0));
+}
+
+void TestGddm5292::rejectsMarkerAboveEight() {
+    Gddm5292Decoder decoder;
+    // Only nine shapes exist; the manual lists "Set marker > 8" as G3.
+    const auto result = decoder.process(QByteArray::fromHex("ff93b54995"));
+    QVERIFY(result.error);
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::FatalError);
+    QVERIFY(!decoder.graphicsMode());
+}
+
+void TestGddm5292::markerOutsideDisplayIsRecoverable() {
+    Gddm5292Decoder decoder;
+    // Two markers: (1,1) cannot fit its 5x5 box, (95,229) can. G5 is the one
+    // recoverable graphics error, so the device skips the bad one, finishes the
+    // block, keeps graphics mode and answers Cmd-9 rather than Cmd-10.
+    const auto result = decoder.process(QByteArray::fromHex(
+        "ff93" "b544b047" "a4" "40414041" "415f4365" "92" "90"));
+
+    QVERIFY(result.handled);
+    QVERIFY(result.error);
+    QVERIFY(result.errorMessage.startsWith("G5 at offset"));
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::RecoverableError);
+    // Recoverable means graphics mode survives, and 0x90 keeps it open.
+    QVERIFY(decoder.graphicsMode());
+    // The in-bounds marker was still drawn.
+    QCOMPARE(decoder.graphicsPlane().pixelColor(95, planeY(229)),
+             QColor(255, 255, 255));
+}
+
+void TestGddm5292::styleOffsetSelectsStartingSegment() {
+    // A square spanning device x 8..30, y 10..30, hatched by style 1/3/1/3
+    // (period 8, visible at phases 0 and 4). The fill phase is the X
+    // coordinate, so column 8 falls on phase 0 and is painted.
+    const QByteArray prefix = QByteArray::fromHex("ff93b1" "41434143" "b047");
+    const QByteArray fill = QByteArray::fromHex("b74240a5")
+        + QByteArray::fromHex("4048404a405e404a405e405e4048405e")
+        + QByteArray::fromHex("9295");
+
+    Gddm5292Decoder unshifted;
+    QVERIFY(!unshifted.process(prefix + fill).error);
+
+    // Set Style Offset 0x50 selects segment 1, the first gap, so the same
+    // column now lands in a gap instead.
+    Gddm5292Decoder shifted;
+    QVERIFY(!shifted.process(prefix + QByteArray::fromHex("b250") + fill).error);
+
+    const int y = planeY(20);
+    QCOMPARE(unshifted.graphicsPlane().pixelColor(8, y), QColor(255, 255, 255));
+    QCOMPARE(shifted.graphicsPlane().pixelColor(8, y), QColor(0, 0, 0));
 }
 
 QTEST_MAIN(TestGddm5292)

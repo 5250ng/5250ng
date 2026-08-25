@@ -27,6 +27,11 @@ class Gddm5292Decoder {
     // The device raises G4 on a fill polygon with more nonhorizontal edges.
     static constexpr int kMaxFillEdges = 128;
 
+    // Markers are drawn from a box centred on the coordinate. One that will not
+    // fit entirely on the surface raises the recoverable G5.
+    static constexpr int kMarkerSize = 5;
+    static constexpr int kMarkerCount = 9;
+
     enum class Completion {
         None,
         Success,
@@ -80,6 +85,8 @@ class Gddm5292Decoder {
         None,
         Polyline,
         FillPolygon,
+        Scanline,
+        Polymarker,
         ColorTable,
         Ignore
     };
@@ -95,7 +102,16 @@ class Gddm5292Decoder {
 
         int period() const { return visible1 + gap1 + visible2 + gap2; }
         bool solid() const { return gap1 == 0 && gap2 == 0; }
-        bool covers(int offset) const;
+        // `segment` is the Set Style Offset run to begin on (0..3), and
+        // `overrideLength` replaces that first run's length when nonzero.
+        bool covers(int offset, int segment = 0, int overrideLength = 0) const;
+    };
+
+    // Set Style Offset (order B2): which of the four Set Style runs a line
+    // starts on, plus an optional override for that run's length.
+    struct StyleOffset {
+        int segment = 0;
+        int overrideLength = 0;
     };
 
     // Set Fill Mode (order B7) bits aa: the direction the interior fill lines
@@ -119,6 +135,11 @@ class Gddm5292Decoder {
     bool completePending(Result &result, int offset);
     bool drawPolyline(Result &result);
     bool fillPolygon(Result &result, int offset);
+    bool drawScanline(Result &result, int offset);
+    bool drawPolymarker(Result &result, int offset);
+    // The 5x5 shape for the current Set Marker value; bit 4 of each row is the
+    // leftmost PEL.
+    const uint8_t *markerShape() const;
     // Decodes m_pendingData into plane coordinates, failing G1 on a short or
     // ragged payload and on a coordinate outside the surface.
     bool decodePoints(Result &result, int offset, const char *what,
@@ -127,6 +148,11 @@ class Gddm5292Decoder {
     // Offset along the current style for the interior PEL at (x, deviceY).
     int stylePhase(int x, int deviceY) const;
     bool fail(Result &result, ErrorCode code, int offset, const QString &message);
+    // Records a recoverable error. Unlike fail(), the block carries on with the
+    // next byte and graphics mode survives; process() completes the block with
+    // Completion::RecoverableError so the host is answered Cmd-9.
+    void noteRecoverable(Result &result, ErrorCode code, int offset,
+                         const QString &message);
     void applyPalette();
     void writePel(int x, int y, int colorIndex);
     void drawLine(int x0, int y0, int x1, int y1, bool styled = false);
@@ -145,7 +171,9 @@ class Gddm5292Decoder {
     int m_lineWeight = 1;
     RasterFunction m_rasterFunction = RasterFunction::Replace;
     LineStyle m_style;
+    StyleOffset m_styleOffset;
     FillMode m_fillMode;
+    int m_marker = 0;
     ErrorCode m_lastError = ErrorCode::None;
     int m_lastErrorOffset = -1;
     QImage m_plane;
