@@ -42,6 +42,16 @@ void Gddm5292Decoder::reset(bool clearPlane) {
     m_styleOffset = StyleOffset();
     m_fillMode = FillMode();
     m_marker = 0;
+    // Default Printer A/N Color Mix Table, as bcmy nibbles. Every fourth entry
+    // is a fixed "no ink" the host cannot change.
+    m_printerAlphaMix = {8, 8, 5, 5, 8, 8, 5, 0,
+                         2, 2, 2, 2, 2, 2, 2, 0,
+                         4, 4, 1, 1, 4, 4, 1, 0,
+                         3, 3, 6, 6, 3, 3, 6, 0};
+    // Default Printer Graphics Color Mix Table.
+    m_printerGraphicsMix = {0, 2, 5, 6, 3, 1, 4, 8};
+    m_printerTimeoutUnits = 3;
+    m_printerData.clear();
     m_lastError = ErrorCode::None;
     m_lastErrorOffset = -1;
     m_lastOrder = 0;
@@ -68,13 +78,29 @@ int Gddm5292Decoder::decodeBufferOffset(uint8_t high, uint8_t low) {
     return ((high & 0x3F) << 6) | (low & 0x3F);
 }
 
+const char *Gddm5292Decoder::errorCodeText(ErrorCode code) {
+    switch (code) {
+    case ErrorCode::G1: return "G1";
+    case ErrorCode::G2: return "G2";
+    case ErrorCode::G3: return "G3";
+    case ErrorCode::G4: return "G4";
+    case ErrorCode::G5: return "G5";
+    case ErrorCode::P5: return "P5";
+    case ErrorCode::None: break;
+    }
+    return "";
+}
+
 QByteArray Gddm5292Decoder::encodedErrorCode(ErrorCode code) {
-    if (code == ErrorCode::None)
+    const char *text = errorCodeText(code);
+    if (text[0] == '\0')
         return QByteArray::fromHex("ffff");
+    // The code appears on the device's status line, so it travels to the
+    // alphanumeric buffer as display characters: EBCDIC letter then digit.
     QByteArray encoded;
     encoded.reserve(2);
-    encoded.append(static_cast<char>(0xC7));
-    encoded.append(static_cast<char>(0xF0 + static_cast<int>(code)));
+    encoded.append(static_cast<char>(text[0] == 'P' ? 0xD7 : 0xC7));
+    encoded.append(static_cast<char>(0xF0 + (text[1] - '0')));
     return encoded;
 }
 
@@ -98,8 +124,8 @@ bool Gddm5292Decoder::fail(Result &result, ErrorCode code, int offset,
     m_lastError = code;
     m_lastErrorOffset = std::max(0, offset);
     result.error = true;
-    result.errorMessage = QString("G%1 at offset %2: %3")
-                              .arg(static_cast<int>(code)).arg(offset).arg(message);
+    result.errorMessage = QString("%1 at offset %2: %3")
+                              .arg(errorCodeText(code)).arg(offset).arg(message);
     result.completion = m_suppressPacing ? Completion::None : Completion::FatalError;
     result.pacingSuppressed = m_suppressPacing;
     m_graphicsMode = false;
@@ -120,8 +146,8 @@ void Gddm5292Decoder::noteRecoverable(Result &result, ErrorCode code, int offset
     m_lastError = code;
     m_lastErrorOffset = std::max(0, offset);
     result.error = true;
-    result.errorMessage = QString("G%1 at offset %2: %3")
-                              .arg(static_cast<int>(code)).arg(offset).arg(message);
+    result.errorMessage = QString("%1 at offset %2: %3")
+                              .arg(errorCodeText(code)).arg(offset).arg(message);
     // The completion is decided at the end of the block: the device shows the
     // code, sounds the alarm, finishes processing and only then answers Cmd-9.
 }
@@ -460,6 +486,45 @@ bool Gddm5292Decoder::completePending(Result &result, int offset) {
         ok = drawScanline(result, offset);
     } else if (m_pendingOrder == PendingOrder::Polymarker) {
         ok = drawPolymarker(result, offset);
+    } else if (m_pendingOrder == PendingOrder::GraphicsMixTable) {
+        // Load Printer Graphics Color Mix Table (C3): index/bcmy pairs mapping
+        // each graphics colour index onto the printer's four inks. GDDM sends
+        // this in every picture's opening block, seven pairs for indexes 1..7,
+        // so a screen copy prints colours matching the display palette.
+        if ((m_pendingData.size() % 2) != 0) {
+            ok = fail(result, ErrorCode::G1, offset,
+                      "printer graphics mix table requires index/bcmy pairs");
+        } else {
+            for (int index = 0; index < m_pendingData.size(); index += 2) {
+                const int entry = static_cast<uint8_t>(m_pendingData[index]) & 0x07;
+                m_printerGraphicsMix[static_cast<size_t>(entry)] =
+                    static_cast<uint8_t>(m_pendingData[index + 1]) & 0x0F;
+            }
+        }
+    } else if (m_pendingOrder == PendingOrder::AlphaMixTable) {
+        // Load Printer A/N Color Mix Table (C2). Indexes 7, 15, 23 and 31 are
+        // fixed in the device, and the manual names attempting one as P5.
+        if ((m_pendingData.size() % 2) != 0) {
+            ok = fail(result, ErrorCode::G1, offset,
+                      "printer alphanumeric mix table requires index/bcmy pairs");
+        } else {
+            for (int index = 0; index < m_pendingData.size(); index += 2) {
+                const int entry = static_cast<uint8_t>(m_pendingData[index]) & 0x1F;
+                if (alphaMixIndexIsFixed(entry)) {
+                    ok = fail(result, ErrorCode::P5, offset,
+                              QString("printer A/N mix table index %1 cannot be changed")
+                                  .arg(entry));
+                    break;
+                }
+                m_printerAlphaMix[static_cast<size_t>(entry)] =
+                    static_cast<uint8_t>(m_pendingData[index + 1]) & 0x0F;
+            }
+        }
+    } else if (m_pendingOrder == PendingOrder::PrinterData) {
+        // Printer Data Follows (C0). With no attached printer the payload is
+        // retained for a future export path, bounded so a hostile stream cannot
+        // grow it without limit.
+        m_printerData = m_pendingData.left(kHostMaxBlockBytes);
     } else if (m_pendingOrder == PendingOrder::ColorTable) {
         if ((m_pendingData.size() % 3) != 0) {
             ok = fail(result, ErrorCode::G1, offset,
@@ -764,17 +829,29 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             m_pendingOrder = PendingOrder::Ignore;
             ++offset;
             break;
-        case 0xC0:
-        case 0xC2:
-        case 0xC3:
-            m_pendingOrder = PendingOrder::Ignore;
+        case 0xC0: // Printer Data Follows
+            m_pendingOrder = PendingOrder::PrinterData;
             ++offset;
             break;
-        case 0xC1:
+        case 0xC2: // Load Printer A/N Color Mix Table
+            m_pendingOrder = PendingOrder::AlphaMixTable;
             ++offset;
             break;
-        case 0xC4:
+        case 0xC3: // Load Printer Graphics Color Mix Table
+            m_pendingOrder = PendingOrder::GraphicsMixTable;
+            ++offset;
+            break;
+        case 0xC1: // Screen Copy
+            // The device prints the composite of the alphanumeric buffer and
+            // the graphics bitmap. Report the request and let the application
+            // decide: a host should not be able to write files unprompted.
+            result.screenCopyRequested = true;
+            ++offset;
+            break;
+        case 0xC4: // Set Printer Time-Out
             if (!readFixedData(1, values)) return result;
+            // One unit is 5.5 seconds, to a documented maximum of 63.
+            m_printerTimeoutUnits = static_cast<uint8_t>(values[0]) & 0x3F;
             break;
         default:
             fail(result, ErrorCode::G2, offset, QString("unsupported graphics order 0x%1")

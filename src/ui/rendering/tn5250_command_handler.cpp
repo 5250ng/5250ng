@@ -276,6 +276,19 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
             const uint8_t aid = completionAid(graphics.completion);
             if (aid != 0 && m_sendToHost)
                 m_sendToHost(buildFieldResponse(aid, includeModifiedFields));
+            if (graphics.screenCopyRequested) {
+                // Order C1. The device would print the composite of both
+                // planes; 5250ng reports it instead. Deliberately no file is
+                // written here, because that would hand a remote host a
+                // file-write primitive on the user's machine.
+                // Q5250ScreenWidget::exportCompositeScreen() is the
+                // user-invoked equivalent.
+                logger::Logger::instance()->info(
+                    QString("CommandHandler: 5292 Screen Copy requested by host "
+                            "(block %1); no file written, emitting request")
+                        .arg(m_gddmDecoder.blockCount()));
+                emit screenCopyRequested();
+            }
             if (!graphics.warning.isEmpty()) {
                 logger::Logger::instance()->warning(
                     QString("CommandHandler: 5292 graphics block %1: %2")

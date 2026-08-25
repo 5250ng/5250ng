@@ -292,6 +292,22 @@ void Q5250ScreenWidget::setForegroundColor(const QColor &color) {
  */
 void Q5250ScreenWidget::updateScreen() { update(); }
 
+QImage Q5250ScreenWidget::compositeScreenImage() {
+    QImage image(size(), QImage::Format_ARGB32);
+    if (image.isNull())
+        return image;
+    image.fill(m_bgColor);
+    render(&image);
+    return image;
+}
+
+bool Q5250ScreenWidget::exportCompositeScreen(const QString &path) {
+    const QImage image = compositeScreenImage();
+    if (image.isNull())
+        return false;
+    return image.save(path);
+}
+
 void Q5250ScreenWidget::setGddmGraphicsPlane(const QImage &plane, bool visible) {
     m_gddmGraphicsPlane = plane;
     m_gddmGraphicsVisible = visible;

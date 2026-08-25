@@ -19,6 +19,10 @@
 
 #include <QtTest/QtTest>
 
+#include <QDir>
+#include <QFile>
+#include <QSignalSpy>
+
 using ui::rendering::TN5250CommandHandler;
 using ui::widgets::Q5250ScreenWidget;
 
@@ -43,6 +47,8 @@ class TestCommandHandlerSoh : public QObject {
     void testEBCDICffInTextDoesNotBeginGraphics();
 
     void testGddmGraphicsPlaneRendersBehindText();
+    void testGddmScreenCopyEmitsRequestAndWritesNothing();
+    void testCompositeExportContainsBothPlanes();
 
   private:
     Q5250ScreenWidget *m_widget = nullptr;
@@ -241,6 +247,61 @@ void TestCommandHandlerSoh::testGddmGraphicsPlaneRendersBehindText() {
     // picture composited over the cells instead, the glyph was buried.
     QVERIFY(sawGraphics);
     QVERIFY(sawGlyph);
+}
+
+void TestCommandHandlerSoh::testGddmScreenCopyEmitsRequestAndWritesNothing() {
+    QList<QByteArray> responses;
+    m_handler->setSendToHostCallback(
+        [&responses](const QByteArray &response) { responses.append(response); });
+    QSignalSpy spy(m_handler, &TN5250CommandHandler::screenCopyRequested);
+
+    // Order C1. The device would print; we report the request and write
+    // nothing, so a host cannot use it as a file-write primitive.
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff93c195"));
+
+    QCOMPARE(spy.count(), 1);
+    // The block is still acknowledged normally.
+    QCOMPARE(responses.size(), 1);
+    QCOMPARE(static_cast<uint8_t>(responses[0][2]), static_cast<uint8_t>(0x3C));
+}
+
+void TestCommandHandlerSoh::testCompositeExportContainsBothPlanes() {
+    const int glyphRow = m_widget->screenBuffer()->rows() / 2;
+    const int glyphCol = m_widget->screenBuffer()->cols() / 2;
+    m_widget->screenBuffer()->writeChar(glyphRow, glyphCol, 0xC1); // EBCDIC 'A'
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff93a34195"));
+    m_widget->resize(720, 480);
+
+    const QString path =
+        QDir::temp().filePath(QStringLiteral("5250ng_composite_test.png"));
+    QFile::remove(path);
+    QVERIFY(m_widget->exportCompositeScreen(path));
+
+    // The export must carry the composite, not one plane: the graphics plane is
+    // only ever combined with the text here, which is the whole reason a local
+    // screen copy has to be the client's job.
+    QImage written(path);
+    QVERIFY(!written.isNull());
+    QCOMPARE(written.size(), m_widget->size());
+
+    const int cx = written.width() / 2;
+    const int cy = written.height() / 2;
+    bool sawGraphics = false;
+    bool sawGlyph = false;
+    for (int y = cy - 30; y <= cy + 30; ++y) {
+        for (int x = cx - 30; x <= cx + 30; ++x) {
+            if (x < 0 || y < 0 || x >= written.width() || y >= written.height())
+                continue;
+            const QColor colour = written.pixelColor(x, y);
+            if (colour == QColor(255, 0, 0))
+                sawGraphics = true;
+            else if (colour.green() > 100 || colour.blue() > 100)
+                sawGlyph = true;
+        }
+    }
+    QVERIFY(sawGraphics);
+    QVERIFY(sawGlyph);
+    QFile::remove(path);
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)

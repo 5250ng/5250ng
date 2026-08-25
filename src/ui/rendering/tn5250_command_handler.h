@@ -43,6 +43,11 @@ namespace ui::rendering {
 class TN5250CommandHandler : public QObject {
     Q_OBJECT
 
+  signals:
+    // The host asked for a Screen Copy (5292 order C1). Nothing is written
+    // here: the application decides whether and where to export.
+    void screenCopyRequested();
+
   public:
     using SendToHostFn = std::function<void(const QByteArray &)>;
     using SendGDSFn = std::function<void(uint8_t flagsHi, uint8_t opcode, const QByteArray &payload)>;

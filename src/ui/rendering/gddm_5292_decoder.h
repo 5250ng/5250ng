@@ -35,6 +35,14 @@ class Gddm5292Decoder {
     // The device raises G4 on a fill polygon with more nonhorizontal edges.
     static constexpr int kMaxFillEdges = 128;
 
+    // Printer colour-mix tables, loaded by orders C2 and C3 for the screen-copy
+    // path. Each entry is four bcmy bits: black, cyan, magenta, yellow.
+    static constexpr int kAlphaMixEntries = 32;
+    static constexpr int kGraphicsMixEntries = 8;
+    // The A/N table's indexes 7, 15, 23 and 31 are fixed in the device;
+    // attempting to change one raises P5.
+    static bool alphaMixIndexIsFixed(int index) { return (index & 0x07) == 7; }
+
     // Markers are drawn from a box centred on the coordinate. One that will not
     // fit entirely on the surface raises the recoverable G5.
     static constexpr int kMarkerSize = 5;
@@ -57,6 +65,10 @@ class Gddm5292Decoder {
         bool handled = false;
         bool changed = false;
         bool error = false;
+        // Screen Copy (order C1) asks the device to print the composite of the
+        // alphanumeric buffer and the graphics bitmap. The decoder only reports
+        // the request; nothing is written unless the user asks for it.
+        bool screenCopyRequested = false;
         Completion completion = Completion::None;
         QVector<StatusWrite> statusWrites;
         QString errorMessage;
@@ -80,6 +92,14 @@ class Gddm5292Decoder {
     quint64 blockCount() const { return m_blockCount; }
     QByteArray statusBytes() const;
 
+    // Printer state for the screen-copy path. Retained rather than acted on:
+    // there is no attached printer, and these describe how one would render the
+    // picture.
+    const std::array<uint8_t, 32> &printerAlphaMix() const { return m_printerAlphaMix; }
+    const std::array<uint8_t, 8> &printerGraphicsMix() const { return m_printerGraphicsMix; }
+    int printerTimeoutUnits() const { return m_printerTimeoutUnits; }
+    const QByteArray &printerData() const { return m_printerData; }
+
     // Diagnostics for the log and for debugging a stream that misbehaves.
     // lastOrder is the most recent set or draw order: the control bytes 90..96
     // are handled before it and deliberately do not displace it, because "what
@@ -94,7 +114,10 @@ class Gddm5292Decoder {
         G2,
         G3,
         G4,
-        G5
+        G5,
+        // P5 is the only printer error an emulator can raise on its own: P1 to
+        // P4 are physical printer conditions, and there is no printer here.
+        P5
     };
 
     enum class RasterFunction {
@@ -110,6 +133,9 @@ class Gddm5292Decoder {
         Scanline,
         Polymarker,
         ColorTable,
+        AlphaMixTable,
+        GraphicsMixTable,
+        PrinterData,
         Ignore
     };
 
@@ -180,6 +206,8 @@ class Gddm5292Decoder {
     void applyPalette();
     void writePel(int x, int y, int colorIndex);
     void drawLine(int x0, int y0, int x1, int y1, bool styled = false);
+    // "G1".."G5", "P5", or empty for None.
+    static const char *errorCodeText(ErrorCode code);
     static QByteArray encodedErrorCode(ErrorCode code);
     static bool isGraphicsData(uint8_t byte);
     static int decodeCoordinate(uint8_t high, uint8_t low);
@@ -204,6 +232,10 @@ class Gddm5292Decoder {
     quint64 m_blockCount = 0;
     uint8_t m_lastOrder = 0;
     QByteArray m_lastBlock;
+    std::array<uint8_t, 32> m_printerAlphaMix;
+    std::array<uint8_t, 8> m_printerGraphicsMix;
+    int m_printerTimeoutUnits = 3;   // default hex 03; one unit is 5.5 seconds
+    QByteArray m_printerData;
 };
 
 } // namespace ui::rendering

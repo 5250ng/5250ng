@@ -45,6 +45,11 @@ class TestGddm5292 : public QObject {
     void warnsOnBlockBeyondDeviceLimit();
     void reportsSuppressedPacingDistinctly();
     void retainsLastOrderAndRawBlock();
+    void decodesCapturedPrinterGraphicsMixTable();
+    void rejectsFixedAlphanumericMixIndexAsP5();
+    void loadsChangeableAlphanumericMixIndexes();
+    void retainsPrinterDataAndTimeout();
+    void reportsScreenCopyRequest();
 };
 
 namespace {
@@ -506,6 +511,82 @@ void TestGddm5292::retainsLastOrderAndRawBlock() {
     // bytes and do not displace it.
     QCOMPARE(decoder.lastOrder(), uint8_t(0xA0));
     QCOMPARE(decoder.lastBlock(), block);
+}
+
+// The printer orders are retained state, not behaviour: there is no attached
+// printer, and they describe how one would render the picture.
+
+void TestGddm5292::decodesCapturedPrinterGraphicsMixTable() {
+    Gddm5292Decoder decoder;
+    // The exact C3 order IBM i sends in every picture's opening block: seven
+    // index/bcmy pairs for colour indexes 1..7, mapping each display colour to
+    // its subtractive printer equivalent, white becoming black ink on paper.
+    const auto result = decoder.process(QByteArray::fromHex(
+        "ff93" "c3" "4146424343424445454446414748" "92" "95"));
+    QVERIFY(result.handled);
+    QVERIFY(!result.error);
+
+    const auto &mix = decoder.printerGraphicsMix();
+    QCOMPARE(mix[1], uint8_t(0x6)); // blue    -> cyan+magenta
+    QCOMPARE(mix[2], uint8_t(0x3)); // red     -> magenta+yellow
+    QCOMPARE(mix[3], uint8_t(0x2)); // magenta -> magenta
+    QCOMPARE(mix[4], uint8_t(0x5)); // green   -> cyan+yellow
+    QCOMPARE(mix[5], uint8_t(0x4)); // cyan    -> cyan
+    QCOMPARE(mix[6], uint8_t(0x1)); // yellow  -> yellow
+    QCOMPARE(mix[7], uint8_t(0x8)); // white   -> black
+    QCOMPARE(mix[0], uint8_t(0x0)); // index 0 keeps its default of no ink
+}
+
+void TestGddm5292::rejectsFixedAlphanumericMixIndexAsP5() {
+    Gddm5292Decoder decoder;
+    // Index 7 is fixed in the device. The manual names this exact case as P5,
+    // which is nonrecoverable, so the block ends with Cmd-10.
+    const auto result = decoder.process(QByteArray::fromHex("ff93c247409295"));
+    QVERIFY(result.error);
+    QVERIFY(result.errorMessage.startsWith("P5 at offset"));
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::FatalError);
+    QVERIFY(!decoder.graphicsMode());
+    // The status bytes carry the code as EBCDIC 'P' then '5'.
+    const QByteArray status = decoder.statusBytes();
+    QCOMPARE(static_cast<uint8_t>(status[0]), uint8_t(0xD7));
+    QCOMPARE(static_cast<uint8_t>(status[1]), uint8_t(0xF5));
+}
+
+void TestGddm5292::loadsChangeableAlphanumericMixIndexes() {
+    Gddm5292Decoder decoder;
+    // Indexes 2 and 8 are changeable; 0x4F carries bcmy 1111.
+    const auto result = decoder.process(
+        QByteArray::fromHex("ff93c2" "424f" "484c" "9295"));
+    QVERIFY(!result.error);
+    QCOMPARE(decoder.printerAlphaMix()[2], uint8_t(0xF));
+    QCOMPARE(decoder.printerAlphaMix()[8], uint8_t(0xC));
+    // A fixed index keeps its default of no ink.
+    QCOMPARE(decoder.printerAlphaMix()[7], uint8_t(0x0));
+}
+
+void TestGddm5292::retainsPrinterDataAndTimeout() {
+    Gddm5292Decoder decoder;
+    QCOMPARE(decoder.printerTimeoutUnits(), 3);   // default is three units
+
+    const auto result = decoder.process(
+        QByteArray::fromHex("ff93" "c444" "c04142434492" "95"));
+    QVERIFY(!result.error);
+    QCOMPARE(decoder.printerTimeoutUnits(), 4);   // 4 x 5.5 = 22 seconds
+    QCOMPARE(decoder.printerData(), QByteArray::fromHex("41424344"));
+}
+
+void TestGddm5292::reportsScreenCopyRequest() {
+    Gddm5292Decoder decoder;
+    const auto quiet = decoder.process(QByteArray::fromHex("ff93b04195"));
+    QVERIFY(!quiet.screenCopyRequested);
+
+    Gddm5292Decoder other;
+    const auto copy = other.process(QByteArray::fromHex("ff93c195"));
+    QVERIFY(copy.handled);
+    QVERIFY(!copy.error);
+    QVERIFY(copy.screenCopyRequested);
+    // The order is acknowledged like any other block.
+    QCOMPARE(copy.completion, Gddm5292Decoder::Completion::Success);
 }
 
 QTEST_MAIN(TestGddm5292)
