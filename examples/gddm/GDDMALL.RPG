@@ -1,0 +1,188 @@
+     IPARAM       DS
+     I                                    B   1   40ATTYPE
+     I                                    B   5   80ATMOD
+     I                                    B   9  120COUNT
+     C                     CALL 'GDDM'
+     C                     PARM 'FSINIT ' RTN     8
+     C                     CALL 'GDDM'
+     C                     PARM 'GSLW   ' RTN     8
+     C                     PARM 2         N       40
+     C                     CALL 'GDDM'
+     C                     PARM 'GSPAT  ' RTN     8
+     C                     PARM 1         N       40
+
+     C* Draw a multicolour frame and diagonals.
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN     8
+     C                     PARM 2         N       40
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMOVE ' RTN     8
+     C                     PARM 5.0       X       51
+     C                     PARM 5.0       X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSLINE ' RTN     8
+     C                     PARM 45.0      X       51
+     C                     PARM 5.0       X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 45.0      X       51
+     C                     PARM 45.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 5.0       X       51
+     C                     PARM 45.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 5.0       X       51
+     C                     PARM 5.0       X       51
+
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN     8
+     C                     PARM 1         N       40
+     C                     CALL 'GSMOVE ' RTN     8
+     C                     PARM 5.0       X       51
+     C                     PARM 5.0       X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 45.0      X       51
+     C                     PARM 45.0      X       51
+     C                     CALL 'GSCOL  ' RTN     8
+     C                     PARM 3         N       40
+     C                     CALL 'GSMOVE ' RTN     8
+     C                     PARM 5.0       X       51
+     C                     PARM 45.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 45.0      X       51
+     C                     PARM 5.0       X       51
+
+     C* Draw a filled triangle with an explicit boundary.
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN     8
+     C                     PARM 4         N       40
+     C                     CALL 'GSPAT  ' RTN     8
+     C                     PARM 3         N       40
+     C                     CALL 'GSMOVE ' RTN     8
+     C                     PARM 55.0      X       51
+     C                     PARM 10.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSAREA ' RTN     8
+     C                     PARM 1         N       40
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 90.0      X       51
+     C                     PARM 10.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 72.5      X       51
+     C                     PARM 42.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 55.0      X       51
+     C                     PARM 10.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSENDA ' RTN     8
+
+     C* Draw a filled rectangle with a different colour and pattern.
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN     8
+     C                     PARM 5         N       40
+     C                     CALL 'GSPAT  ' RTN     8
+     C                     PARM 5         N       40
+     C                     CALL 'GSMOVE ' RTN     8
+     C                     PARM 55.0      X       51
+     C                     PARM 50.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSAREA ' RTN     8
+     C                     PARM 0         N       40
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 90.0      X       51
+     C                     PARM 50.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 90.0      X       51
+     C                     PARM 85.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 55.0      X       51
+     C                     PARM 85.0      X       51
+     C                     CALL 'GSLINE ' RTN     8
+     C                     PARM 55.0      X       51
+     C                     PARM 50.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSENDA ' RTN     8
+
+     C* Exercise marker symbols in all supported positions.
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN     8
+     C                     PARM 6         N       40
+     C                     CALL 'GSMOVE ' RTN     8
+     C                     PARM 10.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 0         N       40
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMARK ' RTN     8
+     C                     PARM 10.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 1         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 20.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 2         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 30.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 3         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 40.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 4         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 50.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 5         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 60.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 6         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 70.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 7         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 80.0      X       51
+     C                     PARM 70.0      X       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN     8
+     C                     PARM 8         N       40
+     C                     CALL 'GSMARK ' RTN     8
+     C                     PARM 90.0      X       51
+     C                     PARM 70.0      X       51
+
+     C* Add a circular outline to exercise arc conversion.
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN     8
+     C                     PARM 7         N       40
+     C                     CALL 'GSMOVE ' RTN     8
+     C                     PARM 30.0      X       51
+     C                     PARM 25.0      X       51
+     C                     CALL 'GSARC  ' RTN     8
+     C                     PARM 30.0      X       51
+     C                     PARM 25.0      X       51
+     C                     PARM 360.0     X       51
+
+     C                     CALL 'GDDM'
+     C                     PARM 'ASREAD ' RTN     8
+     C                     PARM 0         ATTYPE
+     C                     PARM           ATMOD
+     C                     PARM           COUNT
+     C                     CALL 'GDDM'
+     C                     PARM 'FSTERM ' RTN     8
+     C                     SETON                     LR
+     C                     RETRN
