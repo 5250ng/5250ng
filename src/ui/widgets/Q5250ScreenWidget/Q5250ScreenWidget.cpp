@@ -292,6 +292,22 @@ void Q5250ScreenWidget::setForegroundColor(const QColor &color) {
  */
 void Q5250ScreenWidget::updateScreen() { update(); }
 
+QImage Q5250ScreenWidget::compositeScreenImage() {
+    QImage image(size(), QImage::Format_ARGB32);
+    if (image.isNull())
+        return image;
+    image.fill(m_bgColor);
+    render(&image);
+    return image;
+}
+
+bool Q5250ScreenWidget::exportCompositeScreen(const QString &path) {
+    const QImage image = compositeScreenImage();
+    if (image.isNull())
+        return false;
+    return image.save(path);
+}
+
 void Q5250ScreenWidget::setGddmGraphicsPlane(const QImage &plane, bool visible) {
     m_gddmGraphicsPlane = plane;
     m_gddmGraphicsVisible = visible;
@@ -320,13 +336,11 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
     int rows = m_screenBuffer->rows();
     int cols = m_screenBuffer->cols();
 
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < cols; ++col) {
-            const ScreenCell &cell = m_screenBuffer->cell(row, col);
-            renderCell(painter, row, col, cell);
-        }
-    }
-
+    // The GDDM picture is a background to the alphanumeric data, as the GDDM
+    // Programming Guide describes for a display file using ALWGPH, so it is
+    // painted before the cells. renderCell() correspondingly leaves the default
+    // cell background unpainted while the plane is visible, so the picture is
+    // not covered up again cell by cell.
     if (m_gddmGraphicsVisible && !m_gddmGraphicsPlane.isNull()) {
         const QSizeF presentationSize(cols * m_cellWidthF, rows * m_cellHeightF);
         QSizeF graphicsSize = m_gddmGraphicsPlane.size();
@@ -336,6 +350,13 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
                             graphicsSize.width(), graphicsSize.height());
         painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
         painter.drawImage(target, m_gddmGraphicsPlane);
+    }
+
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            const ScreenCell &cell = m_screenBuffer->cell(row, col);
+            renderCell(painter, row, col, cell);
+        }
     }
 
     // Draw contiguous underlines: scan each row for runs of underlined cells
@@ -386,6 +407,14 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
         renderCursorRules(painter);
     }
 
+    // Graphics display mode indicator: the 5292 Model 2 shows a blue uppercase G
+    // at the bottom of the screen while it is in graphics display mode.
+    if (m_gddmGraphicsVisible && !m_gddmGraphicsPlane.isNull()) {
+        painter.setFont(m_font);
+        painter.setPen(QColor(0, 0, 255));
+        painter.drawText(cellRect(rows - 1, 0), Qt::AlignCenter, QStringLiteral("G"));
+    }
+
     // Do not emit cursor notifications from paint path to avoid repaint loops.
     painter.restore();
 }
@@ -420,8 +449,12 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
         qSwap(bgColor, fgColor);
     }
 
-    // Fill background
-    painter.fillRect(cellRect, bgColor);
+    // Fill background. While a GDDM picture is on screen the default background
+    // is left unpainted so the picture shows through; a cell carrying its own
+    // background, reverse video for instance, still fills, or its text would be
+    // unreadable against the graphics.
+    if (!m_gddmGraphicsVisible || m_gddmGraphicsPlane.isNull() || bgColor != m_bgColor)
+        painter.fillRect(cellRect, bgColor);
 
     // Field protection overlay
     if (m_showFieldProtection) {

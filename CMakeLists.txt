@@ -442,6 +442,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)
     add_tn5250_test(test_match_replace tests/unit/test_match_replace.cpp)
     add_tn5250_test(test_gddm_5292 tests/unit/test_gddm_5292.cpp)
+    add_tn5250_test(test_gddm_5292_fuzz tests/unit/test_gddm_5292_fuzz.cpp)
 
     # Host server tests
     add_tn5250_test(test_host_data_stream tests/unit/test_host_data_stream.cpp)

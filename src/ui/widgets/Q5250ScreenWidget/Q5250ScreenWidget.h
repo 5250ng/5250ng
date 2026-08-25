@@ -95,6 +95,14 @@ class Q5250ScreenWidget : public QWidget {
     // IBM 5292 Model 2 graphics are retained independently from the
     // alphanumeric presentation space and composited during painting.
     void setGddmGraphicsPlane(const QImage &plane, bool visible);
+
+    // Renders the composite presentation - the alphanumeric plane with the GDDM
+    // graphics plane behind it - into an image. The two planes only ever exist
+    // composited here, so this is the emulator's answer to the 5292's local
+    // Screen Copy: nothing host-side can serialise the graphics plane.
+    QImage compositeScreenImage();
+    // Saves compositeScreenImage() to `path`, format taken from the suffix.
+    bool exportCompositeScreen(const QString &path);
     const QImage &gddmGraphicsPlane() const { return m_gddmGraphicsPlane; }
     bool gddmGraphicsVisible() const { return m_gddmGraphicsVisible; }
 
