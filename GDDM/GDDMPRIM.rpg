@@ -1,0 +1,84 @@
+     IPARAM       DS
+     I                                    B   1   40COLOR
+     I                                    B   5   80MODE
+     I                                    B   9  120MARKER
+     I                                    B  13  160LEN
+     I                                    B  17  200ITYPE
+     I                                    B  21  240IWIDE
+     I                                    B  25  280IDEEP
+     I                                    B  29  320ILEN
+     I                                    B  33  360ATTYPE
+     I                                    B  37  400ATMOD
+     I                                    B  41  440COUNT
+     C                     CALL 'GDDM'
+     C                     PARM 'FSINIT ' RTN     8
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCOL  ' RTN
+     C                     PARM 7         COLOR
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN
+     C                     PARM 1         MARKER
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMARK ' RTN
+     C                     PARM 20        X       51
+     C                     PARM 80        Y       51
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN
+     C                     PARM 4         MARKER
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMARK ' RTN
+     C                     PARM 35        X
+     C                     PARM 80        Y
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMS   ' RTN
+     C                     PARM 8         MARKER
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMARK ' RTN
+     C                     PARM 50        X
+     C                     PARM 80        Y
+     C                     CALL 'GDDM'
+     C                     PARM 'FSFRCE ' RTN
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCM   ' RTN
+     C                     PARM 3         MODE
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCHAR ' RTN
+     C                     PARM 10        X
+     C                     PARM 60        Y
+     C                     PARM 5         LEN
+     C                     PARM 'ABCDE'   STR     5
+     C                     CALL 'GDDM'
+     C                     PARM 'FSFRCE ' RTN
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCM   ' RTN
+     C                     PARM 2         MODE
+     C                     CALL 'GDDM'
+     C                     PARM 'GSCHAR ' RTN
+     C                     PARM 10        X
+     C                     PARM 40        Y
+     C                     PARM 5         LEN
+     C                     PARM 'ABCDE'   STR
+     C                     CALL 'GDDM'
+     C                     PARM 'FSFRCE ' RTN
+     C                     CALL 'GDDM'
+     C                     PARM 'GSMOVE ' RTN
+     C                     PARM 10        X
+     C                     PARM 20        Y
+     C                     CALL 'GDDM'
+     C                     PARM 'GSIMG  ' RTN
+     C                     PARM 0         ITYPE
+     C                     PARM 8         IWIDE
+     C                     PARM 8         IDEEP
+     C                     PARM 8         ILEN
+     C                     PARM 'A'       IMGDTA  8
+     C                     CALL 'GDDM'
+     C                     PARM 'FSFRCE ' RTN
+     C                     CALL 'GDDM'
+     C                     PARM 'ASREAD ' RTN
+     C                     PARM 0         ATTYPE
+     C                     PARM           ATMOD
+     C                     PARM           COUNT
+     C                     CALL 'GDDM'
+     C                     PARM 'FSTERM ' RTN
+     C                     SETON                     LR
+     C                     RETRN
