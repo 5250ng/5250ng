@@ -490,9 +490,10 @@ capture has read status with an error pending.
 ### The plane holds colour indexes, not colours
 
 `m_plane` is now `QImage::Format_Indexed8` with the palette in the image's colour
-table, and `kUnset` (`0xFF`) marking a PEL nothing has written, which resolves to
-transparent so the alphanumeric plane shows through. Two spec behaviours are only
-expressible this way:
+table. A PEL nothing has written holds index 0, so the plane is opaque black
+where the picture has not been drawn - which is what the device does, its
+graphics bitmap covering the whole surface. Two spec behaviours are only
+expressible on an indexed plane:
 
 - **`B3` OR and XOR combine 3-bit colour indexes.** The manual's worked example -
   red `001` XOR white `111` = turquoise `110` - is a unit test. Doing that in RGB
@@ -683,17 +684,17 @@ later it belongs behind a user option, not as default behaviour.
 
 ### Diagnostics, not rejections
 
-Three things are now reported without ever failing a block, because in each case
-the manual either gives no error code or the research above warns against
-rejecting:
+Two things are reported without ever failing a block, because the research above
+warns against rejecting on either:
 
 - **Block length.** The 5292 Functions Reference documents 11 to 256 bytes; the
   IBM i GDDM guide allows up to 1920. Both bounds only produce a warning. IBM i
   was observed using blocks up to 252 bytes, so it respects the device limit,
   and the long runs of `93` padding exist precisely to reach the 11-byte floor.
-- **Coordinates outside the 480x288 surface.** The manual defines no error code
-  for these, and failing the block would terminate graphics mode over what is
-  probably a clipping edge case, so they are clipped and counted.
+- **Coordinates outside the 480x288 surface** are rejected as `G1`, which ends
+  the block. The manual defines no error code for them, so this is a choice
+  rather than a requirement; it is safe in practice because GDDM clips
+  host-side and has never been observed sending one.
 - **Suppressed pacing.** `Result::pacingSuppressed` distinguishes "deliberately
   silent" from "silent by mistake". That distinction is what makes the
   always-answer property checkable.
@@ -703,9 +704,8 @@ exposes `lastOrder()` and `lastBlock()`. The command handler emits one greppable
 line per block with block number, size, mode, display state, last order and the
 AID sent, plus the raw block hex when a block failed.
 
-Consolidating `A0` onto the shared `decodePoints` helper closed a gap found while
-testing this: Draw Polyline had its own coordinate-decoding lambda and so was the
-one order never range-checked.
+`A0` was consolidated onto the shared `decodePoints` helper so that every
+coordinate order validates its input the same way.
 
 ### Fuzzing
 
