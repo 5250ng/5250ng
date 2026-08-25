@@ -41,6 +41,10 @@ class TestGddm5292 : public QObject {
     void rejectsMarkerAboveEight();
     void markerOutsideDisplayIsRecoverable();
     void styleOffsetSelectsStartingSegment();
+    void warnsOnBlockBelowMinimumLength();
+    void warnsOnBlockBeyondDeviceLimit();
+    void reportsSuppressedPacingDistinctly();
+    void retainsLastOrderAndRawBlock();
 };
 
 namespace {
@@ -457,6 +461,51 @@ void TestGddm5292::styleOffsetSelectsStartingSegment() {
     const int y = planeY(20);
     QCOMPARE(unshifted.graphicsPlane().pixelColor(8, y), QColor(255, 255, 255));
     QCOMPARE(shifted.graphicsPlane().pixelColor(8, y), QColor(0, 0, 0));
+}
+
+// Diagnostics report; they never reject a block.
+
+void TestGddm5292::warnsOnBlockBelowMinimumLength() {
+    Gddm5292Decoder decoder;
+    const auto result = decoder.process(QByteArray::fromHex("ff9395"));
+    QVERIFY(result.handled);
+    QVERIFY(!result.error);   // short, but perfectly well formed
+    QVERIFY(result.warning.contains("below the documented"));
+    QCOMPARE(result.completion, Gddm5292Decoder::Completion::Success);
+}
+
+void TestGddm5292::warnsOnBlockBeyondDeviceLimit() {
+    Gddm5292Decoder decoder;
+    // Valid throughout: Graphics Display On repeated past the 256-byte limit.
+    QByteArray block = QByteArray::fromHex("ff");
+    block += QByteArray(300, static_cast<char>(0x93));
+    block += QByteArray::fromHex("95");
+
+    const auto result = decoder.process(block);
+    QVERIFY(!result.error);   // never rejected on length alone
+    QVERIFY(result.warning.contains("device limit"));
+}
+
+void TestGddm5292::reportsSuppressedPacingDistinctly() {
+    Gddm5292Decoder decoder;
+    const auto suppressed = decoder.process(QByteArray::fromHex("ff9396b04195"));
+    QCOMPARE(suppressed.completion, Gddm5292Decoder::Completion::None);
+    QVERIFY(suppressed.pacingSuppressed);   // deliberately silent
+
+    Gddm5292Decoder other;
+    const auto normal = other.process(QByteArray::fromHex("ff93b04195"));
+    QCOMPARE(normal.completion, Gddm5292Decoder::Completion::Success);
+    QVERIFY(!normal.pacingSuppressed);
+}
+
+void TestGddm5292::retainsLastOrderAndRawBlock() {
+    Gddm5292Decoder decoder;
+    const QByteArray block = QByteArray::fromHex("ff93b041a04040404a416440729295");
+    decoder.process(block);
+    // A0 was the last set or draw order; the trailing 92 and 95 are control
+    // bytes and do not displace it.
+    QCOMPARE(decoder.lastOrder(), uint8_t(0xA0));
+    QCOMPARE(decoder.lastBlock(), block);
 }
 
 QTEST_MAIN(TestGddm5292)

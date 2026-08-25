@@ -276,10 +276,28 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
             const uint8_t aid = completionAid(graphics.completion);
             if (aid != 0 && m_sendToHost)
                 m_sendToHost(buildFieldResponse(aid, includeModifiedFields));
+            if (!graphics.warning.isEmpty()) {
+                logger::Logger::instance()->warning(
+                    QString("CommandHandler: 5292 graphics block %1: %2")
+                        .arg(m_gddmDecoder.blockCount()).arg(graphics.warning));
+            }
+            // One greppable line per block, carrying enough to reconstruct what
+            // the decoder saw and what it decided.
             logger::Logger::instance()->debug(
-                QString("CommandHandler: 5292 graphics block %1 (%2 bytes, mode=%3, display=%4)")
-                    .arg(m_gddmDecoder.blockCount()).arg(data.size())
-                    .arg(m_gddmDecoder.graphicsMode()).arg(m_gddmDecoder.displayEnabled()));
+                QString("CommandHandler: 5292 block=%1 bytes=%2 mode=%3 display=%4 "
+                        "lastOrder=0x%5 aid=0x%6%7")
+                    .arg(m_gddmDecoder.blockCount())
+                    .arg(data.size())
+                    .arg(m_gddmDecoder.graphicsMode())
+                    .arg(m_gddmDecoder.displayEnabled())
+                    .arg(m_gddmDecoder.lastOrder(), 2, 16, QChar('0'))
+                    .arg(aid, 2, 16, QChar('0'))
+                    .arg(graphics.pacingSuppressed ? " suppressed=1" : ""));
+            if (graphics.error) {
+                logger::Logger::instance()->debug(
+                    QString("CommandHandler: 5292 raw block: %1")
+                        .arg(QString::fromLatin1(m_gddmDecoder.lastBlock().toHex())));
+            }
         } else if (m_renderer) {
             m_renderer->render(data);
         }

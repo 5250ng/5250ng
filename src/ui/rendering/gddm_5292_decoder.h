@@ -24,6 +24,14 @@ class Gddm5292Decoder {
     static constexpr int kWidth = 480;
     static constexpr int kHeight = 288;
 
+    // A graphics write block is documented as 11 to 256 bytes by the 5292
+    // Functions Reference, while the IBM i GDDM guide allows up to 1920. The
+    // difference looks like a controller layering artefact, so these bounds
+    // only ever produce a diagnostic: a block is never rejected on length.
+    static constexpr int kMinBlockBytes = 11;
+    static constexpr int kDeviceMaxBlockBytes = 256;
+    static constexpr int kHostMaxBlockBytes = 1920;
+
     // The device raises G4 on a fill polygon with more nonhorizontal edges.
     static constexpr int kMaxFillEdges = 128;
 
@@ -52,6 +60,13 @@ class Gddm5292Decoder {
         Completion completion = Completion::None;
         QVector<StatusWrite> statusWrites;
         QString errorMessage;
+        // Non-fatal anomalies worth logging but never worth rejecting a block
+        // over, such as a length outside the documented bounds.
+        QString warning;
+        // True when Suppress Pacing Response withheld the completion. It tells
+        // a deliberately silent block from a silently broken one, which is what
+        // makes the always-answer property checkable.
+        bool pacingSuppressed = false;
     };
 
     Gddm5292Decoder();
@@ -64,6 +79,13 @@ class Gddm5292Decoder {
     const QImage &graphicsPlane() const { return m_plane; }
     quint64 blockCount() const { return m_blockCount; }
     QByteArray statusBytes() const;
+
+    // Diagnostics for the log and for debugging a stream that misbehaves.
+    // lastOrder is the most recent set or draw order: the control bytes 90..96
+    // are handled before it and deliberately do not displace it, because "what
+    // was it drawing" is the useful question.
+    uint8_t lastOrder() const { return m_lastOrder; }
+    const QByteArray &lastBlock() const { return m_lastBlock; }
 
   private:
     enum class ErrorCode {
@@ -153,6 +175,8 @@ class Gddm5292Decoder {
     // Completion::RecoverableError so the host is answered Cmd-9.
     void noteRecoverable(Result &result, ErrorCode code, int offset,
                          const QString &message);
+    // Records a non-fatal anomaly, de-duplicated within one block.
+    static void warn(Result &result, const QString &message);
     void applyPalette();
     void writePel(int x, int y, int colorIndex);
     void drawLine(int x0, int y0, int x1, int y1, bool styled = false);
@@ -178,6 +202,8 @@ class Gddm5292Decoder {
     int m_lastErrorOffset = -1;
     QImage m_plane;
     quint64 m_blockCount = 0;
+    uint8_t m_lastOrder = 0;
+    QByteArray m_lastBlock;
 };
 
 } // namespace ui::rendering

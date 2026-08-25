@@ -44,6 +44,8 @@ void Gddm5292Decoder::reset(bool clearPlane) {
     m_marker = 0;
     m_lastError = ErrorCode::None;
     m_lastErrorOffset = -1;
+    m_lastOrder = 0;
+    m_lastBlock.clear();
     applyPalette();
     if (clearPlane)
         m_plane.fill(0);
@@ -99,10 +101,18 @@ bool Gddm5292Decoder::fail(Result &result, ErrorCode code, int offset,
     result.errorMessage = QString("G%1 at offset %2: %3")
                               .arg(static_cast<int>(code)).arg(offset).arg(message);
     result.completion = m_suppressPacing ? Completion::None : Completion::FatalError;
+    result.pacingSuppressed = m_suppressPacing;
     m_graphicsMode = false;
     m_pendingOrder = PendingOrder::None;
     m_pendingData.clear();
     return false;
+}
+
+void Gddm5292Decoder::warn(Result &result, const QString &message) {
+    if (result.warning.isEmpty())
+        result.warning = message;
+    else if (!result.warning.contains(message))
+        result.warning += QStringLiteral("; ") + message;
 }
 
 void Gddm5292Decoder::noteRecoverable(Result &result, ErrorCode code, int offset,
@@ -490,6 +500,23 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
     result.handled = true;
     ++m_blockCount;
     m_suppressPacing = false;
+
+    // Keep the raw block for diagnostics, capped so a hostile stream cannot
+    // grow this without bound.
+    m_lastBlock = data.left(kHostMaxBlockBytes);
+
+    if (data.size() < kMinBlockBytes) {
+        warn(result, QString("block is %1 bytes, below the documented %2-byte minimum")
+                         .arg(data.size()).arg(kMinBlockBytes));
+    } else if (data.size() > kDeviceMaxBlockBytes) {
+        warn(result, QString("block is %1 bytes, beyond the %2-byte device limit%3")
+                         .arg(data.size()).arg(kDeviceMaxBlockBytes)
+                         .arg(data.size() > kHostMaxBlockBytes
+                                  ? QString(" and IBM i's %1-byte limit")
+                                        .arg(kHostMaxBlockBytes)
+                                  : QString()));
+    }
+
     int offset = 0;
 
     if (!m_graphicsMode) {
@@ -593,6 +620,7 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             return true;
         };
 
+        m_lastOrder = byte;
         QByteArray values;
         switch (byte) {
         case 0x80: {
@@ -763,6 +791,7 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
 
     if (m_suppressPacing) {
         result.completion = Completion::None;
+        result.pacingSuppressed = true;
     } else if (result.error) {
         // A fatal error returns early, so an error still set here was
         // recoverable: the block ran to completion and answers Cmd-9.
