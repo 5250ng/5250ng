@@ -11,6 +11,8 @@
 #include <QByteArray>
 #include <QColor>
 #include <QImage>
+#include <QPoint>
+#include <QPolygon>
 #include <QString>
 #include <QVector>
 #include <array>
@@ -75,17 +77,60 @@ class Gddm5292Decoder {
     enum class PendingOrder {
         None,
         Polyline,
+        Scanline,
+        Polymarker,
+        FillPolygon,
+        ShieldArea,
         ColorTable,
         Ignore
+    };
+
+    enum class FillReference {
+        Vertical,
+        PolygonEdge,
+        Positive45,
+        Negative45
+    };
+
+    enum class FillMode {
+        SolidBoundaryAndFill,
+        SolidBoundaryOnly,
+        FillOnly,
+        StyledBoundaryOnly
+    };
+
+    struct StyleCursor {
+        std::array<int, 4> lengths{};
+        int segment = 0;
+        int remaining = 0;
+
+        StyleCursor(const std::array<int, 4> &style, int startSegment,
+                    int overrideLength);
+        bool take();
     };
 
     void reset(bool clearPlane);
     bool completePending(Result &result, int offset);
     bool drawPolyline(Result &result);
+    bool drawScanline(Result &result);
+    bool drawPolymarker(Result &result);
+    bool fillPolygon(Result &result);
+    bool defineShieldArea(Result &result);
+    bool decodePoints(Result &result, int minimumPoints, const QString &orderName,
+                      QVector<QPoint> &points);
     bool fail(Result &result, ErrorCode code, int offset, const QString &message);
+    void recover(Result &result, ErrorCode code, int offset, const QString &message);
     void applyPalette();
     void writePel(int x, int y, int colorIndex);
-    void drawLine(int x0, int y0, int x1, int y1);
+    void drawLine(int x0, int y0, int x1, int y1, StyleCursor *style = nullptr,
+                  bool skipFirst = false, bool weighted = true);
+    void drawMarker(int x, int y);
+    void drawPolygonBoundary(const QPolygon &polygon, bool styled);
+    bool fillStyleVisible(int graphicsX, int graphicsY,
+                          const QPolygon &polygon) const;
+    bool isShielded(const QPoint &point) const;
+    static bool pointOnPolygon(const QPoint &point, const QPolygon &polygon);
+    static int nonHorizontalEdges(const QPolygon &polygon);
     static QByteArray encodedErrorCode(ErrorCode code);
     static bool isGraphicsData(uint8_t byte);
     static int decodeCoordinate(uint8_t high, uint8_t low);
@@ -99,9 +144,18 @@ class Gddm5292Decoder {
     std::array<QColor, 8> m_palette;
     int m_colorIndex = 7;
     int m_lineWeight = 1;
+    std::array<int, 4> m_lineStyle{15, 0, 15, 0};
+    int m_styleStartSegment = 0;
+    int m_styleOverrideLength = 0;
+    int m_marker = 0;
+    FillReference m_fillReference = FillReference::Vertical;
+    FillMode m_fillMode = FillMode::SolidBoundaryAndFill;
+    int m_fillReferenceShift = 0;
     RasterFunction m_rasterFunction = RasterFunction::Replace;
     ErrorCode m_lastError = ErrorCode::None;
     int m_lastErrorOffset = -1;
+    QVector<QPolygon> m_shieldAreas;
+    int m_shieldNonHorizontalEdges = 0;
     QImage m_plane;
     quint64 m_blockCount = 0;
 };

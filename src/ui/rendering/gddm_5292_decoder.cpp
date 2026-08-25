@@ -9,6 +9,7 @@
 #include "gddm_5292_decoder.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 namespace ui::rendering {
@@ -16,6 +17,31 @@ namespace ui::rendering {
 Gddm5292Decoder::Gddm5292Decoder()
     : m_plane(kWidth, kHeight, QImage::Format_Indexed8) {
     reset(true);
+}
+
+Gddm5292Decoder::StyleCursor::StyleCursor(
+    const std::array<int, 4> &style, int startSegment, int overrideLength)
+    : lengths(style), segment(startSegment & 0x03) {
+    remaining = overrideLength > 0 ? overrideLength : lengths[segment];
+}
+
+bool Gddm5292Decoder::StyleCursor::take() {
+    int emptySegments = 0;
+    while (remaining == 0 && emptySegments < 4) {
+        segment = (segment + 1) & 0x03;
+        remaining = lengths[segment];
+        ++emptySegments;
+    }
+    if (remaining == 0)
+        return false;
+
+    const bool visible = (segment & 1) == 0;
+    --remaining;
+    if (remaining == 0) {
+        segment = (segment + 1) & 0x03;
+        remaining = lengths[segment];
+    }
+    return visible;
 }
 
 void Gddm5292Decoder::applyPalette() {
@@ -36,9 +62,18 @@ void Gddm5292Decoder::reset(bool clearPlane) {
                  QColor(0, 255, 255), QColor(255, 255, 255)};
     m_colorIndex = 7;
     m_lineWeight = 1;
+    m_lineStyle = {15, 0, 15, 0};
+    m_styleStartSegment = 0;
+    m_styleOverrideLength = 0;
+    m_marker = 0;
+    m_fillReference = FillReference::Vertical;
+    m_fillMode = FillMode::SolidBoundaryAndFill;
+    m_fillReferenceShift = 0;
     m_rasterFunction = RasterFunction::Replace;
     m_lastError = ErrorCode::None;
     m_lastErrorOffset = -1;
+    m_shieldAreas.clear();
+    m_shieldNonHorizontalEdges = 0;
     applyPalette();
     if (clearPlane)
         m_plane.fill(0);
@@ -97,7 +132,18 @@ bool Gddm5292Decoder::fail(Result &result, ErrorCode code, int offset,
     m_graphicsMode = false;
     m_pendingOrder = PendingOrder::None;
     m_pendingData.clear();
+    m_shieldAreas.clear();
+    m_shieldNonHorizontalEdges = 0;
     return false;
+}
+
+void Gddm5292Decoder::recover(Result &result, ErrorCode code, int offset,
+                              const QString &message) {
+    m_lastError = code;
+    m_lastErrorOffset = std::max(0, offset);
+    result.error = true;
+    result.errorMessage = QString("G%1 at offset %2: %3")
+                              .arg(static_cast<int>(code)).arg(offset).arg(message);
 }
 
 void Gddm5292Decoder::writePel(int x, int y, int colorIndex) {
@@ -120,17 +166,26 @@ void Gddm5292Decoder::writePel(int x, int y, int colorIndex) {
     line[x] = static_cast<uchar>(next);
 }
 
-void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1) {
+void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1,
+                               StyleCursor *style, bool skipFirst,
+                               bool weighted) {
     const int dx = std::abs(x1 - x0);
     const int sx = x0 < x1 ? 1 : -1;
     const int dy = -std::abs(y1 - y0);
     const int sy = y0 < y1 ? 1 : -1;
     int error = dx + dy;
+    bool first = true;
 
     for (;;) {
-        for (int weightY = 0; weightY < m_lineWeight; ++weightY) {
-            for (int weightX = 0; weightX < m_lineWeight; ++weightX)
-                writePel(x0 + weightX, y0 + weightY, m_colorIndex);
+        if (!(skipFirst && first)) {
+            const bool visible = style == nullptr || style->take();
+            if (visible) {
+                const int weight = weighted ? m_lineWeight : 1;
+                for (int weightY = 0; weightY < weight; ++weightY) {
+                    for (int weightX = 0; weightX < weight; ++weightX)
+                        writePel(x0 + weightX, y0 + weightY, m_colorIndex);
+                }
+            }
         }
         if (x0 == x1 && y0 == y1)
             break;
@@ -143,43 +198,276 @@ void Gddm5292Decoder::drawLine(int x0, int y0, int x1, int y1) {
             error += dx;
             y0 += sy;
         }
+        first = false;
     }
 }
 
-bool Gddm5292Decoder::drawPolyline(Result &result) {
-    if (m_pendingData.size() < 8 || (m_pendingData.size() % 4) != 0) {
+bool Gddm5292Decoder::decodePoints(Result &result, int minimumPoints,
+                                   const QString &orderName,
+                                   QVector<QPoint> &points) {
+    if (m_pendingData.size() < minimumPoints * 4
+        || (m_pendingData.size() % 4) != 0) {
         return fail(result, ErrorCode::G1, m_pendingData.size(),
-                    "polyline requires complete coordinate pairs");
+                    QString("%1 requires at least %2 complete coordinate pair(s)")
+                        .arg(orderName).arg(minimumPoints));
     }
 
-    auto pointAt = [this, &result](int offset, int &x, int &y) {
-        x = decodeCoordinate(static_cast<uint8_t>(m_pendingData[offset]),
-                             static_cast<uint8_t>(m_pendingData[offset + 1]));
+    points.reserve(m_pendingData.size() / 4);
+    for (int offset = 0; offset < m_pendingData.size(); offset += 4) {
+        const int x = decodeCoordinate(static_cast<uint8_t>(m_pendingData[offset]),
+                                       static_cast<uint8_t>(m_pendingData[offset + 1]));
         const int graphicsY = decodeCoordinate(
             static_cast<uint8_t>(m_pendingData[offset + 2]),
             static_cast<uint8_t>(m_pendingData[offset + 3]));
         if (x >= kWidth || graphicsY >= kHeight) {
-            fail(result, ErrorCode::G1, offset, "coordinate is outside the 480x288 PEL buffer");
+            fail(result, ErrorCode::G1, offset,
+                 "coordinate is outside the 480x288 PEL buffer");
             return false;
         }
-        y = kHeight - 1 - graphicsY;
-        return true;
-    };
+        points.append(QPoint(x, kHeight - 1 - graphicsY));
+    }
+    return true;
+}
 
-    int previousX = 0;
-    int previousY = 0;
-    if (!pointAt(0, previousX, previousY))
+bool Gddm5292Decoder::drawPolyline(Result &result) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, 2, "polyline", points))
         return false;
-    for (int offset = 4; offset < m_pendingData.size(); offset += 4) {
-        int nextX = 0;
-        int nextY = 0;
-        if (!pointAt(offset, nextX, nextY))
-            return false;
-        drawLine(previousX, previousY, nextX, nextY);
-        previousX = nextX;
-        previousY = nextY;
+
+    StyleCursor style(m_lineStyle, m_styleStartSegment, m_styleOverrideLength);
+    for (int index = 1; index < points.size(); ++index) {
+        const QPoint &previous = points[index - 1];
+        const QPoint &next = points[index];
+        drawLine(previous.x(), previous.y(), next.x(), next.y(), &style, index > 1);
     }
     result.changed = true;
+    return true;
+}
+
+bool Gddm5292Decoder::drawScanline(Result &result) {
+    if (m_pendingData.size() < 5) {
+        return fail(result, ErrorCode::G1, m_pendingData.size(),
+                    "scanline requires a coordinate and at least one PEL-pattern byte");
+    }
+
+    int x = decodeCoordinate(static_cast<uint8_t>(m_pendingData[0]),
+                             static_cast<uint8_t>(m_pendingData[1]));
+    const int graphicsY = decodeCoordinate(static_cast<uint8_t>(m_pendingData[2]),
+                                           static_cast<uint8_t>(m_pendingData[3]));
+    if (x >= kWidth || graphicsY >= kHeight) {
+        return fail(result, ErrorCode::G1, 0,
+                    "scanline coordinate is outside the 480x288 PEL buffer");
+    }
+
+    const int y = kHeight - 1 - graphicsY;
+    for (int offset = 4; offset < m_pendingData.size(); ++offset) {
+        const uint8_t pattern = static_cast<uint8_t>(m_pendingData[offset]) & 0x3F;
+        for (int bit = 5; bit >= 0; --bit, ++x) {
+            if ((pattern & (1U << bit)) != 0) {
+                writePel(x, y, m_colorIndex);
+                result.changed = true;
+            }
+        }
+    }
+    return true;
+}
+
+void Gddm5292Decoder::drawMarker(int x, int y) {
+    for (int dy = -2; dy <= 2; ++dy) {
+        for (int dx = -2; dx <= 2; ++dx) {
+            const int manhattan = std::abs(dx) + std::abs(dy);
+            bool draw = false;
+            switch (m_marker) {
+            case 0: draw = true; break;
+            case 1: draw = std::abs(dx) <= 1 && std::abs(dy) <= 1; break;
+            case 2: draw = std::abs(dx) == 2 || std::abs(dy) == 2; break;
+            case 3: draw = dx == 0 || dy == 0; break;
+            case 4: draw = std::abs(dx) == std::abs(dy); break;
+            case 5: draw = manhattan <= 2; break;
+            case 6: draw = manhattan == 2; break;
+            case 7: draw = dx == 0 || std::abs(dx) == std::abs(dy); break;
+            case 8: draw = dx == 0 || dy == 0 || std::abs(dx) == std::abs(dy); break;
+            }
+            if (draw)
+                writePel(x + dx, y + dy, m_colorIndex);
+        }
+    }
+}
+
+bool Gddm5292Decoder::drawPolymarker(Result &result) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, 1, "polymarker", points))
+        return false;
+
+    const int radius = m_marker == 1 ? 1 : 2;
+    for (int index = 0; index < points.size(); ++index) {
+        const QPoint &point = points[index];
+        if (point.x() < radius || point.x() >= kWidth - radius
+            || point.y() < radius || point.y() >= kHeight - radius) {
+            recover(result, ErrorCode::G5, index * 4,
+                    "marker center does not allow the entire marker to be drawn");
+            continue;
+        }
+        drawMarker(point.x(), point.y());
+        result.changed = true;
+    }
+    return true;
+}
+
+int Gddm5292Decoder::nonHorizontalEdges(const QPolygon &polygon) {
+    int count = 0;
+    for (int index = 0; index < polygon.size(); ++index) {
+        const QPoint &first = polygon[index];
+        const QPoint &second = polygon[(index + 1) % polygon.size()];
+        if (first.y() != second.y())
+            ++count;
+    }
+    return count;
+}
+
+bool Gddm5292Decoder::pointOnPolygon(const QPoint &point,
+                                     const QPolygon &polygon) {
+    for (int index = 0; index < polygon.size(); ++index) {
+        const QPoint &first = polygon[index];
+        const QPoint &second = polygon[(index + 1) % polygon.size()];
+        const qint64 cross = qint64(point.x() - first.x()) * (second.y() - first.y())
+                           - qint64(point.y() - first.y()) * (second.x() - first.x());
+        if (cross == 0 && point.x() >= std::min(first.x(), second.x())
+            && point.x() <= std::max(first.x(), second.x())
+            && point.y() >= std::min(first.y(), second.y())
+            && point.y() <= std::max(first.y(), second.y()))
+            return true;
+    }
+    return false;
+}
+
+bool Gddm5292Decoder::isShielded(const QPoint &point) const {
+    bool shielded = false;
+    for (const QPolygon &shield : m_shieldAreas) {
+        if (pointOnPolygon(point, shield))
+            return true;
+        if (shield.containsPoint(point, Qt::OddEvenFill))
+            shielded = !shielded;
+    }
+    return shielded;
+}
+
+bool Gddm5292Decoder::fillStyleVisible(int graphicsX, int graphicsY,
+                                       const QPolygon &polygon) const {
+    int distance = 0;
+    switch (m_fillReference) {
+    case FillReference::Vertical:
+        distance = graphicsX + m_fillReferenceShift;
+        break;
+    case FillReference::Positive45:
+        distance = graphicsX - graphicsY + kHeight + m_fillReferenceShift;
+        break;
+    case FillReference::Negative45:
+        distance = graphicsX + graphicsY + m_fillReferenceShift;
+        break;
+    case FillReference::PolygonEdge: {
+        const QPoint &first = polygon[0];
+        const QPoint &second = polygon[1];
+        const int firstGraphicsY = kHeight - 1 - first.y();
+        const int secondGraphicsY = kHeight - 1 - second.y();
+        const int dx = second.x() - first.x();
+        const int dy = secondGraphicsY - firstGraphicsY;
+        const qint64 cross = qint64(dx) * (graphicsY - firstGraphicsY)
+                           - qint64(dy) * (graphicsX - first.x());
+        const int scale = std::max(1, std::max(std::abs(dx), std::abs(dy)));
+        distance = int(std::abs(cross) / scale) + m_fillReferenceShift;
+        break;
+    }
+    }
+
+    distance = std::max(0, distance);
+    const int firstLength = m_styleOverrideLength > 0
+                          ? m_styleOverrideLength
+                          : m_lineStyle[static_cast<size_t>(m_styleStartSegment)];
+    if (distance < firstLength)
+        return (m_styleStartSegment & 1) == 0;
+    distance -= firstLength;
+
+    const int cycleLength = m_lineStyle[0] + m_lineStyle[1]
+                          + m_lineStyle[2] + m_lineStyle[3];
+    if (cycleLength == 0)
+        return false;
+    distance %= cycleLength;
+    for (int count = 0, segment = (m_styleStartSegment + 1) & 0x03;
+         count < 4; ++count, segment = (segment + 1) & 0x03) {
+        const int length = m_lineStyle[static_cast<size_t>(segment)];
+        if (distance < length)
+            return (segment & 1) == 0;
+        distance -= length;
+    }
+    return false;
+}
+
+void Gddm5292Decoder::drawPolygonBoundary(const QPolygon &polygon, bool styled) {
+    StyleCursor style(m_lineStyle, m_styleStartSegment, m_styleOverrideLength);
+    for (int index = 0; index < polygon.size(); ++index) {
+        const QPoint &first = polygon[index];
+        const QPoint &second = polygon[(index + 1) % polygon.size()];
+        drawLine(first.x(), first.y(), second.x(), second.y(), styled ? &style : nullptr,
+                 index > 0, false);
+    }
+}
+
+bool Gddm5292Decoder::fillPolygon(Result &result) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, 3, "fill polygon", points))
+        return false;
+    const QPolygon polygon(points);
+    const int edgeCount = m_shieldNonHorizontalEdges + nonHorizontalEdges(polygon);
+    if (edgeCount > 128) {
+        m_shieldAreas.clear();
+        m_shieldNonHorizontalEdges = 0;
+        return fail(result, ErrorCode::G4, 0,
+                    "fill and shield areas exceed 128 nonhorizontal edges");
+    }
+
+    const bool fillInterior = m_fillMode == FillMode::SolidBoundaryAndFill
+                           || m_fillMode == FillMode::FillOnly;
+    const bool solidBoundary = m_fillMode == FillMode::SolidBoundaryAndFill
+                            || m_fillMode == FillMode::SolidBoundaryOnly;
+    const bool styledBoundary = m_fillMode == FillMode::StyledBoundaryOnly;
+
+    if (fillInterior) {
+        const QRect bounds = polygon.boundingRect().intersected(QRect(0, 0, kWidth, kHeight));
+        for (int y = bounds.top(); y <= bounds.bottom(); ++y) {
+            for (int x = bounds.left(); x <= bounds.right(); ++x) {
+                const QPoint point(x, y);
+                if (pointOnPolygon(point, polygon)
+                    || !polygon.containsPoint(point, Qt::OddEvenFill)
+                    || isShielded(point))
+                    continue;
+                const int graphicsY = kHeight - 1 - y;
+                if (fillStyleVisible(x, graphicsY, polygon))
+                    writePel(x, y, m_colorIndex);
+            }
+        }
+    }
+    if (solidBoundary || styledBoundary)
+        drawPolygonBoundary(polygon, styledBoundary);
+
+    m_shieldAreas.clear();
+    m_shieldNonHorizontalEdges = 0;
+    result.changed = fillInterior || solidBoundary || styledBoundary;
+    return true;
+}
+
+bool Gddm5292Decoder::defineShieldArea(Result &result) {
+    QVector<QPoint> points;
+    if (!decodePoints(result, 3, "shield area", points))
+        return false;
+    const QPolygon polygon(points);
+    const int edges = nonHorizontalEdges(polygon);
+    if (m_shieldNonHorizontalEdges + edges > 128) {
+        return fail(result, ErrorCode::G4, 0,
+                    "shield areas exceed 128 nonhorizontal edges");
+    }
+    m_shieldAreas.append(polygon);
+    m_shieldNonHorizontalEdges += edges;
     return true;
 }
 
@@ -191,6 +479,14 @@ bool Gddm5292Decoder::completePending(Result &result, int offset) {
     bool ok = true;
     if (m_pendingOrder == PendingOrder::Polyline) {
         ok = drawPolyline(result);
+    } else if (m_pendingOrder == PendingOrder::Scanline) {
+        ok = drawScanline(result);
+    } else if (m_pendingOrder == PendingOrder::Polymarker) {
+        ok = drawPolymarker(result);
+    } else if (m_pendingOrder == PendingOrder::FillPolygon) {
+        ok = fillPolygon(result);
+    } else if (m_pendingOrder == PendingOrder::ShieldArea) {
+        ok = defineShieldArea(result);
     } else if (m_pendingOrder == PendingOrder::ColorTable) {
         if ((m_pendingData.size() % 3) != 0) {
             ok = fail(result, ErrorCode::G1, offset,
@@ -358,13 +654,20 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             break;
         case 0xB1:
             if (!readFixedData(4, values)) return result;
+            for (int index = 0; index < 4; ++index)
+                m_lineStyle[static_cast<size_t>(index)] =
+                    static_cast<uint8_t>(values[index]) & 0x0F;
             break;
         case 0xB2:
             if (!readFixedData(1, values)) return result;
+            m_styleStartSegment =
+                (static_cast<uint8_t>(values[0]) >> 4) & 0x03;
+            m_styleOverrideLength = static_cast<uint8_t>(values[0]) & 0x0F;
             break;
         case 0xB5:
             if (!readFixedData(1, values)) return result;
-            if ((static_cast<uint8_t>(values[0]) & 0x3F) > 8) {
+            m_marker = static_cast<uint8_t>(values[0]) & 0x3F;
+            if (m_marker > 8) {
                 fail(result, ErrorCode::G3, offset - 1, "marker index must be in 0..8");
                 return result;
             }
@@ -386,10 +689,15 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
             break;
         case 0xB6:
             if (!readFixedData(1, values)) return result;
-            m_lineWeight = ((static_cast<uint8_t>(values[0]) & 0x3F) == 0) ? 1 : 2;
+            m_lineWeight = ((static_cast<uint8_t>(values[0]) & 0x01) == 0) ? 1 : 2;
             break;
         case 0xB7:
             if (!readFixedData(2, values)) return result;
+            m_fillReference = static_cast<FillReference>(
+                (static_cast<uint8_t>(values[0]) >> 2) & 0x03);
+            m_fillMode = static_cast<FillMode>(
+                static_cast<uint8_t>(values[0]) & 0x03);
+            m_fillReferenceShift = static_cast<uint8_t>(values[1]) & 0x3F;
             break;
         case 0xA0:
             m_pendingOrder = PendingOrder::Polyline;
@@ -404,19 +712,32 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
                 return result;
             }
             for (int y = 0; y < kHeight; ++y) {
-                for (int x = 0; x < kWidth; ++x)
-                    writePel(x, y, color);
+                StyleCursor style(m_lineStyle, m_styleStartSegment,
+                                  m_styleOverrideLength);
+                for (int x = 0; x < kWidth; ++x) {
+                    if (style.take())
+                        writePel(x, y, color);
+                }
             }
             result.changed = true;
             break;
         }
         case 0xA1:
+            m_pendingOrder = PendingOrder::Scanline;
+            ++offset;
+            break;
         case 0xA4:
+            m_pendingOrder = PendingOrder::Polymarker;
+            ++offset;
+            break;
         case 0xA5:
+            m_pendingOrder = PendingOrder::FillPolygon;
+            ++offset;
+            break;
         case 0xA6:
-            fail(result, ErrorCode::G2, offset, QString("unsupported drawing order 0x%1")
-                                                    .arg(byte, 2, 16, QChar('0')));
-            return result;
+            m_pendingOrder = PendingOrder::ShieldArea;
+            ++offset;
+            break;
         case 0xC0:
         case 0xC2:
         case 0xC3:
@@ -442,7 +763,9 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
         return result;
     }
 
-    result.completion = m_suppressPacing ? Completion::None : Completion::Success;
+    result.completion = m_suppressPacing ? Completion::None
+                                         : (result.error ? Completion::RecoverableError
+                                                         : Completion::Success);
     return result;
 }
 
