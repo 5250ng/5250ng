@@ -623,11 +623,9 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
                 continue;
             }
             if (byte == 0x91) {
-                if (m_pendingData.isEmpty()) {
-                    fail(result, ErrorCode::G1, offset,
-                         "More Data to Come requires graphics data");
-                    return result;
-                }
+                // More Data to Come may arrive with nothing buffered yet: IBM i
+                // splits a block immediately after an order byte, leaving all
+                // of that order's coordinate data for the next one.
                 endedWithMoreData = true;
                 ++offset;
                 break;

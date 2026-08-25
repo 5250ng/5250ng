@@ -50,6 +50,7 @@ class TestGddm5292 : public QObject {
     void loadsChangeableAlphanumericMixIndexes();
     void retainsPrinterDataAndTimeout();
     void reportsScreenCopyRequest();
+    void resumesOrderSplitBeforeAnyDataArrives();
 };
 
 namespace {
@@ -587,6 +588,24 @@ void TestGddm5292::reportsScreenCopyRequest() {
     QVERIFY(copy.screenCopyRequested);
     // The order is acknowledged like any other block.
     QCOMPARE(copy.completion, Gddm5292Decoder::Completion::Success);
+}
+
+void TestGddm5292::resumesOrderSplitBeforeAnyDataArrives() {
+    Gddm5292Decoder decoder;
+    // IBM i splits a block immediately after an order byte, leaving all of that
+    // order's coordinate data for the next block, so More Data to Come can
+    // arrive with nothing buffered. Taken from a real GSAREA capture, where a
+    // polyline's A0 and its 91 sat at the end of one block.
+    const auto first = decoder.process(QByteArray::fromHex("ff93b041a091"));
+    QVERIFY(first.handled);
+    QVERIFY(!first.error);
+    QVERIFY(decoder.graphicsMode());
+
+    const auto second = decoder.process(
+        QByteArray::fromHex("404a404a4054404a" "92" "95"));
+    QVERIFY(!second.error);
+    QVERIFY(second.changed);
+    QCOMPARE(decoder.graphicsPlane().pixelColor(12, planeY(10)), QColor(255, 0, 0));
 }
 
 QTEST_MAIN(TestGddm5292)
