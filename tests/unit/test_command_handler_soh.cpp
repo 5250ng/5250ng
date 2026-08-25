@@ -42,6 +42,8 @@ class TestCommandHandlerSoh : public QObject {
     void testGddmResetAndErrorUseDocumentedAids();
     void testEBCDICffInTextDoesNotBeginGraphics();
 
+    void testGddmGraphicsPlaneRendersBehindText();
+
   private:
     Q5250ScreenWidget *m_widget = nullptr;
     TN5250CommandHandler *m_handler = nullptr;
@@ -196,6 +198,49 @@ void TestCommandHandlerSoh::testEBCDICffInTextDoesNotBeginGraphics() {
     QCOMPARE(m_widget->screenBuffer()->character(0, 0), static_cast<uint8_t>(0xC1));
     QCOMPARE(m_widget->screenBuffer()->character(0, 1), static_cast<uint8_t>(0xFF));
     QCOMPARE(m_widget->screenBuffer()->character(0, 2), static_cast<uint8_t>(0xC2));
+}
+
+void TestCommandHandlerSoh::testGddmGraphicsPlaneRendersBehindText() {
+    // Put a glyph at the centre of the screen, which is certainly inside the
+    // scaled picture's target rectangle. A corner cell would sit in the
+    // letterboxed margin the picture never covers and would survive either
+    // way, making the test pass regardless of the layering.
+    const int glyphRow = m_widget->screenBuffer()->rows() / 2;
+    const int glyphCol = m_widget->screenBuffer()->cols() / 2;
+    m_widget->screenBuffer()->writeChar(glyphRow, glyphCol, 0xC1); // EBCDIC 'A'
+
+    // Write Background in colour 1, red by default, then display on. The plane
+    // is opaque and covers the whole surface.
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff93a34195"));
+    QVERIFY(m_widget->gddmGraphicsVisible());
+
+    m_widget->resize(720, 480);
+    QImage shot(m_widget->size(), QImage::Format_ARGB32);
+    shot.fill(Qt::black);
+    m_widget->render(&shot);
+
+    // Scan only around the centre. Scanning the whole image would also pick up
+    // the blue graphics-mode indicator in the bottom row, whose blue channel
+    // would satisfy the glyph test on its own.
+    const int cx = shot.width() / 2;
+    const int cy = shot.height() / 2;
+    bool sawGraphics = false;
+    bool sawGlyph = false;
+    for (int y = cy - 30; y <= cy + 30; ++y) {
+        for (int x = cx - 30; x <= cx + 30; ++x) {
+            if (x < 0 || y < 0 || x >= shot.width() || y >= shot.height())
+                continue;
+            const QColor colour = shot.pixelColor(x, y);
+            if (colour == QColor(255, 0, 0))
+                sawGraphics = true;
+            else if (colour.green() > 100 || colour.blue() > 100)
+                sawGlyph = true;  // neither the picture nor a blend of it with black
+        }
+    }
+    // The picture must be present and the glyph legible on top of it. With the
+    // picture composited over the cells instead, the glyph was buried.
+    QVERIFY(sawGraphics);
+    QVERIFY(sawGlyph);
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)
