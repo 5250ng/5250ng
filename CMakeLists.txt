@@ -24,6 +24,19 @@ find_package(Qt6 REQUIRED COMPONENTS
     Network
 )
 
+find_package(QtUiStyle 0.1 CONFIG QUIET)
+if(NOT TARGET QtUiStyle::Dialogs)
+    include(FetchContent)
+    set(QT_UI_STYLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(QT_UI_STYLE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(QtUiStyle
+        GIT_REPOSITORY https://github.com/5250ng/qt-ui-style.git
+        GIT_TAG v0.1.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(QtUiStyle)
+endif()
+
 find_package(OpenSSL REQUIRED)
 
 # TLS support gate. QSslSocket ships inside Qt6::Network (there is no
@@ -240,20 +253,6 @@ set(UI_SOURCES
     src/ui/widgets/QConnectionStatusWidget/QConnectionStatusWidget.h
     src/ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.cpp
     src/ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.h
-    src/ui/widgets/Frameless/BaseFramelessWindow.cpp
-    src/ui/widgets/Frameless/BaseFramelessWindow.h
-    src/ui/widgets/Frameless/BaseFramelessDialog.cpp
-    src/ui/widgets/Frameless/BaseFramelessDialog.h
-    src/ui/widgets/Frameless/TitleBar.cpp
-    src/ui/widgets/Frameless/TitleBar.h
-    src/ui/widgets/Frameless/StyledMessageBox.cpp
-    src/ui/widgets/Frameless/StyledMessageBox.h
-    src/ui/widgets/Frameless/StyledInputDialog.cpp
-    src/ui/widgets/Frameless/StyledInputDialog.h
-    src/ui/widgets/Frameless/StyledColorDialog.cpp
-    src/ui/widgets/Frameless/StyledColorDialog.h
-    src/ui/widgets/Frameless/StyledFileDialog.cpp
-    src/ui/widgets/Frameless/StyledFileDialog.h
     # dialogs
     src/ui/dialogs/log_viewer.cpp
     src/ui/dialogs/log_viewer.h
@@ -359,6 +358,7 @@ target_link_libraries(5250ng
         OpenSSL::Crypto
         tn5250::tn5250
         5250script
+        QtUiStyle::Dialogs
 )
 
 # QSslSocket lives in Qt6::Network (already linked); only the define is needed
@@ -457,10 +457,9 @@ if(BUILD_TESTS)
         src/ui/rendering/tn5250_command_handler.cpp
         src/ui/rendering/tn5250_stream_renderer.cpp
         src/ui/dialogs/pc_command_confirm_dialog.cpp
-        src/ui/widgets/Frameless/BaseFramelessDialog.cpp
-        src/ui/widgets/Frameless/TitleBar.cpp
-        src/ui/themes/manager.cpp)
-    target_link_libraries(test_command_handler_soh PRIVATE tn5250_core Qt6::Test)
+    )
+    target_link_libraries(test_command_handler_soh PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_command_handler_soh COMMAND test_command_handler_soh)
 
     # MCP transport tests

@@ -17,7 +17,7 @@
 #pragma once
 
 #include "core/match_replace_engine.h"
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QCheckBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -27,7 +27,7 @@
 
 namespace ui::dialogs {
 
-class MatchReplaceDialog : public ui::widgets::BaseFramelessDialog {
+class MatchReplaceDialog : public qt_ui_style::BaseFramelessDialog {
     Q_OBJECT
 
   public:

@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QApplication>
 #include <QClipboard>
 
@@ -26,7 +26,7 @@ void MainWindow::onCopySessionGuid() {
     QString guid = m_sessions[m_activeIndex]->guid;
     QApplication::clipboard()->setText(guid);
 
-    ui::widgets::StyledMessageBox::information(
+    qt_ui_style::StyledMessageBox::information(
         this, "Session GUID",
         QString("Session GUID copied to clipboard:\n%1").arg(guid));
 }

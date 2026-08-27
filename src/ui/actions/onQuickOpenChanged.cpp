@@ -17,7 +17,7 @@
 #include "session/config.h"
 #include "session/manager.h"
 #include "ui/main_window.h"
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QString>
 
 /**
@@ -38,7 +38,7 @@ void MainWindow::onQuickOpenChanged(const QString &sessionName) {
         // Reset selection to placeholder for next use
         // no reset needed for submenu
     } else {
-        ui::widgets::StyledMessageBox::warning(
+        qt_ui_style::StyledMessageBox::warning(
             this, "Open Session",
             QString("Failed to open session '%1'.").arg(sessionName)
         );

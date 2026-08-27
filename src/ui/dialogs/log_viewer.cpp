@@ -19,7 +19,7 @@
 #include <QKeySequence>
 
 LogViewerDialog::LogViewerDialog(QWidget *parent)
-    : ui::widgets::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)) {
+    : qt_ui_style::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)) {
     setWindowTitle("Session Logs");
     resize(800, 600);
     QVBoxLayout *content = contentLayout();

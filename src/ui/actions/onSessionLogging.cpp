@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QDateTime>
 #include <QDir>
 #include <QStandardPaths>
@@ -31,7 +31,7 @@ void MainWindow::onToggleSessionLogging() {
     if (s->sessionLogger->isActive()) {
         s->sessionLogger->stop();
         m_sessionLoggingAction->setChecked(false);
-        ui::widgets::StyledMessageBox::information(this, "Session Logging",
+        qt_ui_style::StyledMessageBox::information(this, "Session Logging",
             QString("Logging stopped.\nLog saved to: %1").arg(s->sessionLogger->filePath()));
     } else {
         QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
@@ -47,7 +47,7 @@ void MainWindow::onToggleSessionLogging() {
             s->sessionLogger->logEvent(
                 QString("Connected to %1:%2").arg(s->config.hostname()).arg(s->config.port()));
         } else {
-            ui::widgets::StyledMessageBox::warning(this, "Session Logging",
+            qt_ui_style::StyledMessageBox::warning(this, "Session Logging",
                 QString("Failed to open log file:\n%1").arg(path));
         }
     }

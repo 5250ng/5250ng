@@ -63,7 +63,7 @@ QPlainTextEdit *makeCommandView(QWidget *parent, const QString &command) {
 PcCommandConfirmDialog::PcCommandConfirmDialog(const QString &hostname,
                                                const QString &command,
                                                QWidget *parent)
-    : ui::widgets::BaseFramelessDialog(parent) {
+    : qt_ui_style::BaseFramelessDialog(parent) {
     setWindowTitle("Allow PC command from host?");
     setModal(true);
     resize(kDialogWidth, kDialogHeight);
@@ -136,7 +136,7 @@ void PcCommandConfirmDialog::notifyDenied(const QString &hostname,
     // Information-only modal: surfaces a refused STRPCCMD attempt to the user
     // so a host that tries to run something never goes unnoticed under the
     // "Deny and alert" policy. No Allow button — the policy already refused.
-    ui::widgets::BaseFramelessDialog dlg(parent);
+    qt_ui_style::BaseFramelessDialog dlg(parent);
     dlg.setWindowTitle("PC command blocked");
     dlg.setModal(true);
     dlg.resize(kDialogWidth, kDialogHeight);

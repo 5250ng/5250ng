@@ -29,13 +29,13 @@
 #include <QFormLayout>
 #include <QStandardPaths>
 #include <QUrl>
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
 
-SettingsDialog::SettingsDialog(QWidget *parent) : ui::widgets::BaseFramelessDialog(parent) {
+SettingsDialog::SettingsDialog(QWidget *parent) : qt_ui_style::BaseFramelessDialog(parent) {
     setupUI();
     ensureThemesLoaded();
 }
@@ -690,7 +690,7 @@ void SettingsDialog::onMacrosSaveClicked() {
     auto &cfg = core::MacroConfig::instance();
     cfg.setRecordTimings(m_recordTimingsCheck->isChecked());
     cfg.save();
-    ui::widgets::StyledMessageBox::information(this, "Macros Settings", "Settings saved.");
+    qt_ui_style::StyledMessageBox::information(this, "Macros Settings", "Settings saved.");
 }
 
 QWidget *SettingsDialog::buildMcpServerPage() {
@@ -743,7 +743,7 @@ void SettingsDialog::onMcpSaveClicked() {
     cfg.setMcpAutoStart(m_mcpAutoStartCheck->isChecked());
     cfg.setMcpServerPort(static_cast<quint16>(m_mcpPortSpin->value()));
     cfg.save();
-    ui::widgets::StyledMessageBox::information(this, "MCP Server Settings", "Settings saved.");
+    qt_ui_style::StyledMessageBox::information(this, "MCP Server Settings", "Settings saved.");
 }
 
 void SettingsDialog::onAgentProviderChanged(int index) {
@@ -800,7 +800,7 @@ void SettingsDialog::onAgentTestClicked() {
     QString model = m_agentModelCombo->currentText();
 
     if (apiKey.isEmpty()) {
-        ui::widgets::StyledMessageBox::warning(this, "Test Connection", "Please enter an API key first.");
+        qt_ui_style::StyledMessageBox::warning(this, "Test Connection", "Please enter an API key first.");
         return;
     }
 
@@ -819,13 +819,13 @@ void SettingsDialog::onAgentTestClicked() {
     connect(provider, &agent::Provider::responseReceived, this, [this, provider](const QString &) {
         m_agentTestBtn->setEnabled(true);
         m_agentTestBtn->setText("Test");
-        ui::widgets::StyledMessageBox::information(this, "Test Connection", "Connection successful!");
+        qt_ui_style::StyledMessageBox::information(this, "Test Connection", "Connection successful!");
         provider->deleteLater();
     });
     connect(provider, &agent::Provider::responseError, this, [this, provider](const QString &error) {
         m_agentTestBtn->setEnabled(true);
         m_agentTestBtn->setText("Test");
-        ui::widgets::StyledMessageBox::warning(this, "Test Connection", "Connection failed:\n" + error);
+        qt_ui_style::StyledMessageBox::warning(this, "Test Connection", "Connection failed:\n" + error);
         provider->deleteLater();
     });
 
@@ -871,13 +871,13 @@ void SettingsDialog::onAgentSaveClicked() {
                     || (wantFileEdits && !cfg.autoAcceptFileEdits());
 
     if (enablingAny) {
-        auto result = ui::widgets::StyledMessageBox::question(this, "Enable Auto-Accept",
+        auto result = qt_ui_style::StyledMessageBox::question(this, "Enable Auto-Accept",
             "Are you sure you want to enable auto-accept?\n\n"
             "The agent will perform the selected actions on your live AS/400 "
             "session without asking for confirmation. This can result in data "
             "loss or unintended system changes.\n\n"
             "Do you want to proceed?");
-        if (result != ui::widgets::StyledMessageBox::Yes) {
+        if (result != qt_ui_style::StyledMessageBox::Yes) {
             m_autoAcceptToolCallsCheck->setChecked(cfg.autoAcceptToolCalls());
             m_autoAcceptFileEditsCheck->setChecked(cfg.autoAcceptFileEdits());
             wantToolCalls = cfg.autoAcceptToolCalls();
@@ -890,7 +890,7 @@ void SettingsDialog::onAgentSaveClicked() {
     cfg.save();
     emit agentConfigChanged();
 
-    ui::widgets::StyledMessageBox::information(this, "Agent Settings", "Settings saved.");
+    qt_ui_style::StyledMessageBox::information(this, "Agent Settings", "Settings saved.");
 }
 
 void SettingsDialog::onOAuthSignInClicked() {
@@ -899,7 +899,7 @@ void SettingsDialog::onOAuthSignInClicked() {
     QString tokenEndpoint = m_oauthTokenEndpointEdit->text().trimmed();
 
     if (clientId.isEmpty() || authEndpoint.isEmpty() || tokenEndpoint.isEmpty()) {
-        ui::widgets::StyledMessageBox::warning(this, "OAuth Sign In",
+        qt_ui_style::StyledMessageBox::warning(this, "OAuth Sign In",
                              "Please fill in the Client ID, Auth Endpoint, and Token Endpoint.");
         return;
     }
@@ -925,14 +925,14 @@ void SettingsDialog::onOAuthSignInClicked() {
         m_oauthSignInBtn->setEnabled(true);
         m_oauthSignInBtn->setText("Sign In with Browser");
         updateOAuthStatus();
-        ui::widgets::StyledMessageBox::information(this, "OAuth", "Successfully signed in!");
+        qt_ui_style::StyledMessageBox::information(this, "OAuth", "Successfully signed in!");
     });
     connect(m_activeOAuth, &agent::AuthMethod::authenticationFailed, this, [this](const QString &error) {
         m_oauthSignInBtn->setEnabled(true);
         m_oauthSignInBtn->setText("Sign In with Browser");
         m_oauthStatusLabel->setText("Not signed in");
         m_oauthStatusLabel->setStyleSheet("color: red; font-style: italic;");
-        ui::widgets::StyledMessageBox::warning(this, "OAuth", "Sign in failed:\n" + error);
+        qt_ui_style::StyledMessageBox::warning(this, "OAuth", "Sign in failed:\n" + error);
     });
 
     m_activeOAuth->authenticate();
@@ -947,7 +947,7 @@ void SettingsDialog::onOAuthSignOutClicked() {
         m_activeOAuth = nullptr;
     }
     updateOAuthStatus();
-    ui::widgets::StyledMessageBox::information(this, "OAuth", "Signed out.");
+    qt_ui_style::StyledMessageBox::information(this, "OAuth", "Signed out.");
 }
 
 void SettingsDialog::updateOAuthStatus() {
@@ -1037,7 +1037,7 @@ void SettingsDialog::onSaveClicked() {
         }
         cfg.save();
         emit agentConfigChanged();
-        ui::widgets::StyledMessageBox::information(this, "Tools", "Tool settings saved.");
+        qt_ui_style::StyledMessageBox::information(this, "Tools", "Tool settings saved.");
         return;
     }
 

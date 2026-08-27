@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "ui/widgets/Frameless/BaseFramelessWindow.h"
+#include <QtUiStyle/BaseFramelessWindow.h>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -24,7 +24,7 @@
 
 namespace mcp { class McpServer; }
 
-class McpLogViewerDialog : public ui::widgets::BaseFramelessWindow {
+class McpLogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     Q_OBJECT
   public:
     explicit McpLogViewerDialog(mcp::McpServer *server, QWidget *parent = nullptr);

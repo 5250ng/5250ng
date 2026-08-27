@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QString>
 
 namespace ui::dialogs {
@@ -27,7 +27,7 @@ namespace ui::dialogs {
 // — the user must explicitly choose it. Renders with the project's frameless
 // title bar in a wide horizontal-rectangle layout matching the rest of the
 // dialogs in src/ui/dialogs/.
-class PcCommandConfirmDialog : public ui::widgets::BaseFramelessDialog {
+class PcCommandConfirmDialog : public qt_ui_style::BaseFramelessDialog {
     Q_OBJECT
 
   public:

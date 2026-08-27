@@ -18,7 +18,7 @@
 
 #include "network/tn5250_qt/devices/devices.h"
 #include "session/config.h"
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -37,7 +37,7 @@
 
 namespace ui::themes { class TerminalThemeManager; }
 
-class ConnectDialog : public ui::widgets::BaseFramelessDialog {
+class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     Q_OBJECT
 
   public:

@@ -16,10 +16,10 @@
 
 #include "session_settings_dialog.h"
 #include "ui/themes/terminal_theme_manager.h"
-#include "ui/widgets/Frameless/StyledColorDialog.h"
-#include "ui/widgets/Frameless/StyledFileDialog.h"
-#include "ui/widgets/Frameless/StyledInputDialog.h"
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledColorDialog.h>
+#include <QtUiStyle/StyledFileDialog.h>
+#include <QtUiStyle/StyledInputDialog.h>
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QFontDatabase>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -624,7 +624,7 @@ void SessionSettingsDialog::onColorSwatchClicked() {
     if (!btn) return;
 
     QColor current = swatchColor(btn);
-    QColor selected = ui::widgets::StyledColorDialog::getColor(current, this, "Select Color", true);
+    QColor selected = qt_ui_style::StyledColorDialog::getColor(current, this, "Select Color", true);
     if (selected.isValid()) {
         setSwatchColor(btn, selected);
         onThemePropertyChanged();
@@ -924,7 +924,7 @@ void SessionSettingsDialog::onBackgroundModeChanged() {
 }
 
 void SessionSettingsDialog::onBrowseBackgroundImage() {
-    QString path = ui::widgets::StyledFileDialog::getOpenFileName(
+    QString path = qt_ui_style::StyledFileDialog::getOpenFileName(
         this, "Select Background Image", QString(),
         "Images (*.png *.jpg *.jpeg *.bmp *.gif)");
     if (!path.isEmpty()) {
@@ -945,7 +945,7 @@ void SessionSettingsDialog::updatePreview() {
 
 void SessionSettingsDialog::onNewTheme() {
     bool ok;
-    QString name = ui::widgets::StyledInputDialog::getText(this, "New Theme", "Theme name:", QLineEdit::Normal,
+    QString name = qt_ui_style::StyledInputDialog::getText(this, "New Theme", "Theme name:", QLineEdit::Normal,
                                           "My Custom Theme", &ok);
     if (!ok || name.trimmed().isEmpty()) return;
 
@@ -967,7 +967,7 @@ void SessionSettingsDialog::onDuplicateTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     ui::themes::TerminalTheme original = mgr.theme(m_currentThemeId);
     QString baseName = original.displayName + " (copy)";
-    QString name = ui::widgets::StyledInputDialog::getText(this, "Duplicate Theme", "Theme name:", QLineEdit::Normal,
+    QString name = qt_ui_style::StyledInputDialog::getText(this, "Duplicate Theme", "Theme name:", QLineEdit::Normal,
                                           baseName, &ok);
     if (!ok || name.trimmed().isEmpty()) return;
 
@@ -984,7 +984,7 @@ void SessionSettingsDialog::onSaveTheme() {
     ui::themes::TerminalTheme existing = mgr.theme(m_currentThemeId);
 
     if (existing.builtin) {
-        ui::widgets::StyledMessageBox::warning(this, "Save Theme",
+        qt_ui_style::StyledMessageBox::warning(this, "Save Theme",
                              "Cannot overwrite a built-in theme. Use 'Duplicate' first.");
         return;
     }
@@ -993,17 +993,17 @@ void SessionSettingsDialog::onSaveTheme() {
     t.id = m_currentThemeId;
     t.builtin = false;
     mgr.saveUserTheme(t);
-    ui::widgets::StyledMessageBox::information(this, "Save Theme", "Theme saved successfully.");
+    qt_ui_style::StyledMessageBox::information(this, "Save Theme", "Theme saved successfully.");
 }
 
 void SessionSettingsDialog::onResetTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     if (!mgr.hasTheme(m_currentThemeId)) return;
 
-    auto result = ui::widgets::StyledMessageBox::question(this, "Reset Theme",
+    auto result = qt_ui_style::StyledMessageBox::question(this, "Reset Theme",
         QString("Reset all settings to the stored values of \"%1\"?")
             .arg(m_themeCombo->currentText().remove(" (built-in)")));
-    if (result != ui::widgets::StyledMessageBox::Yes) return;
+    if (result != qt_ui_style::StyledMessageBox::Yes) return;
 
     ui::themes::TerminalTheme theme = mgr.resolvedTheme(m_currentThemeId);
     m_loading = true;
@@ -1016,13 +1016,13 @@ void SessionSettingsDialog::onDeleteTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     ui::themes::TerminalTheme t = mgr.theme(m_currentThemeId);
     if (t.builtin) {
-        ui::widgets::StyledMessageBox::warning(this, "Delete Theme", "Cannot delete a built-in theme.");
+        qt_ui_style::StyledMessageBox::warning(this, "Delete Theme", "Cannot delete a built-in theme.");
         return;
     }
 
-    auto result = ui::widgets::StyledMessageBox::question(this, "Delete Theme",
+    auto result = qt_ui_style::StyledMessageBox::question(this, "Delete Theme",
                                          QString("Delete theme \"%1\"?").arg(t.displayName));
-    if (result != ui::widgets::StyledMessageBox::Yes) return;
+    if (result != qt_ui_style::StyledMessageBox::Yes) return;
 
     mgr.deleteUserTheme(m_currentThemeId);
     m_currentThemeId = "classic_green";
@@ -1030,7 +1030,7 @@ void SessionSettingsDialog::onDeleteTheme() {
 }
 
 void SessionSettingsDialog::onImportTheme() {
-    QString path = ui::widgets::StyledFileDialog::getOpenFileName(
+    QString path = qt_ui_style::StyledFileDialog::getOpenFileName(
         this, "Import Theme", QString(),
         "Theme files (*.json *.5250theme)");
     if (path.isEmpty()) return;
@@ -1038,14 +1038,14 @@ void SessionSettingsDialog::onImportTheme() {
     auto &mgr = ui::themes::TerminalThemeManager::instance();
     if (mgr.importTheme(path)) {
         populateThemeDropdown();
-        ui::widgets::StyledMessageBox::information(this, "Import", "Theme imported successfully.");
+        qt_ui_style::StyledMessageBox::information(this, "Import", "Theme imported successfully.");
     } else {
-        ui::widgets::StyledMessageBox::warning(this, "Import", "Failed to import theme.");
+        qt_ui_style::StyledMessageBox::warning(this, "Import", "Failed to import theme.");
     }
 }
 
 void SessionSettingsDialog::onExportTheme() {
-    QString path = ui::widgets::StyledFileDialog::getSaveFileName(
+    QString path = qt_ui_style::StyledFileDialog::getSaveFileName(
         this, "Export Theme", m_currentThemeId + ".5250theme",
         "Theme files (*.5250theme *.json)");
     if (path.isEmpty()) return;
@@ -1057,9 +1057,9 @@ void SessionSettingsDialog::onExportTheme() {
     mgr.registerTheme(t);
 
     if (mgr.exportTheme(m_currentThemeId, path)) {
-        ui::widgets::StyledMessageBox::information(this, "Export", "Theme exported successfully.");
+        qt_ui_style::StyledMessageBox::information(this, "Export", "Theme exported successfully.");
     } else {
-        ui::widgets::StyledMessageBox::warning(this, "Export", "Failed to export theme.");
+        qt_ui_style::StyledMessageBox::warning(this, "Export", "Failed to export theme.");
     }
 }
 

@@ -15,13 +15,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
 
 void MainWindow::onAbout() {
-    ui::widgets::BaseFramelessDialog dlg(this);
+    qt_ui_style::BaseFramelessDialog dlg(this);
     dlg.setWindowTitle("About 5250ng");
     dlg.setModal(true);
 

@@ -23,7 +23,7 @@
 #include <QVBoxLayout>
 
 McpLogViewerDialog::McpLogViewerDialog(mcp::McpServer *server, QWidget *parent)
-    : ui::widgets::BaseFramelessWindow(parent), m_server(server) {
+    : qt_ui_style::BaseFramelessWindow(parent), m_server(server) {
     setWindowTitle("MCP Server Logs");
     resize(650, 500);
 

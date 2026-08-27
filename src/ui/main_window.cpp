@@ -42,7 +42,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -241,7 +241,7 @@ class McpTabStyle : public QProxyStyle {
  * @param parent Optional parent QWidget.
  */
 MainWindow::MainWindow(QWidget *parent)
-    : ui::widgets::BaseFramelessWindow(parent), m_displayWidget(nullptr),
+    : qt_ui_style::BaseFramelessWindow(parent), m_displayWidget(nullptr),
       m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
     setWindowTitle("5250ng");
     resize(900, 645);
@@ -648,7 +648,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
             if (idx >= 0 && idx != m_activeIndex) {
                 m_tabWidget->setCurrentIndex(idx);
             }
-            ui::widgets::StyledMessageBox::warning(this, "Connection Error", error);
+            qt_ui_style::StyledMessageBox::warning(this, "Connection Error", error);
         });
     // App data: feed this session's parser directly
     connect(session->worker, &tn5250::session::Worker::appData, this, [this, session](const QByteArray &bytes) {
@@ -1215,7 +1215,7 @@ void MainWindow::dropEvent(QDropEvent *event) {
         }
     }
     if (imported > 0) {
-        ui::widgets::StyledMessageBox::information(this, "Import Theme",
+        qt_ui_style::StyledMessageBox::information(this, "Import Theme",
             QString("Imported %1 theme(s) successfully.").arg(imported));
     }
 }
@@ -1228,6 +1228,13 @@ void MainWindow::dropEvent(QDropEvent *event) {
  * @return true if the event was handled, false to propagate.
  */
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // BaseFramelessWindow installs an application-wide filter so resize
+    // gestures also work over child widgets. Events can therefore arrive
+    // before setupUI() has created the tab widget.
+    if (!m_tabWidget) {
+        return qt_ui_style::BaseFramelessWindow::eventFilter(obj, event);
+    }
+
     // Resize CRT overlay to match tab container; repaint bg image
     if (event->type() == QEvent::Resize) {
         for (auto *s : m_sessions) {
@@ -1342,7 +1349,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             return true;
         }
     }
-    return QMainWindow::eventFilter(obj, event);
+    return qt_ui_style::BaseFramelessWindow::eventFilter(obj, event);
 }
 
 // onClearScreenRequested, onKeyboardUnlockRequested, onControlCharactersReceived,

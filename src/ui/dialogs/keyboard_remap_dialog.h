@@ -17,7 +17,7 @@
 #pragma once
 
 #include "core/keyboard_mapping.h"
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QHash>
 #include <QLineEdit>
 #include <QList>
@@ -83,7 +83,7 @@ class ChordListEditor : public QWidget {
 
 // Dialog that lets the user edit the {chord -> action} map. Changes are only
 // applied to the KeyboardMapping singleton when the user clicks "Save".
-class KeyboardRemapDialog : public ui::widgets::BaseFramelessDialog {
+class KeyboardRemapDialog : public qt_ui_style::BaseFramelessDialog {
     Q_OBJECT
   public:
     // Optional: pre-focus on a specific action (e.g. opened via right-click on

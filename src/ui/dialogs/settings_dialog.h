@@ -19,7 +19,7 @@
 #include "session_settings_dialog.h"
 #include "ui/themes/manager.h"
 #include "ui/themes/terminal_theme.h"
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -37,7 +37,7 @@
 
 namespace agent { class OAuthAuth; }
 
-class SettingsDialog : public ui::widgets::BaseFramelessDialog {
+class SettingsDialog : public qt_ui_style::BaseFramelessDialog {
     Q_OBJECT
 
   public:

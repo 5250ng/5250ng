@@ -20,8 +20,8 @@
 #include <5250script/script_compiler.h>
 #include <5250script/script_executor.h>
 #include <5250script/script_parser.h>
-#include "ui/widgets/Frameless/BaseFramelessDialog.h"
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
+#include <QtUiStyle/StyledMessageBox.h>
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer_adapter.h"
 #include <QApplication>
 #include <QDesktopServices>
@@ -60,7 +60,7 @@ void MainWindow::onRecordScript() {
 
     // Prevent recording during playback
     if (s->macroRecorder->isPlaying()) {
-        ui::widgets::StyledMessageBox::information(this, "Recording",
+        qt_ui_style::StyledMessageBox::information(this, "Recording",
             "Cannot record while a macro is playing.");
         m_scriptRecordAction->setChecked(false);
         return;
@@ -71,7 +71,7 @@ void MainWindow::onRecordScript() {
         s->macroRecorder->stopRecording();
 
         // Ask for script name
-        auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+        auto *dlg = new qt_ui_style::BaseFramelessDialog(this);
         dlg->setWindowTitle("Save Script");
         dlg->setFixedWidth(360);
 
@@ -121,12 +121,12 @@ void MainWindow::onRecordScript() {
             if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 file.write(scriptText.toUtf8());
                 file.close();
-                ui::widgets::StyledMessageBox::information(this, "Script Saved",
+                qt_ui_style::StyledMessageBox::information(this, "Script Saved",
                     QString("Script '%1' saved with %2 steps.")
                         .arg(name).arg(macro.steps.size()));
             } else {
                 // Save failed — show the generated script so the user can recover it manually
-                ui::widgets::StyledMessageBox::information(this, "Save Failed",
+                qt_ui_style::StyledMessageBox::information(this, "Save Failed",
                     QString("Could not save script to:\n%1\n\nGenerated script:\n\n%2")
                         .arg(path, scriptText));
             }
@@ -255,7 +255,7 @@ void MainWindow::onRunScript(const QString &path) {
     // Load script text
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        ui::widgets::StyledMessageBox::information(this, "Run Script",
+        qt_ui_style::StyledMessageBox::information(this, "Run Script",
             "Could not open script file.");
         return;
     }
@@ -269,7 +269,7 @@ void MainWindow::onRunScript(const QString &path) {
         QStringList errMsgs;
         for (const auto &e : parseResult.errors)
             errMsgs << QString("Line %1: %2").arg(e.line).arg(e.message);
-        ui::widgets::StyledMessageBox::information(this, "Script Error",
+        qt_ui_style::StyledMessageBox::information(this, "Script Error",
             "Script has errors:\n\n" + errMsgs.join("\n"));
         return;
     }
@@ -390,7 +390,7 @@ void MainWindow::onRunScript(const QString &path) {
     // Error
     *connError = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionError, this,
         [this](int line, const QString &msg) {
-            ui::widgets::StyledMessageBox::information(this, "Script Error",
+            qt_ui_style::StyledMessageBox::information(this, "Script Error",
                 QString("Line %1: %2").arg(line).arg(msg));
         });
 
@@ -407,7 +407,7 @@ void MainWindow::onRunScript(const QString &path) {
     // Pause
     *connPause = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::pauseRequested, this,
         [this, execGuard]() {
-            ui::widgets::StyledMessageBox::information(this, "Script Paused",
+            qt_ui_style::StyledMessageBox::information(this, "Script Paused",
                 "Script execution paused.\nClick OK to continue.");
             if (!execGuard.isNull()) execGuard->resumeAfterPause();
         });
@@ -417,7 +417,7 @@ void MainWindow::onRunScript(const QString &path) {
         [this, execGuard](const QStringList &labels, const QStringList &varNames) {
             if (execGuard.isNull()) return;
 
-            auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+            auto *dlg = new qt_ui_style::BaseFramelessDialog(this);
             dlg->setWindowTitle("Script Input");
             dlg->setFixedWidth(400);
             dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
@@ -488,9 +488,9 @@ void MainWindow::onEditScript(const QString &path) {
 
 void MainWindow::onDeleteScript(const QString &path) {
     QFileInfo fi(path);
-    auto answer = ui::widgets::StyledMessageBox::question(this, "Delete Script",
+    auto answer = qt_ui_style::StyledMessageBox::question(this, "Delete Script",
         QString("Delete script '%1'?").arg(fi.baseName()));
-    if (answer == ui::widgets::StyledMessageBox::Yes) {
+    if (answer == qt_ui_style::StyledMessageBox::Yes) {
         QFile::remove(path);
     }
 }
@@ -500,7 +500,7 @@ void MainWindow::onDeleteScript(const QString &path) {
 // ---------------------------------------------------------------------------
 
 void MainWindow::onNewScript() {
-    auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+    auto *dlg = new qt_ui_style::BaseFramelessDialog(this);
     dlg->setWindowTitle("New Script");
     dlg->setFixedWidth(360);
 
@@ -576,10 +576,10 @@ void MainWindow::onImportScript() {
     }
 
     if (QFile::copy(filePath, destPath)) {
-        ui::widgets::StyledMessageBox::information(this, "Import Script",
+        qt_ui_style::StyledMessageBox::information(this, "Import Script",
             QString("Script '%1' imported.").arg(fi.baseName()));
     } else {
-        ui::widgets::StyledMessageBox::information(this, "Import Script",
+        qt_ui_style::StyledMessageBox::information(this, "Import Script",
             "Could not import script file.");
     }
 }
@@ -724,7 +724,7 @@ void MainWindow::runStartupScript(Session *s) {
 
     *connError = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionError, this,
         [this](int line, const QString &msg) {
-            ui::widgets::StyledMessageBox::information(this, "Script Error",
+            qt_ui_style::StyledMessageBox::information(this, "Script Error",
                 QString("Line %1: %2").arg(line).arg(msg));
         });
 
@@ -739,7 +739,7 @@ void MainWindow::runStartupScript(Session *s) {
 
     *connPause = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::pauseRequested, this,
         [this, execGuard]() {
-            ui::widgets::StyledMessageBox::information(this, "Script Paused",
+            qt_ui_style::StyledMessageBox::information(this, "Script Paused",
                 "Script execution paused.\nClick OK to continue.");
             if (!execGuard.isNull()) execGuard->resumeAfterPause();
         });
@@ -748,7 +748,7 @@ void MainWindow::runStartupScript(Session *s) {
         [this, execGuard](const QStringList &labels, const QStringList &varNames) {
             if (execGuard.isNull()) return;
 
-            auto *dlg = new ui::widgets::BaseFramelessDialog(this);
+            auto *dlg = new qt_ui_style::BaseFramelessDialog(this);
             dlg->setWindowTitle("Script Input");
             dlg->setFixedWidth(400);
             dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);

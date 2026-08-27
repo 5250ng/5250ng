@@ -17,7 +17,7 @@
 #pragma once
 
 #include "logger/logger.h"
-#include "ui/widgets/Frameless/BaseFramelessWindow.h"
+#include <QtUiStyle/BaseFramelessWindow.h>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -25,7 +25,7 @@
 #include <QShortcut>
 #include <QVBoxLayout>
 
-class LogViewerDialog : public ui::widgets::BaseFramelessWindow {
+class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     Q_OBJECT
   public:
     explicit LogViewerDialog(QWidget *parent = nullptr);

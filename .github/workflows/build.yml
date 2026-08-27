@@ -41,7 +41,9 @@ jobs:
 
   macos:
     name: macOS Build & Test
-    runs-on: macos-latest
+    # Keep the CI SDK aligned with the Qt 6 versions supported by the project.
+    # macos-latest currently resolves to macOS 26, which removed AGL.framework.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:

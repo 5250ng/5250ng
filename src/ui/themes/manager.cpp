@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "manager.h"
+#include <QtUiStyle/StyleManager.h>
 #include <QColor>
 #include <QFile>
 #include <QJsonDocument>
@@ -412,6 +413,14 @@ void ThemeManager::applyToApplication(QApplication *app) {
     const Theme th = currentTheme();
     app->setPalette(buildPaletteFromTheme(th.colors));
     app->setStyleSheet(th.stylesheet);
+
+    qt_ui_style::TitleBarStyle titleBarStyle;
+    titleBarStyle.background = QColor(th.colors.value("mainwindow.titlebar.background"));
+    titleBarStyle.foreground = QColor(th.colors.value("mainwindow.text"));
+    titleBarStyle.buttonHover = QColor(th.colors.value("mainwindow.titlebar.button.hover"));
+    titleBarStyle.closeButtonHover = QColor(th.colors.value("mainwindow.titlebar.close.hover"));
+    titleBarStyle.separator = QColor(th.colors.value("mainwindow.titlebar.hline"));
+    qt_ui_style::StyleManager::instance().setTitleBarStyle(titleBarStyle);
 }
 
 /**

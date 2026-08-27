@@ -18,7 +18,7 @@
 #include "session/manager.h"
 #include "ui/main_window.h"
 #include <QAction>
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QString>
 
 /**
@@ -37,7 +37,7 @@ void MainWindow::onSavedSessionChosen(QAction *action) {
     if (mgr.loadSession(sessionName, cfg)) {
         connectToServer(cfg);
     } else {
-        ui::widgets::StyledMessageBox::warning(
+        qt_ui_style::StyledMessageBox::warning(
             this, "Open Session",
             QString("Failed to open session '%1'.").arg(sessionName)
         );

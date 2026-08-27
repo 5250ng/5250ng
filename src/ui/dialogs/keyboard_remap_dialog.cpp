@@ -16,8 +16,8 @@
 
 #include "keyboard_remap_dialog.h"
 
-#include "ui/widgets/Frameless/StyledFileDialog.h"
-#include "ui/widgets/Frameless/StyledMessageBox.h"
+#include <QtUiStyle/StyledFileDialog.h>
+#include <QtUiStyle/StyledMessageBox.h>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -151,7 +151,7 @@ void ChordListEditor::emitChords() {
 // --- KeyboardRemapDialog ---------------------------------------------------
 
 KeyboardRemapDialog::KeyboardRemapDialog(QWidget *parent, MappedAction focusOn)
-    : ui::widgets::BaseFramelessDialog(parent), m_focusOn(focusOn) {
+    : qt_ui_style::BaseFramelessDialog(parent), m_focusOn(focusOn) {
     setWindowTitle(tr("Remap Keyboard"));
     resize(720, 560);
     m_working = KeyboardMapping::instance().allBindings();
@@ -262,9 +262,9 @@ void KeyboardRemapDialog::onRowChordsChanged(MappedAction action,
             .arg(chord.toString(),
                  KeyboardMapping::actionName(prevOwner),
                  KeyboardMapping::actionName(action));
-        auto result = ui::widgets::StyledMessageBox::question(
+        auto result = qt_ui_style::StyledMessageBox::question(
             this, tr("Replace existing binding?"), prompt);
-        if (result != ui::widgets::StyledMessageBox::Yes) {
+        if (result != qt_ui_style::StyledMessageBox::Yes) {
             // Roll the row back to its prior state without touching m_working.
             ChordListEditor *editor = editorForAction(action);
             if (editor) {
@@ -329,26 +329,26 @@ void KeyboardRemapDialog::onResetDefaultsClicked() {
 }
 
 void KeyboardRemapDialog::onImportClicked() {
-    QString path = ui::widgets::StyledFileDialog::getOpenFileName(
+    QString path = qt_ui_style::StyledFileDialog::getOpenFileName(
         this, tr("Import Keyboard Mapping"), QString(), tr("JSON (*.json)"));
     if (path.isEmpty()) return;
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
-        ui::widgets::StyledMessageBox::warning(this, tr("Import failed"),
+        qt_ui_style::StyledMessageBox::warning(this, tr("Import failed"),
             tr("Could not open %1.").arg(path));
         return;
     }
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-        ui::widgets::StyledMessageBox::warning(this, tr("Import failed"),
+        qt_ui_style::StyledMessageBox::warning(this, tr("Import failed"),
             tr("Invalid JSON: %1").arg(err.errorString()));
         return;
     }
     KeyboardMapping tmp;
     tmp.resetToDefaults();
     if (!tmp.fromJson(doc.object())) {
-        ui::widgets::StyledMessageBox::warning(this, tr("Import failed"),
+        qt_ui_style::StyledMessageBox::warning(this, tr("Import failed"),
             tr("File does not contain a keyboard mapping."));
         return;
     }
@@ -358,7 +358,7 @@ void KeyboardRemapDialog::onImportClicked() {
 }
 
 void KeyboardRemapDialog::onExportClicked() {
-    QString path = ui::widgets::StyledFileDialog::getSaveFileName(
+    QString path = qt_ui_style::StyledFileDialog::getSaveFileName(
         this, tr("Export Keyboard Mapping"), QString(), tr("JSON (*.json)"));
     if (path.isEmpty()) return;
     KeyboardMapping tmp;
@@ -366,7 +366,7 @@ void KeyboardRemapDialog::onExportClicked() {
     QJsonDocument doc(tmp.toJson());
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        ui::widgets::StyledMessageBox::warning(this, tr("Export failed"),
+        qt_ui_style::StyledMessageBox::warning(this, tr("Export failed"),
             tr("Could not write %1.").arg(path));
         return;
     }

@@ -28,7 +28,7 @@
 #include "ui/dialogs/connect_dialog.h"
 #include "ui/rendering/tn5250_command_handler.h"
 #include "ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.h"
-#include "ui/widgets/Frameless/BaseFramelessWindow.h"
+#include <QtUiStyle/BaseFramelessWindow.h>
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
 #include "ui/widgets/QCRTOverlayWidget/QCRTOverlayWidget.h"
@@ -49,7 +49,7 @@
 #include <QVBoxLayout>
 #include <QWidgetAction>
 
-class MainWindow : public ui::widgets::BaseFramelessWindow {
+class MainWindow : public qt_ui_style::BaseFramelessWindow {
     Q_OBJECT
 
   public:
@@ -180,7 +180,7 @@ class MainWindow : public ui::widgets::BaseFramelessWindow {
     void runStartupScript(Session *session);
     void applyThemeToSession(Session *session, const QString &themeId);
 
-    QTabWidget *m_tabWidget;
+    QTabWidget *m_tabWidget = nullptr;
     QVector<Session *> m_sessions;
     int m_activeIndex;
     QWidget *m_emptyPlaceholder;

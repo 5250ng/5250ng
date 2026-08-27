@@ -21,11 +21,11 @@ jobs:
             runner: ubuntu-24.04-arm
           - os: macos
             arch: x64
-            runner: macos-latest
+            runner: macos-15
             macos_cmake_arch: x86_64
           - os: macos
             arch: arm64
-            runner: macos-latest
+            runner: macos-15
             macos_cmake_arch: arm64
           - os: windows
             arch: x64
