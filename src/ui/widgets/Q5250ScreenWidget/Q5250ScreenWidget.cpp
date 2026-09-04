@@ -314,6 +314,13 @@ void Q5250ScreenWidget::setGddmGraphicsPlane(const QImage &plane, bool visible) 
     update();
 }
 
+void Q5250ScreenWidget::setGddmGraphicsOpacity(qreal opacity) {
+    const qreal boundedOpacity = qBound<qreal>(0.0, opacity, 1.0);
+    if (qFuzzyCompare(m_gddmGraphicsOpacity, boundedOpacity)) return;
+    m_gddmGraphicsOpacity = boundedOpacity;
+    update();
+}
+
 /**
  * @brief Renders the full 5250 screen: cells, underlines, grid, selection, cursor rules, hotspots.
  * @param painter Painter already set up for this widget; clipping and translation applied here.
@@ -342,6 +349,7 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
     // cell background unpainted while the plane is visible, so the picture is
     // not covered up again cell by cell.
     if (m_gddmGraphicsVisible && !m_gddmGraphicsPlane.isNull()) {
+        painter.save();
         const QSizeF presentationSize(cols * m_cellWidthF, rows * m_cellHeightF);
         QSizeF graphicsSize = m_gddmGraphicsPlane.size();
         graphicsSize.scale(presentationSize, Qt::KeepAspectRatio);
@@ -349,7 +357,9 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
                             (presentationSize.height() - graphicsSize.height()) / 2.0,
                             graphicsSize.width(), graphicsSize.height());
         painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+        painter.setOpacity(m_gddmGraphicsOpacity);
         painter.drawImage(target, m_gddmGraphicsPlane);
+        painter.restore();
     }
 
     for (int row = 0; row < rows; ++row) {

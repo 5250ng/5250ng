@@ -95,6 +95,7 @@ class Q5250ScreenWidget : public QWidget {
     // IBM 5292 Model 2 graphics are retained independently from the
     // alphanumeric presentation space and composited during painting.
     void setGddmGraphicsPlane(const QImage &plane, bool visible);
+    void setGddmGraphicsOpacity(qreal opacity);
 
     // Renders the composite presentation - the alphanumeric plane with the GDDM
     // graphics plane behind it - into an image. The two planes only ever exist
@@ -105,6 +106,7 @@ class Q5250ScreenWidget : public QWidget {
     bool exportCompositeScreen(const QString &path);
     const QImage &gddmGraphicsPlane() const { return m_gddmGraphicsPlane; }
     bool gddmGraphicsVisible() const { return m_gddmGraphicsVisible; }
+    qreal gddmGraphicsOpacity() const { return m_gddmGraphicsOpacity; }
 
     // Display configuration
     void setScreenSize(int rows, int cols);
@@ -328,6 +330,7 @@ class Q5250ScreenWidget : public QWidget {
     QColor m_cellGridColor = QColor(255, 255, 255, 40);
     QImage m_gddmGraphicsPlane;
     bool m_gddmGraphicsVisible = false;
+    qreal m_gddmGraphicsOpacity = 1.0;
 
     // 5250 terminal state
     KeyboardState m_keyboardState;

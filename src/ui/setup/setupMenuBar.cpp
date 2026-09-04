@@ -17,8 +17,11 @@
 #include "../main_window.h"
 #include <QComboBox>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QSettings>
+#include <QSlider>
 #include <QSizePolicy>
 #include <QTabBar>
 #include <QTabWidget>
@@ -149,6 +152,41 @@ void MainWindow::setupMenuBar() {
     m_showInputFieldsAction->setCheckable(true);
     m_showCellGridAction = advancedMenu->addAction("Show cell &grid", this, &MainWindow::onToggleCellGrid);
     m_showCellGridAction->setCheckable(true);
+
+    advancedMenu->addSeparator();
+    QMenu *gddmOpacityMenu = advancedMenu->addMenu("GDDM canvas &opacity");
+    QWidget *gddmOpacityWidget = new QWidget(gddmOpacityMenu);
+    QHBoxLayout *gddmOpacityLayout = new QHBoxLayout(gddmOpacityWidget);
+    gddmOpacityLayout->setContentsMargins(10, 4, 10, 4);
+    auto *gddmOpacitySlider = new QSlider(Qt::Horizontal, gddmOpacityWidget);
+    gddmOpacitySlider->setAccessibleName("GDDM canvas opacity");
+    gddmOpacitySlider->setToolTip(
+        "Adjust GDDM graphics without changing the 5250 text screen");
+    gddmOpacitySlider->setRange(0, 100);
+    gddmOpacitySlider->setSingleStep(5);
+    gddmOpacitySlider->setPageStep(10);
+    gddmOpacitySlider->setMinimumWidth(160);
+    auto *gddmOpacityLabel = new QLabel(gddmOpacityWidget);
+    gddmOpacityLabel->setMinimumWidth(42);
+    gddmOpacityLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    gddmOpacityLayout->addWidget(gddmOpacitySlider, 1);
+    gddmOpacityLayout->addWidget(gddmOpacityLabel);
+
+    QSettings settings;
+    const int savedGddmOpacity =
+        qBound(0, settings.value("Display/gddmCanvasOpacity", 100).toInt(), 100);
+    m_gddmCanvasOpacity = savedGddmOpacity / 100.0;
+    gddmOpacitySlider->setValue(savedGddmOpacity);
+    gddmOpacityLabel->setText(QString("%1%").arg(savedGddmOpacity));
+    connect(gddmOpacitySlider, &QSlider::valueChanged, this,
+            [this, gddmOpacityLabel](int percent) {
+                gddmOpacityLabel->setText(QString("%1%").arg(percent));
+                onGddmCanvasOpacityChanged(percent);
+            });
+
+    auto *gddmOpacityAction = new QWidgetAction(gddmOpacityMenu);
+    gddmOpacityAction->setDefaultWidget(gddmOpacityWidget);
+    gddmOpacityMenu->addAction(gddmOpacityAction);
 
     // Help menu
     QMenu *helpMenu = bar->addMenu("&Help");

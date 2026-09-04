@@ -47,6 +47,7 @@ class TestCommandHandlerSoh : public QObject {
     void testEBCDICffInTextDoesNotBeginGraphics();
 
     void testGddmGraphicsPlaneRendersBehindText();
+    void testGddmCanvasOpacityAffectsOnlyGraphicsPlane();
     void testGddmScreenCopyEmitsRequestAndWritesNothing();
     void testCompositeExportContainsBothPlanes();
 
@@ -247,6 +248,44 @@ void TestCommandHandlerSoh::testGddmGraphicsPlaneRendersBehindText() {
     // picture composited over the cells instead, the glyph was buried.
     QVERIFY(sawGraphics);
     QVERIFY(sawGlyph);
+}
+
+void TestCommandHandlerSoh::testGddmCanvasOpacityAffectsOnlyGraphicsPlane() {
+    const int glyphRow = m_widget->screenBuffer()->rows() / 2;
+    const int glyphCol = m_widget->screenBuffer()->cols() / 2;
+    m_widget->screenBuffer()->writeChar(glyphRow, glyphCol, 0xC1); // EBCDIC 'A'
+    m_handler->handleRawScreenData(QByteArray::fromHex("ff93a34195"));
+    m_widget->setGddmGraphicsOpacity(0.5);
+    QCOMPARE(m_widget->gddmGraphicsOpacity(), 0.5);
+
+    m_widget->resize(720, 480);
+    QImage shot(m_widget->size(), QImage::Format_ARGB32);
+    shot.fill(Qt::black);
+    m_widget->render(&shot);
+
+    const int cx = shot.width() / 2;
+    const int cy = shot.height() / 2;
+    bool sawHalfOpacityGraphics = false;
+    bool sawFullOpacityGlyph = false;
+    for (int y = cy - 30; y <= cy + 30; ++y) {
+        for (int x = cx - 30; x <= cx + 30; ++x) {
+            const QColor colour = shot.pixelColor(x, y);
+            if (colour.red() >= 110 && colour.red() <= 145
+                && colour.green() < 10 && colour.blue() < 10) {
+                sawHalfOpacityGraphics = true;
+            }
+            if (colour.green() > 200 || colour.blue() > 200) {
+                sawFullOpacityGlyph = true;
+            }
+        }
+    }
+    QVERIFY(sawHalfOpacityGraphics);
+    QVERIFY(sawFullOpacityGlyph);
+
+    m_widget->setGddmGraphicsOpacity(-1.0);
+    QCOMPARE(m_widget->gddmGraphicsOpacity(), 0.0);
+    m_widget->setGddmGraphicsOpacity(2.0);
+    QCOMPARE(m_widget->gddmGraphicsOpacity(), 1.0);
 }
 
 void TestCommandHandlerSoh::testGddmScreenCopyEmitsRequestAndWritesNothing() {
