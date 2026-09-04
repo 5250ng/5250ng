@@ -16,28 +16,49 @@
 
 #include "../main_window.h"
 #include "ui/dialogs/keyboard_remap_dialog.h"
+#include <QtUiStyle/BaseFramelessDialog.h>
 #include <QVBoxLayout>
 
 void MainWindow::onToggleVirtualKeyboard() {
-    if (!m_virtualKeyboard) {
-        m_virtualKeyboard = new ui::widgets::QVirtualKeyboardWidget(this);
+    bool firstShow = false;
+    if (!m_virtualKeyboardWindow) {
+        firstShow = true;
+        m_virtualKeyboardWindow = new qt_ui_style::BaseFramelessDialog(this);
+        m_virtualKeyboardWindow->setWindowTitle(tr("Virtual 5250 Keyboard"));
+        m_virtualKeyboardWindow->setWindowFlag(Qt::Tool, true);
+        m_virtualKeyboardWindow->setWindowModality(Qt::NonModal);
+        m_virtualKeyboardWindow->setAttribute(Qt::WA_QuitOnClose, false);
+
+        m_virtualKeyboard = new ui::widgets::QVirtualKeyboardWidget(m_virtualKeyboardWindow);
+        m_virtualKeyboardWindow->contentLayout()->addWidget(m_virtualKeyboard);
         connect(m_virtualKeyboard, &ui::widgets::QVirtualKeyboardWidget::actionTriggered,
                 this, &MainWindow::onVirtualKeyboardAction);
         connect(m_virtualKeyboard, &ui::widgets::QVirtualKeyboardWidget::characterTriggered,
                 this, &MainWindow::onVirtualKeyboardCharacter);
         connect(m_virtualKeyboard, &ui::widgets::QVirtualKeyboardWidget::remapRequested,
                 this, &MainWindow::onVirtualKeyboardRemap);
-        // Attach at the bottom of the main content area.
-        QVBoxLayout *root = contentLayout();
-        if (root) {
-            // Insert before the last widget (global bottom status bar).
-            int insertAt = root->count() > 0 ? root->count() - 1 : 0;
-            root->insertWidget(insertAt, m_virtualKeyboard);
-        }
+
+        connect(m_virtualKeyboardWindow, &QDialog::finished, this, [this]() {
+            if (m_virtualKeyboardAction) m_virtualKeyboardAction->setChecked(false);
+            rebindVirtualKeyboardPulse();
+        });
     }
-    bool show = !m_virtualKeyboard->isVisible();
-    m_virtualKeyboard->setVisible(show);
-    if (m_virtualKeyboardAction) m_virtualKeyboardAction->setChecked(show);
+
+    if (m_virtualKeyboardWindow->isVisible()) {
+        m_virtualKeyboardWindow->reject();
+        return;
+    }
+
+    m_virtualKeyboard->refreshChordLabels();
+    if (firstShow) {
+        m_virtualKeyboardWindow->resize(900, 380);
+        m_virtualKeyboardWindow->move(
+            frameGeometry().center() - m_virtualKeyboardWindow->rect().center());
+    }
+    m_virtualKeyboardWindow->show();
+    m_virtualKeyboardWindow->raise();
+    m_virtualKeyboardWindow->activateWindow();
+    if (m_virtualKeyboardAction) m_virtualKeyboardAction->setChecked(true);
     rebindVirtualKeyboardPulse();
 }
 
@@ -47,7 +68,10 @@ void MainWindow::rebindVirtualKeyboardPulse() {
         QObject::disconnect(m_virtualKeyboardPulseConnection);
         m_virtualKeyboardPulseConnection = QMetaObject::Connection();
     }
-    if (!m_virtualKeyboard || !m_virtualKeyboard->isVisible() || !m_displayWidget) return;
+    if (!m_virtualKeyboardWindow || !m_virtualKeyboardWindow->isVisible()
+        || !m_virtualKeyboard || !m_displayWidget) {
+        return;
+    }
     m_virtualKeyboardPulseConnection = connect(
         m_displayWidget, &ui::widgets::Q5250ScreenWidget::keyRecorded,
         m_virtualKeyboard,

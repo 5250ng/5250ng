@@ -49,6 +49,10 @@
 #include <QVBoxLayout>
 #include <QWidgetAction>
 
+namespace qt_ui_style {
+class BaseFramelessDialog;
+}
+
 class MainWindow : public qt_ui_style::BaseFramelessWindow {
     Q_OBJECT
 
@@ -217,6 +221,7 @@ class MainWindow : public qt_ui_style::BaseFramelessWindow {
     QAction *m_mcpReadOnlyAction;
     QAction *m_matchReplaceEnableAction;
     QAction *m_virtualKeyboardAction = nullptr;
+    qt_ui_style::BaseFramelessDialog *m_virtualKeyboardWindow = nullptr;
     ui::widgets::QVirtualKeyboardWidget *m_virtualKeyboard = nullptr;
     QMetaObject::Connection m_virtualKeyboardPulseConnection;
     QLabel *m_cursorCoordinates; // Cursor position display (row/col)
