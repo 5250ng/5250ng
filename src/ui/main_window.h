@@ -86,6 +86,7 @@ class MainWindow : public qt_ui_style::BaseFramelessWindow {
     void onToggleFieldProtection();
     void onToggleInputFields();
     void onToggleCellGrid();
+    void onGddmCanvasOpacityChanged(int percent);
     void onReconnect();
     void onDuplicateSession();
     void onToggleFullscreen();
@@ -222,6 +223,7 @@ class MainWindow : public qt_ui_style::BaseFramelessWindow {
     ui::widgets::QConnectionStatusWidget *m_globalConnectionStatus; // Global bottom-bar status
 
     bool m_connected;
+    qreal m_gddmCanvasOpacity = 1.0;
     mcp::McpServer *m_mcpServer = nullptr;
     QTimer m_resizeLogTimer;            // Debounce resize logging
 

@@ -48,6 +48,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QClipboard>
+#include <QSettings>
 #include <QSet>
 #include <QUuid>
 #include <QTabBar>
@@ -414,6 +415,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     tabLayout->addWidget(terminalView);
     session->terminalView = terminalView;
     session->displayWidget = terminalView->screen();
+    session->displayWidget->setGddmGraphicsOpacity(m_gddmCanvasOpacity);
     // Per-tab footer with keyboard state, system name, history, macros, coordinates
     QHBoxLayout *footerLayout = new QHBoxLayout();
     footerLayout->setContentsMargins(5, 2, 5, 2);
@@ -962,6 +964,20 @@ void MainWindow::onToggleCellGrid() {
     if (m_displayWidget) {
         m_displayWidget->toggleCellGrid();
         m_showCellGridAction->setChecked(m_displayWidget->showCellGrid());
+    }
+}
+
+void MainWindow::onGddmCanvasOpacityChanged(int percent) {
+    const int boundedPercent = qBound(0, percent, 100);
+    m_gddmCanvasOpacity = boundedPercent / 100.0;
+
+    QSettings settings;
+    settings.setValue("Display/gddmCanvasOpacity", boundedPercent);
+
+    for (Session *session : m_sessions) {
+        if (session && session->displayWidget) {
+            session->displayWidget->setGddmGraphicsOpacity(m_gddmCanvasOpacity);
+        }
     }
 }
 
