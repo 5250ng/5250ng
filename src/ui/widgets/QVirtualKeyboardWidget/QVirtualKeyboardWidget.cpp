@@ -19,7 +19,6 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QGridLayout>
-#include <QLabel>
 #include <QMenu>
 #include <QPointer>
 #include <QString>
@@ -108,10 +107,6 @@ void QVirtualKeyboardWidget::buildLayout() {
     root->setSpacing(4);
 
     // --- Row of PF / command keys (Model M "F-row" extended) ----------------
-    QLabel *title = new QLabel(tr("Virtual 5250 Keyboard"), this);
-    title->setStyleSheet("font-weight: bold;");
-    root->addWidget(title);
-
     QGridLayout *fnGrid = new QGridLayout();
     fnGrid->setHorizontalSpacing(3);
     fnGrid->setVerticalSpacing(3);
