@@ -30,7 +30,12 @@
 #include <Qt>
 
 void MainWindow::setupMenuBar() {
+#ifdef Q_OS_MACOS
+    QMenuBar *bar = menuBar();
+    bar->setNativeMenuBar(true);
+#else
     QMenuBar *bar = titleBar()->menuBar();
+#endif
 
     // File menu
     QMenu *fileMenu = bar->addMenu("&File");
@@ -46,7 +51,10 @@ void MainWindow::setupMenuBar() {
     fileMenu->addSeparator();
     fileMenu->addAction("Replay Session from &PCAP...", this, &MainWindow::onReplayPcap);
     fileMenu->addSeparator();
-    fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
+    QAction *settingsAction =
+        fileMenu->addAction("&Settings...", this, &MainWindow::onOpenSettings);
+    settingsAction->setMenuRole(QAction::PreferencesRole);
+    settingsAction->setShortcut(QKeySequence::Preferences);
     fileMenu->addSeparator();
     QMenu *mcpMenu = fileMenu->addMenu("&MCP Server");
     m_mcpEnableAction = mcpMenu->addAction("&Enabled", this, &MainWindow::onMcpToggleEnabled);
@@ -65,14 +73,21 @@ void MainWindow::setupMenuBar() {
     mcpMenu->addAction("Show &Logs...", this, &MainWindow::onMcpShowLogs);
     fileMenu->addSeparator();
     m_exitAction = fileMenu->addAction("E&xit", this, &QWidget::close);
+    m_exitAction->setMenuRole(QAction::QuitRole);
     m_exitAction->setShortcut(QKeySequence::Quit);
 
     // Edit menu
     QMenu *editMenu = bar->addMenu("&Edit");
-    editMenu->addAction("&Copy", this, &MainWindow::onEditCopy);
-    editMenu->addAction("&Paste", this, &MainWindow::onEditPaste);
+    QAction *copyAction =
+        editMenu->addAction("&Copy", this, &MainWindow::onEditCopy);
+    copyAction->setShortcut(QKeySequence::Copy);
+    QAction *pasteAction =
+        editMenu->addAction("&Paste", this, &MainWindow::onEditPaste);
+    pasteAction->setShortcut(QKeySequence::Paste);
     editMenu->addSeparator();
-    editMenu->addAction("Select &All", this, &MainWindow::onEditSelectAll);
+    QAction *selectAllAction =
+        editMenu->addAction("Select &All", this, &MainWindow::onEditSelectAll);
+    selectAllAction->setShortcut(QKeySequence::SelectAll);
 
     // Session menu
     QMenu *sessionMenu = bar->addMenu("&Session");
@@ -101,6 +116,7 @@ void MainWindow::setupMenuBar() {
     QMenu *viewMenu = bar->addMenu("&View");
     m_fullscreenAction = viewMenu->addAction("&Fullscreen", this, &MainWindow::onToggleFullscreen);
     m_fullscreenAction->setCheckable(true);
+    m_fullscreenAction->setShortcut(QKeySequence::FullScreen);
     m_hotspotsAction = viewMenu->addAction("&Hotspots", this, &MainWindow::onToggleHotspots);
     m_hotspotsAction->setCheckable(true);
     viewMenu->addSeparator();
@@ -191,5 +207,7 @@ void MainWindow::setupMenuBar() {
     // Help menu
     QMenu *helpMenu = bar->addMenu("&Help");
     helpMenu->addSeparator();
-    helpMenu->addAction("&About", this, &MainWindow::onAbout);
+    QAction *aboutAction =
+        helpMenu->addAction("&About", this, &MainWindow::onAbout);
+    aboutAction->setMenuRole(QAction::AboutRole);
 }

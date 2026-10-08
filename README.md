@@ -59,14 +59,34 @@ cmake --build build
 ./build/bin/5250ng
 ```
 
-### Mac OS
+### macOS
+
+Download the DMG for your Mac (`arm64` for Apple Silicon or `x64` for Intel)
+from the [latest release](https://github.com/5250ng/5250ng/releases). Open it,
+then drag **5250ng** to **Applications**. The supported deployment baseline is
+macOS 13 Ventura or newer.
+
+To build from source:
 
 ```bash
-brew install qt cmake openssl
-cmake -S . -B build
+brew install qt@6 cmake openssl@3
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6);$(brew --prefix openssl@3)"
 cmake --build build
-./build/bin/5250ng.app/Contents/MacOS/5250ng
+open build/bin/5250ng.app
 ```
+
+Create a self-contained, drag-to-Applications installer with:
+
+```bash
+make package-macos
+open dist/5250ng-macos-$(uname -m).dmg
+```
+
+The packaging step bundles Qt frameworks and plugins, verifies that no
+Homebrew or build-machine library paths remain, signs the app ad hoc for local
+use, and creates a compressed DMG. Public releases can be Developer ID signed
+and notarized by configuring the repository secrets documented below.
 
 ### Windows
 
@@ -230,6 +250,22 @@ Toggle visual overlays for debugging and navigation: cursor rules (crosshair sho
 ## Contributing
 
 Pull requests are welcome. Feel free to open an issue if you want to add other features.
+
+### Signed and notarized macOS releases
+
+The release workflow always builds installable Intel and Apple Silicon DMGs.
+For Gatekeeper-ready public releases, configure these GitHub Actions secrets:
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | Base64-encoded Developer ID Application `.p12` |
+| `MACOS_CERTIFICATE_PASSWORD` | Password for the `.p12` file |
+| `MACOS_NOTARY_KEY_P8` | Base64-encoded App Store Connect API `.p8` key |
+| `MACOS_NOTARY_KEY_ID` | App Store Connect API key ID |
+| `MACOS_NOTARY_ISSUER_ID` | App Store Connect issuer ID |
+
+Without those secrets the workflow still produces an ad-hoc-signed DMG for
+testing, but macOS Gatekeeper may require the user to explicitly approve it.
 
 ## Credits
 

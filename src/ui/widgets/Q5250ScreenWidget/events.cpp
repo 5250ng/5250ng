@@ -25,6 +25,7 @@
 #include <QFocusEvent>
 #include <QFontMetrics>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -79,7 +80,7 @@ void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {
 void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
     // In read-only mode, only allow copy (MCP-injected input bypasses this)
     if (m_readOnly && !m_mcpInjecting) {
-        if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_C) {
+        if (event->matches(QKeySequence::Copy)) {
             if (hasSelection()) {
                 copySelection();
                 event->accept();
@@ -90,8 +91,8 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
         return;
     }
 
-    // Handle Ctrl+C for copying selection
-    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_C) {
+    // Handle the platform copy shortcut (Command+C on macOS, Ctrl+C elsewhere)
+    if (event->matches(QKeySequence::Copy)) {
         if (hasSelection()) {
             copySelection();
             event->accept();
@@ -99,8 +100,8 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
         }
     }
 
-    // Handle Ctrl+V for pasting from clipboard
-    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_V) {
+    // Handle the platform paste shortcut (Command+V on macOS, Ctrl+V elsewhere)
+    if (event->matches(QKeySequence::Paste)) {
         handlePaste();
         event->accept();
         return;

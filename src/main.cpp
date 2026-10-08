@@ -64,6 +64,7 @@ int main(int argc, char *argv[]) {
     qRegisterMetaType<uint8_t>("uint8_t");
 
     app.setApplicationName("5250ng");
+    app.setApplicationDisplayName("5250ng");
     app.setApplicationVersion(APP_VERSION);
     app.setOrganizationName("5250ng");
     app.setWindowIcon(QIcon(":/icons/5250ng.png"));

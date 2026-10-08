@@ -1,7 +1,7 @@
 # Makefile for 5250ng project
 # Based on build instructions from README.md
 
-.PHONY: all build clean install-deps run help
+.PHONY: all build clean install-deps run package-macos help
 
 # Parallel build configuration
 # Override with: make JOBS=8
@@ -24,6 +24,10 @@ build:
 ifeq ($(UNAME_S),Linux)
 	@PATH=/usr/bin:$(PATH) cmake -S . -B build
 	@PATH=/usr/bin:$(PATH) cmake --build build $(PARALLEL)
+else ifeq ($(UNAME_S),Darwin)
+	@cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_PREFIX_PATH="$$(brew --prefix qt@6);$$(brew --prefix openssl@3)"
+	@cmake --build build $(PARALLEL)
 else
 	@cmake -S . -B build
 	@cmake --build build $(PARALLEL)
@@ -44,7 +48,7 @@ install-deps-linux:
 # Install dependencies (macOS)
 install-deps-macos:
 	@echo "Installing dependencies for macOS..."
-	@brew install qt cmake
+	@brew install qt@6 openssl@3 cmake
 
 # Install dependencies (auto-detect OS)
 install-deps:
@@ -60,9 +64,19 @@ endif
 # Run the application
 run: build
 ifeq ($(UNAME_S),Darwin)
-	@./build/5250ng.app/Contents/MacOS/5250ng
+	@open ./build/bin/5250ng.app
 else
 	@./build/bin/5250ng
+endif
+
+# Build a self-contained drag-to-Applications disk image on macOS.
+package-macos: build
+ifeq ($(UNAME_S),Darwin)
+	@mkdir -p dist
+	@./scripts/package_macos.sh ./build/bin/5250ng.app ./dist/5250ng-macos-$$(uname -m).dmg
+else
+	@echo "package-macos must be run on macOS"
+	@exit 1
 endif
 
 # Windows build (PowerShell)
@@ -82,6 +96,7 @@ help:
 	@echo "  clean            - Remove build directory"
 	@echo "  install-deps     - Install dependencies (Linux/macOS)"
 	@echo "  run              - Build and run the application"
+	@echo "  package-macos    - Build a self-contained macOS DMG"
 	@echo "  build-windows    - Build for Windows (Visual Studio)"
 	@echo ""
 	@echo "Parallel build:"
@@ -95,4 +110,3 @@ help:
 	@echo "  make clean       - Clean build artifacts"
 	@echo "  make install-deps - Install dependencies"
 	@echo "  make run         - Build and run"
-

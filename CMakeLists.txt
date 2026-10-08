@@ -13,6 +13,14 @@ endif()
 # Build options
 option(BUILD_TESTS "Build unit and integration tests" ON)
 
+# Keep release bundles runnable on currently supported Intel and Apple Silicon
+# Macs.  Callers can override this when targeting a different deployment
+# baseline.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING
+        "Minimum macOS version supported by the application")
+endif()
+
 # Qt6 configuration
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -37,6 +45,12 @@ if(NOT TARGET QtUiStyle::Dialogs)
     FetchContent_MakeAvailable(QtUiStyle)
 endif()
 
+# Avoid a Homebrew-only libcrypto path in distributable macOS bundles.  The
+# application uses OpenSSL::Crypto directly; linking that dependency statically
+# leaves Qt's own TLS backend to use the platform/backend libraries it deploys.
+if(APPLE)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
 find_package(OpenSSL REQUIRED)
 
 # TLS support gate. QSslSocket ships inside Qt6::Network (there is no
@@ -333,6 +347,35 @@ if(WIN32)
     set(WIN32_RESOURCES ${CMAKE_CURRENT_BINARY_DIR}/5250ng.rc)
 endif()
 
+# macOS application icon.  The checked-in PNG is also used by Qt at runtime;
+# generate Apple's multi-resolution .icns container as part of a macOS build.
+if(APPLE)
+    set(MACOS_ICON ${CMAKE_CURRENT_BINARY_DIR}/5250ng.icns)
+    add_custom_command(
+        OUTPUT ${MACOS_ICON}
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT_PNG=${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/5250ng.png
+            -DOUTPUT_ICNS=${MACOS_ICON}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CreateMacIcon.cmake
+        DEPENDS
+            ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/5250ng.png
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CreateMacIcon.cmake
+        COMMENT "Generating macOS application icon"
+        VERBATIM
+    )
+    set_source_files_properties(${MACOS_ICON} PROPERTIES
+        GENERATED TRUE
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/LICENSE PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    set(MACOS_RESOURCES
+        ${MACOS_ICON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
+    )
+endif()
+
 # Main executable
 add_executable(5250ng
     src/main.cpp
@@ -348,6 +391,7 @@ add_executable(5250ng
     ${UTILS_SOURCES}
     ${AGENT_SOURCES}
     ${WIN32_RESOURCES}
+    ${MACOS_RESOURCES}
 )
 
 target_link_libraries(5250ng
@@ -484,8 +528,9 @@ if(BUILD_TESTS)
     message(STATUS "Testing enabled - unit and integration tests configured")
 endif()
 
-# Installation (for future phases)
+# Installation
 install(TARGETS 5250ng
+    BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
 
@@ -511,5 +556,9 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.p0dalirius.5250ng"
+        MACOSX_BUNDLE_ICON_FILE "5250ng.icns"
+        MACOSX_BUNDLE_INFO_PLIST
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist.in"
+        INSTALL_RPATH "@executable_path/../Frameworks"
     )
 endif()

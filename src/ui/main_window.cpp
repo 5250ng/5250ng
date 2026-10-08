@@ -242,7 +242,7 @@ class McpTabStyle : public QProxyStyle {
  * @param parent Optional parent QWidget.
  */
 MainWindow::MainWindow(QWidget *parent)
-    : qt_ui_style::BaseFramelessWindow(parent), m_displayWidget(nullptr),
+    : MainWindowBase(parent), m_displayWidget(nullptr),
       m_parser(nullptr), m_cursorCoordinates(nullptr), m_connected(false) {
     setWindowTitle("5250ng");
     resize(900, 645);
@@ -1201,7 +1201,7 @@ void MainWindow::applyThemeToSession(Session *session, const QString &themeId) {
 
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
-    BaseFramelessWindow::resizeEvent(event);
+    MainWindowBase::resizeEvent(event);
     m_resizeLogTimer.start(); // Debounce: log only after resizing stops
 }
 
@@ -1248,7 +1248,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     // gestures also work over child widgets. Events can therefore arrive
     // before setupUI() has created the tab widget.
     if (!m_tabWidget) {
-        return qt_ui_style::BaseFramelessWindow::eventFilter(obj, event);
+        return MainWindowBase::eventFilter(obj, event);
     }
 
     // Resize CRT overlay to match tab container; repaint bg image
@@ -1365,7 +1365,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             return true;
         }
     }
-    return qt_ui_style::BaseFramelessWindow::eventFilter(obj, event);
+    return MainWindowBase::eventFilter(obj, event);
 }
 
 // onClearScreenRequested, onKeyboardUnlockRequested, onControlCharactersReceived,
