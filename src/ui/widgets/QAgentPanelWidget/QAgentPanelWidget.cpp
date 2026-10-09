@@ -158,12 +158,18 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     layout->addWidget(inputWrapper);
 
     // --- Font zoom shortcuts ---
-    auto *zoomIn = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Plus), this);
-    connect(zoomIn, &QShortcut::activated, this, [this]() { adjustFontSize(1); });
-    auto *zoomInAlt = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Equal), this);
-    connect(zoomInAlt, &QShortcut::activated, this, [this]() { adjustFontSize(1); });
-    auto *zoomOut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus), this);
-    connect(zoomOut, &QShortcut::activated, this, [this]() { adjustFontSize(-1); });
+    for (const QKeySequence &sequence :
+         QKeySequence::keyBindings(QKeySequence::ZoomIn)) {
+        auto *shortcut = new QShortcut(sequence, this);
+        connect(shortcut, &QShortcut::activated, this,
+                [this]() { adjustFontSize(1); });
+    }
+    for (const QKeySequence &sequence :
+         QKeySequence::keyBindings(QKeySequence::ZoomOut)) {
+        auto *shortcut = new QShortcut(sequence, this);
+        connect(shortcut, &QShortcut::activated, this,
+                [this]() { adjustFontSize(-1); });
+    }
 
     // --- Thinking indicator timer ---
     m_thinkingTimer = new QTimer(this);

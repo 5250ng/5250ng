@@ -85,17 +85,27 @@ void MainWindow::setupUI() {
         if (index == -1) onNewSession();
     });
 
-    // Ctrl+Tab / Ctrl+Shift+Tab to cycle tabs
-    auto *nextTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), this);
-    connect(nextTab, &QShortcut::activated, this, [this]() {
-        if (m_tabWidget->count() > 1)
-            m_tabWidget->setCurrentIndex((m_tabWidget->currentIndex() + 1) % m_tabWidget->count());
-    });
-    auto *prevTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab), this);
-    connect(prevTab, &QShortcut::activated, this, [this]() {
-        if (m_tabWidget->count() > 1)
-            m_tabWidget->setCurrentIndex((m_tabWidget->currentIndex() - 1 + m_tabWidget->count()) % m_tabWidget->count());
-    });
+    // Use Qt's platform bindings so macOS gets physical Control+Tab rather
+    // than Command+Tab, which belongs to the system application switcher.
+    for (const QKeySequence &sequence :
+         QKeySequence::keyBindings(QKeySequence::NextChild)) {
+        auto *shortcut = new QShortcut(sequence, this);
+        connect(shortcut, &QShortcut::activated, this, [this]() {
+            if (m_tabWidget->count() > 1)
+                m_tabWidget->setCurrentIndex(
+                    (m_tabWidget->currentIndex() + 1) % m_tabWidget->count());
+        });
+    }
+    for (const QKeySequence &sequence :
+         QKeySequence::keyBindings(QKeySequence::PreviousChild)) {
+        auto *shortcut = new QShortcut(sequence, this);
+        connect(shortcut, &QShortcut::activated, this, [this]() {
+            if (m_tabWidget->count() > 1)
+                m_tabWidget->setCurrentIndex(
+                    (m_tabWidget->currentIndex() - 1 + m_tabWidget->count())
+                    % m_tabWidget->count());
+        });
+    }
 
     // Active session pointers are null until a tab is created
     m_displayWidget = nullptr;

@@ -84,8 +84,11 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: '13.0'
         run: |
           set -e
-          OPENSSL_VERSION=3.3.2
+          OPENSSL_VERSION=3.5.9
+          OPENSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
           curl -fsSLO "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
+          printf '%s  %s\n' "$OPENSSL_SHA256" "openssl-${OPENSSL_VERSION}.tar.gz" \
+            | shasum -a 256 -c -
           tar xf "openssl-${OPENSSL_VERSION}.tar.gz"
           cd "openssl-${OPENSSL_VERSION}"
           if [ "${{ matrix.macos_cmake_arch }}" = "x86_64" ]; then
@@ -107,6 +110,58 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=${{ matrix.macos_cmake_arch }} \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR"
+
+      - name: Prepare macOS signing and notarization
+        if: matrix.os == 'macos'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_NOTARY_KEY_P8: ${{ secrets.MACOS_NOTARY_KEY_P8 }}
+          MACOS_NOTARY_KEY_ID_SECRET: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID_SECRET: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$MACOS_CERTIFICATE_P12" ]]; then
+            CERTIFICATE_PATH="$RUNNER_TEMP/5250ng-signing.p12"
+            KEYCHAIN_PATH="$RUNNER_TEMP/5250ng-signing.keychain-db"
+            KEYCHAIN_PASSWORD="$(uuidgen)"
+
+            printf '%s' "$MACOS_CERTIFICATE_P12" \
+              | openssl base64 -d -A > "$CERTIFICATE_PATH"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security import "$CERTIFICATE_PATH" \
+              -P "$MACOS_CERTIFICATE_PASSWORD" \
+              -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+            security set-key-partition-list \
+              -S apple-tool:,apple: -s \
+              -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+            SIGNING_IDENTITY="$(security find-identity -v -p codesigning \
+              "$KEYCHAIN_PATH" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+            if [[ -z "$SIGNING_IDENTITY" ]]; then
+              echo "Developer ID Application identity not found in certificate" >&2
+              exit 1
+            fi
+            printf 'MACOS_SIGNING_IDENTITY=%s\n' "$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          else
+            echo "Signing certificate not configured; release will be ad-hoc signed"
+          fi
+
+          if [[ -n "$MACOS_NOTARY_KEY_P8" ]]; then
+            NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID_SECRET}.p8"
+            printf '%s' "$MACOS_NOTARY_KEY_P8" \
+              | openssl base64 -d -A > "$NOTARY_KEY_PATH"
+            chmod 600 "$NOTARY_KEY_PATH"
+            printf 'MACOS_NOTARY_KEY=%s\n' "$NOTARY_KEY_PATH" >> "$GITHUB_ENV"
+            printf 'MACOS_NOTARY_KEY_ID=%s\n' \
+              "$MACOS_NOTARY_KEY_ID_SECRET" >> "$GITHUB_ENV"
+            printf 'MACOS_NOTARY_ISSUER_ID=%s\n' \
+              "$MACOS_NOTARY_ISSUER_ID_SECRET" >> "$GITHUB_ENV"
+          fi
 
       # ── Windows ──
       - name: Install Qt (Windows)
@@ -146,51 +201,13 @@ jobs:
 
       - name: Package (macOS)
         if: matrix.os == 'macos'
+        env:
+          MACOS_EXPECTED_ARCH: ${{ matrix.macos_cmake_arch }}
+          MACOS_EXPECTED_MIN_VERSION: '13.0'
         run: |
-          set -euo pipefail
-
-          app=build/bin/5250ng.app
-          archive=5250ng-macos-${{ matrix.arch }}.zip
-          expected_arch=${{ matrix.macos_cmake_arch }}
-
-          # macdeployqt makes the bundle self-contained and ad-hoc signs every
-          # executable. Users still need to approve an unnotarized download,
-          # but the bundle itself must have a valid, internally consistent
-          # signature.
-          macdeployqt "$app" -codesign=- -verbose=2
-
-          lipo "$app/Contents/MacOS/5250ng" -verify_arch "$expected_arch"
-          minimum_os=$(otool -l "$app/Contents/MacOS/5250ng" |
-            awk '/LC_BUILD_VERSION/{build=1} build && /minos/{print $2; exit}')
-          if [[ "$minimum_os" != "13.0" ]]; then
-            echo "Expected macOS deployment target 13.0, found $minimum_os" >&2
-            exit 1
-          fi
-          codesign --verify --deep --strict --verbose=2 "$app"
-
-          # AGL was removed in macOS 26. Check every Mach-O file so an older Qt
-          # package cannot silently reintroduce a launch-time dependency on it.
-          while IFS= read -r binary; do
-            if file "$binary" | grep -q 'Mach-O' && \
-               otool -L "$binary" | grep -q '/AGL.framework/'; then
-              echo "Obsolete AGL dependency found in $binary" >&2
-              exit 1
-            fi
-          done < <(find "$app" -type f)
-
-          # ditto preserves the framework symlinks and macOS metadata. Plain
-          # `zip -r` follows those symlinks and changes the signed app bundle.
-          ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
-
-          # Verify the exact archive users receive, not only the pre-archive
-          # build directory.
-          mkdir package-check
-          ditto -x -k "$archive" package-check
-          packaged_app=package-check/5250ng.app
-          test -L "$packaged_app/Contents/Frameworks/QtCore.framework/Versions/Current"
-          lipo "$packaged_app/Contents/MacOS/5250ng" -verify_arch "$expected_arch"
-          codesign --verify --deep --strict --verbose=2 "$packaged_app"
-          "$packaged_app/Contents/MacOS/5250ng" --version
+          scripts/package_macos.sh \
+            build/bin/5250ng.app \
+            5250ng-macos-${{ matrix.arch }}.dmg
 
       - name: Package (Windows)
         if: matrix.os == 'windows'

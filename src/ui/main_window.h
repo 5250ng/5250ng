@@ -41,6 +41,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMainWindow>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -53,7 +54,31 @@ namespace qt_ui_style {
 class BaseFramelessDialog;
 }
 
-class MainWindow : public qt_ui_style::BaseFramelessWindow {
+#ifdef Q_OS_MACOS
+// macOS supplies window movement, resizing, full-screen behavior and the
+// traffic-light controls.  Use the native frame there while retaining the
+// project's custom frameless chrome on the other desktop platforms.
+class MainWindowBase : public QMainWindow {
+  public:
+    explicit MainWindowBase(QWidget *parent = nullptr)
+        : QMainWindow(parent), m_content(new QWidget(this)),
+          m_contentLayout(new QVBoxLayout(m_content)) {
+        m_contentLayout->setContentsMargins(0, 0, 0, 0);
+        m_contentLayout->setSpacing(0);
+        setCentralWidget(m_content);
+    }
+
+    QVBoxLayout *contentLayout() const { return m_contentLayout; }
+
+  private:
+    QWidget *m_content;
+    QVBoxLayout *m_contentLayout;
+};
+#else
+using MainWindowBase = qt_ui_style::BaseFramelessWindow;
+#endif
+
+class MainWindow : public MainWindowBase {
     Q_OBJECT
 
   public:
