@@ -57,6 +57,11 @@ class FakeHost : public QObject {
     }
 };
 
+// Generous waits: on Windows a refused connection to a closed localhost
+// port takes about two seconds (the SYN is retried), and CI runners are slow.
+constexpr int kWaitMs = 15000;
+constexpr int kRefusedAttemptsWaitMs = 30000;
+
 ::session::SessionConfig makeConfig(quint16 port) {
     ::session::SessionConfig config;
     config.setHostname(QStringLiteral("127.0.0.1"));
@@ -97,11 +102,11 @@ void TestSessionWorkerReconnect::testReconnectsAfterDrop() {
     });
 
     worker.start();
-    QTRY_COMPARE_WITH_TIMEOUT(scheduled.size(), 1, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(scheduled.size(), 1, kWaitMs);
     QCOMPARE(scheduled.first().at(0).toInt(), 1); // attempt
     QCOMPARE(scheduled.first().at(1).toInt(), 2); // max attempts
     QCOMPARE(scheduled.first().at(2).toInt(), 1); // delay
-    QTRY_COMPARE_WITH_TIMEOUT(connectedCount, 2, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(connectedCount, 2, kWaitMs);
     QCOMPARE(host.connections, 2);
     QVERIFY2(errors.isEmpty(), "a dropped session being reconnected must not report an error");
     worker.stop();
@@ -118,11 +123,11 @@ void TestSessionWorkerReconnect::testGivesUpAfterMaxAttempts() {
     QSignalSpy errors(&worker, &Worker::errorOccurred);
 
     worker.start();
-    QTRY_COMPARE_WITH_TIMEOUT(scheduled.size(), 1, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(scheduled.size(), 1, kWaitMs);
     host.server.close(); // later attempts are refused
 
     // Two attempts are allowed; after the second refusal the error surfaces
-    QTRY_COMPARE_WITH_TIMEOUT(errors.size(), 1, 8000);
+    QTRY_COMPARE_WITH_TIMEOUT(errors.size(), 1, kRefusedAttemptsWaitMs);
     QCOMPARE(scheduled.size(), 2);
     worker.stop();
 }
@@ -139,7 +144,7 @@ void TestSessionWorkerReconnect::testNoReconnectWhenDisabled() {
     QSignalSpy disconnected(&worker, &Worker::disconnected);
 
     worker.start();
-    QTRY_VERIFY_WITH_TIMEOUT(!disconnected.isEmpty(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!disconnected.isEmpty(), kWaitMs);
     QTest::qWait(1500);
     QCOMPARE(scheduled.size(), 0);
     QCOMPARE(host.connections, 1);
@@ -160,7 +165,7 @@ void TestSessionWorkerReconnect::testNoReconnectAfterStop() {
     });
 
     worker.start();
-    QTRY_VERIFY_WITH_TIMEOUT(connected, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(connected, kWaitMs);
     worker.stop(); // user-initiated disconnect
     QTest::qWait(1500);
     QCOMPARE(scheduled.size(), 0);
@@ -179,7 +184,7 @@ void TestSessionWorkerReconnect::testStopCancelsPendingReconnect() {
     QSignalSpy states(&worker, &Worker::stateChanged);
 
     worker.start();
-    QTRY_COMPARE_WITH_TIMEOUT(scheduled.size(), 1, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(scheduled.size(), 1, kWaitMs);
     states.clear();
     worker.stop();
     QCOMPARE(states.size(), 1);
