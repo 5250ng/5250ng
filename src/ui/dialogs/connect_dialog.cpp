@@ -25,6 +25,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
+#include <QSignalBlocker>
 #include <QGroupBox>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -84,10 +85,8 @@ void ConnectDialog::setupUI() {
 
     QHBoxLayout *sessionButtonsLayout = new QHBoxLayout();
     m_loadSessionButton = new QPushButton("Load Session", this);
-    m_saveSessionButton = new QPushButton("Save Session", this);
     m_deleteSessionButton = new QPushButton("Delete Session", this);
     sessionButtonsLayout->addWidget(m_loadSessionButton);
-    sessionButtonsLayout->addWidget(m_saveSessionButton);
     sessionButtonsLayout->addWidget(m_deleteSessionButton);
     sessionLayout->addLayout(sessionButtonsLayout);
 
@@ -330,11 +329,17 @@ void ConnectDialog::setupUI() {
     splitter->setSizes({170, 680});
     mainLayout->addWidget(splitter, 1);
 
-    // Buttons
+    // Buttons - saving lives here so it is reachable from every page
     QHBoxLayout *buttonLayout = new QHBoxLayout();
+    m_saveSessionButton = new QPushButton("Save", this);
+    m_saveSessionButton->setToolTip("Save changes to the loaded session, or save as a new session");
+    m_saveSessionAsButton = new QPushButton("Save As...", this);
+    m_saveSessionAsButton->setToolTip("Save these settings as a new named session");
     m_connectButton = new QPushButton("Connect", this);
     m_connectButton->setDefault(true);
     m_cancelButton = new QPushButton("Cancel", this);
+    buttonLayout->addWidget(m_saveSessionButton);
+    buttonLayout->addWidget(m_saveSessionAsButton);
     buttonLayout->addStretch();
     buttonLayout->addWidget(m_connectButton);
     buttonLayout->addWidget(m_cancelButton);
@@ -344,6 +349,7 @@ void ConnectDialog::setupUI() {
     connect(m_connectButton, &QPushButton::clicked, this, &ConnectDialog::onConnectClicked);
     connect(m_cancelButton, &QPushButton::clicked, this, &ConnectDialog::onCancelClicked);
     connect(m_saveSessionButton, &QPushButton::clicked, this, &ConnectDialog::onSaveSessionClicked);
+    connect(m_saveSessionAsButton, &QPushButton::clicked, this, &ConnectDialog::onSaveSessionAsClicked);
     connect(m_loadSessionButton, &QPushButton::clicked, this, &ConnectDialog::onLoadSessionClicked);
     connect(m_deleteSessionButton, &QPushButton::clicked, this, &ConnectDialog::onDeleteSessionClicked);
     connect(m_attachScriptButton, &QPushButton::clicked, this, &ConnectDialog::onAttachScriptClicked);
@@ -429,7 +435,8 @@ void ConnectDialog::updateUI() {
 
 session::SessionConfig ConnectDialog::getSessionConfig() const {
     session::SessionConfig config;
-    config.setName("Current Session");
+    config.setName(m_savedSessionName.isEmpty() ? QStringLiteral("Current Session")
+                                                : m_savedSessionName);
     config.setHostname(m_hostnameEdit->text());
     config.setPort(static_cast<quint16>(m_portSpin->value()));
     config.setUseTLS(m_tlsCheck->isChecked());
@@ -478,6 +485,7 @@ void ConnectDialog::loadSession(const QString &sessionName) {
     session::SessionManager sessionManager(this);
     session::SessionConfig config;
     if (sessionManager.loadSession(sessionName, config)) {
+        m_savedSessionName = sessionName;
         setSessionConfig(config);
         emit sessionSelected(sessionName);
     } else {
@@ -488,38 +496,103 @@ void ConnectDialog::loadSession(const QString &sessionName) {
     }
 }
 
-void ConnectDialog::saveCurrentAsSession() {
-    bool ok;
-    QString sessionName = qt_ui_style::StyledInputDialog::getText(
-        this, "Save Session", "Session name:", QLineEdit::Normal,
-        m_currentConfig.name(), &ok
-    );
+bool ConnectDialog::isSavedSessionName(const QString &name) {
+    return !name.isEmpty() && name != "Current Session"
+        && name != "Command Line Session";
+}
+
+bool ConnectDialog::promptSaveSessionAs(QWidget *parent, session::SessionConfig &config) {
+    if (config.hostname().isEmpty()) {
+        qt_ui_style::StyledMessageBox::warning(parent, "Save Session",
+                                               "Hostname is required to save a session.");
+        return false;
+    }
+
+    session::SessionManager sessionManager;
+    const QString currentName = config.name();
+    const QString suggested = sessionManager.sessionExists(currentName)
+        ? currentName
+        : QString("%1:%2").arg(config.hostname()).arg(config.port());
+    bool ok = false;
+    const QString sessionName = qt_ui_style::StyledInputDialog::getText(
+        parent, "Save Session", "Session name:", QLineEdit::Normal,
+        suggested, &ok
+    ).trimmed();
     if (!ok || sessionName.isEmpty()) {
+        return false;
+    }
+    if (!isSavedSessionName(sessionName)) {
+        qt_ui_style::StyledMessageBox::warning(
+            parent, "Save Session",
+            QString("'%1' is a reserved name. Please choose another.").arg(sessionName));
+        return false;
+    }
+
+    if (sessionName != currentName && sessionManager.sessionExists(sessionName)) {
+        auto reply = qt_ui_style::StyledMessageBox::question(
+            parent, "Save Session",
+            QString("A session named '%1' already exists. Overwrite it?").arg(sessionName));
+        if (reply != qt_ui_style::StyledMessageBox::Yes) {
+            return false;
+        }
+    }
+
+    session::SessionConfig toSave = config;
+    toSave.setName(sessionName);
+    if (!toSave.isValid() || !sessionManager.saveSession(toSave)) {
+        qt_ui_style::StyledMessageBox::warning(parent, "Save Session", "Failed to save session.");
+        return false;
+    }
+    config.setName(sessionName);
+    return true;
+}
+
+void ConnectDialog::saveCurrentSession() {
+    if (m_savedSessionName.isEmpty()) {
+        saveCurrentAsSession();
         return;
     }
 
     session::SessionConfig config = getSessionConfig();
-    config.setName(sessionName);
-
-    if (!config.isValid()) {
-        qt_ui_style::StyledMessageBox::warning(this, "Save Session", "Invalid session configuration.");
+    if (config.hostname().isEmpty()) {
+        qt_ui_style::StyledMessageBox::warning(this, "Save Session",
+                                               "Hostname is required to save a session.");
         return;
     }
-
     session::SessionManager sessionManager(this);
-    if (sessionManager.saveSession(config)) {
-        // Update combo box
+    if (!config.isValid() || !sessionManager.saveSession(config)) {
+        qt_ui_style::StyledMessageBox::warning(this, "Save Session", "Failed to save session.");
+        return;
+    }
+    m_currentConfig = config;
+    qt_ui_style::StyledMessageBox::information(
+        this, "Save Session",
+        QString("Session '%1' saved successfully.").arg(m_savedSessionName)
+    );
+}
+
+void ConnectDialog::saveCurrentAsSession() {
+    session::SessionConfig config = getSessionConfig();
+    if (!promptSaveSessionAs(this, config)) {
+        return;
+    }
+    const QString sessionName = config.name();
+    m_savedSessionName = sessionName;
+    m_currentConfig = config;
+
+    // Select the saved entry without reloading it over the form
+    {
+        QSignalBlocker blocker(m_sessionCombo);
         if (m_sessionCombo->findText(sessionName) == -1) {
             m_sessionCombo->addItem(sessionName);
         }
         m_sessionCombo->setCurrentText(sessionName);
-        qt_ui_style::StyledMessageBox::information(
-            this, "Save Session",
-            QString("Session '%1' saved successfully.").arg(sessionName)
-        );
-    } else {
-        qt_ui_style::StyledMessageBox::warning(this, "Save Session", "Failed to save session.");
     }
+    m_deleteSessionButton->setEnabled(true);
+    qt_ui_style::StyledMessageBox::information(
+        this, "Save Session",
+        QString("Session '%1' saved successfully.").arg(sessionName)
+    );
 }
 
 QStringList ConnectDialog::availableSessions() const {
@@ -542,7 +615,9 @@ void ConnectDialog::onConnectClicked() {
 
 void ConnectDialog::onCancelClicked() { reject(); }
 
-void ConnectDialog::onSaveSessionClicked() { saveCurrentAsSession(); }
+void ConnectDialog::onSaveSessionClicked() { saveCurrentSession(); }
+
+void ConnectDialog::onSaveSessionAsClicked() { saveCurrentAsSession(); }
 
 void ConnectDialog::onLoadSessionClicked() {
     QString sessionName = m_sessionCombo->currentText();
@@ -554,6 +629,9 @@ void ConnectDialog::onSessionComboChanged(const QString &sessionName) {
         loadSession(sessionName);
         m_deleteSessionButton->setEnabled(true);
     } else {
+        // Keep the current field values as a starting point, but detach
+        // them from the previously loaded session.
+        m_savedSessionName.clear();
         m_deleteSessionButton->setEnabled(false);
     }
 }
@@ -675,6 +753,7 @@ void ConnectDialog::onDeleteSessionClicked() {
             m_sessionCombo->removeItem(idx);
         }
         m_sessionCombo->setCurrentText("(New Session)");
+        m_savedSessionName.clear();
         m_deleteSessionButton->setEnabled(false);
         qt_ui_style::StyledMessageBox::information(this, "Delete Session", QString("Session '%1' deleted.").arg(sessionName));
     } else {

@@ -314,6 +314,7 @@ set(UI_SOURCES
     src/ui/actions/onTakeScreenshot.cpp
     src/ui/actions/onReconnect.cpp
     src/ui/actions/onDuplicateSession.cpp
+    src/ui/actions/onSaveSession.cpp
     src/ui/actions/onCopySessionGuid.cpp
     src/ui/actions/onToggleFullscreen.cpp
     src/ui/actions/onEditActions.cpp

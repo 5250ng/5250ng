@@ -118,6 +118,8 @@ class MainWindow : public MainWindowBase {
     void onGddmCanvasOpacityChanged(int percent);
     void onReconnect();
     void onDuplicateSession();
+    void onSaveSession();
+    void onSaveSessionAs();
     void onToggleFullscreen();
     void onEditCopy();
     void onEditPaste();
@@ -229,6 +231,8 @@ class MainWindow : public MainWindowBase {
     QAction *m_exitAction;
     QAction *m_reconnectAction;
     QAction *m_duplicateAction;
+    QAction *m_saveSessionAction;
+    QAction *m_saveSessionAsAction;
     QAction *m_copyGuidAction;
     QAction *m_sessionLogsAction;
     QAction *m_fullscreenAction;
