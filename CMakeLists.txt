@@ -243,6 +243,13 @@ set(DISPLAY_SOURCES
     src/ui/widgets/Q5250ScreenWidget/cursor.cpp
     src/ui/widgets/Q5250ScreenWidget/utils.cpp
     src/ui/widgets/Q5250ScreenWidget/selection.cpp
+    # script editor
+    src/ui/widgets/QScriptEditorWidget/QScriptEditorWidget.cpp
+    src/ui/widgets/QScriptEditorWidget/QScriptEditorWidget.h
+    src/ui/widgets/QScriptEditorWidget/ScriptCodeEditor.cpp
+    src/ui/widgets/QScriptEditorWidget/ScriptCodeEditor.h
+    src/ui/widgets/QScriptEditorWidget/ScriptSyntaxHighlighter.cpp
+    src/ui/widgets/QScriptEditorWidget/ScriptSyntaxHighlighter.h
 )
 
 set(UI_SOURCES
@@ -478,6 +485,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
     add_tn5250_test(test_aid_key_map tests/unit/test_aid_key_map.cpp)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
+    add_tn5250_test(test_script_editor tests/unit/test_script_editor.cpp)
     add_tn5250_test(test_command_runner tests/unit/test_command_runner.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
