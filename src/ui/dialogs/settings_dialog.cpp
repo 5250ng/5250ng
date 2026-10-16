@@ -19,6 +19,7 @@
 #include "agent/config.h"
 #include "agent/tool_definitions.h"
 #include "core/macro_config.h"
+#include "core/script_config.h"
 #include "agent/auth/api_key_auth.h"
 #include "agent/auth/oauth_auth.h"
 #include "agent/auth/token_storage.h"
@@ -608,24 +609,27 @@ QWidget *SettingsDialog::buildScriptsGeneralPage() {
     layout->addWidget(editorGroup);
 
     // Default execution settings
+    auto &scriptCfg = core::ScriptConfig::instance();
+    scriptCfg.load();
     QGroupBox *execGroup = new QGroupBox("Default Execution Settings", page);
     QFormLayout *execLayout = new QFormLayout(execGroup);
 
     m_defaultTimeoutSpin = new QSpinBox(execGroup);
-    m_defaultTimeoutSpin->setRange(1000, 120000);
+    m_defaultTimeoutSpin->setRange(core::ScriptConfig::kMinExpectTimeoutMs,
+                                   core::ScriptConfig::kMaxExpectTimeoutMs);
     m_defaultTimeoutSpin->setSingleStep(1000);
     m_defaultTimeoutSpin->setSuffix(" ms");
-    m_defaultTimeoutSpin->setValue(30000);
+    m_defaultTimeoutSpin->setValue(scriptCfg.expectTimeoutMs());
     m_defaultTimeoutSpin->setToolTip(
         "Default timeout for EXPECT commands.\n"
         "Scripts can override this with GLOBAL EXPECT_TIMEOUT.");
     execLayout->addRow("EXPECT timeout:", m_defaultTimeoutSpin);
 
     m_defaultDelaySpin = new QSpinBox(execGroup);
-    m_defaultDelaySpin->setRange(0, 5000);
+    m_defaultDelaySpin->setRange(0, core::ScriptConfig::kMaxDelayMs);
     m_defaultDelaySpin->setSingleStep(50);
     m_defaultDelaySpin->setSuffix(" ms");
-    m_defaultDelaySpin->setValue(0);
+    m_defaultDelaySpin->setValue(scriptCfg.actionDelayMs());
     m_defaultDelaySpin->setToolTip(
         "Fixed delay between script actions.\n"
         "Scripts can override this with GLOBAL DELAY.");
@@ -633,15 +637,19 @@ QWidget *SettingsDialog::buildScriptsGeneralPage() {
 
     QHBoxLayout *jitterRow = new QHBoxLayout();
     m_defaultJitterMinSpin = new QSpinBox(execGroup);
-    m_defaultJitterMinSpin->setRange(0, 5000);
+    m_defaultJitterMinSpin->setRange(0, core::ScriptConfig::kMaxDelayMs);
     m_defaultJitterMinSpin->setSingleStep(50);
     m_defaultJitterMinSpin->setSuffix(" ms");
-    m_defaultJitterMinSpin->setValue(0);
+    m_defaultJitterMinSpin->setValue(scriptCfg.jitterMinMs());
     m_defaultJitterMaxSpin = new QSpinBox(execGroup);
-    m_defaultJitterMaxSpin->setRange(0, 5000);
+    m_defaultJitterMaxSpin->setRange(0, core::ScriptConfig::kMaxDelayMs);
     m_defaultJitterMaxSpin->setSingleStep(50);
     m_defaultJitterMaxSpin->setSuffix(" ms");
-    m_defaultJitterMaxSpin->setValue(0);
+    m_defaultJitterMaxSpin->setValue(scriptCfg.jitterMaxMs());
+    // Keep the range ordered: the maximum can't go below the minimum
+    m_defaultJitterMaxSpin->setMinimum(m_defaultJitterMinSpin->value());
+    connect(m_defaultJitterMinSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+            m_defaultJitterMaxSpin, &QSpinBox::setMinimum);
     jitterRow->addWidget(m_defaultJitterMinSpin);
     jitterRow->addWidget(new QLabel("to", execGroup));
     jitterRow->addWidget(m_defaultJitterMaxSpin);
@@ -661,7 +669,7 @@ QWidget *SettingsDialog::buildScriptsGeneralPage() {
     QGroupBox *behaviorGroup = new QGroupBox("Behavior", page);
     QVBoxLayout *behaviorLayout = new QVBoxLayout(behaviorGroup);
     m_confirmDeleteCheck = new QCheckBox("Confirm before deleting scripts", behaviorGroup);
-    m_confirmDeleteCheck->setChecked(true);
+    m_confirmDeleteCheck->setChecked(scriptCfg.confirmDelete());
     behaviorLayout->addWidget(m_confirmDeleteCheck);
     layout->addWidget(behaviorGroup);
 
@@ -706,6 +714,12 @@ QWidget *SettingsDialog::buildMacrosPage() {
 void SettingsDialog::onScriptsSaveClicked() {
     ScriptEditorWindow::setEditorPreference(static_cast<ScriptEditorWindow::EditorPreference>(
         m_scriptEditorCombo->currentData().toInt()));
+    auto &cfg = core::ScriptConfig::instance();
+    cfg.setExpectTimeoutMs(m_defaultTimeoutSpin->value());
+    cfg.setActionDelayMs(m_defaultDelaySpin->value());
+    cfg.setJitterRange(m_defaultJitterMinSpin->value(), m_defaultJitterMaxSpin->value());
+    cfg.setConfirmDelete(m_confirmDeleteCheck->isChecked());
+    cfg.save();
     qt_ui_style::StyledMessageBox::information(this, "Scripts Settings", "Settings saved.");
 }
 

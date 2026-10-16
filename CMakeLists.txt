@@ -104,6 +104,8 @@ set(CORE_SOURCES
     src/core/macro_recorder.h
     src/core/macro_config.cpp
     src/core/macro_config.h
+    src/core/script_config.cpp
+    src/core/script_config.h
     src/core/session_logger.cpp
     src/core/session_logger.h
     src/core/match_replace_engine.cpp
@@ -491,6 +493,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_aid_key_map tests/unit/test_aid_key_map.cpp)
     add_tn5250_test(test_session_config tests/unit/test_session_config.cpp)
     add_tn5250_test(test_script_editor tests/unit/test_script_editor.cpp)
+    add_tn5250_test(test_script_config tests/unit/test_script_config.cpp)
     add_tn5250_test(test_command_runner tests/unit/test_command_runner.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
