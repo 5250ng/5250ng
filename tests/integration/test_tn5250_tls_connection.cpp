@@ -25,6 +25,12 @@
 #include <QSslKey>
 #include <QSslServer>
 #include <QSslSocket>
+
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
 #endif
 
 using namespace tn5250::client;
@@ -85,16 +91,118 @@ const char kTestKeyPem[] =
     "-----END PRIVATE KEY-----\n";
 
 #ifdef HAVE_QT6_SSL
-// TLS server presenting the test certificate. With requireClientCert the
-// server also demands a client certificate signed by the test certificate.
-bool startTestServer(QSslServer &server, bool requireClientCert) {
+// Short-lived PKI generated per run: a CA and a localhost certificate it
+// signed, usable for both server and client authentication. Generated at
+// runtime because some TLS backends (macOS Secure Transport) refuse a
+// self-signed CA certificate as a server certificate and cap the lifetime
+// of certificates chained to user-supplied anchors, so a fixed long-lived
+// fixture cannot be validated there.
+struct TestPki {
+    QByteArray caPem;
+    QByteArray leafPem;
+    QByteArray leafKeyPem;
+};
+
+EVP_PKEY *generateKey() {
+    EVP_PKEY *key = nullptr;
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+    if (ctx && EVP_PKEY_keygen_init(ctx) > 0 && EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048) > 0)
+        EVP_PKEY_keygen(ctx, &key);
+    EVP_PKEY_CTX_free(ctx);
+    return key;
+}
+
+void addExtension(X509 *cert, X509 *issuer, int nid, const char *value) {
+    X509V3_CTX ctx;
+    X509V3_set_ctx_nodb(&ctx);
+    X509V3_set_ctx(&ctx, issuer, cert, nullptr, nullptr, 0);
+    X509_EXTENSION *ext = X509V3_EXT_conf_nid(nullptr, &ctx, nid, value);
+    if (ext) {
+        X509_add_ext(cert, ext, -1);
+        X509_EXTENSION_free(ext);
+    }
+}
+
+// issuer/issuerKey null = self-signed CA
+X509 *makeCertificate(EVP_PKEY *key, const char *cn, long serial,
+                      X509 *issuer, EVP_PKEY *issuerKey) {
+    X509 *cert = X509_new();
+    X509_set_version(cert, 2);
+    ASN1_INTEGER_set(X509_get_serialNumber(cert), serial);
+    X509_gmtime_adj(X509_getm_notBefore(cert), -3600);
+    X509_gmtime_adj(X509_getm_notAfter(cert), 24 * 3600);
+    X509_set_pubkey(cert, key);
+    X509_NAME *name = X509_get_subject_name(cert);
+    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+                               reinterpret_cast<const unsigned char *>(cn), -1, -1, 0);
+    X509 *signer = issuer ? issuer : cert;
+    X509_set_issuer_name(cert, X509_get_subject_name(signer));
+
+    addExtension(cert, signer, NID_subject_key_identifier, "hash");
+    addExtension(cert, signer, NID_authority_key_identifier, "keyid:always");
+    if (!issuer) {
+        addExtension(cert, signer, NID_basic_constraints, "critical,CA:TRUE");
+        addExtension(cert, signer, NID_key_usage, "critical,keyCertSign,cRLSign");
+    } else {
+        addExtension(cert, signer, NID_basic_constraints, "critical,CA:FALSE");
+        addExtension(cert, signer, NID_key_usage, "critical,digitalSignature,keyEncipherment");
+        addExtension(cert, signer, NID_ext_key_usage, "serverAuth,clientAuth");
+        addExtension(cert, signer, NID_subject_alt_name, "DNS:localhost,IP:127.0.0.1");
+    }
+    X509_sign(cert, issuer ? issuerKey : key, EVP_sha256());
+    return cert;
+}
+
+QByteArray toPem(X509 *cert) {
+    BIO *bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_X509(bio, cert);
+    char *data = nullptr;
+    const long len = BIO_get_mem_data(bio, &data);
+    QByteArray pem(data, static_cast<int>(len));
+    BIO_free(bio);
+    return pem;
+}
+
+QByteArray toPem(EVP_PKEY *key) {
+    BIO *bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PrivateKey(bio, key, nullptr, nullptr, 0, nullptr, nullptr);
+    char *data = nullptr;
+    const long len = BIO_get_mem_data(bio, &data);
+    QByteArray pem(data, static_cast<int>(len));
+    BIO_free(bio);
+    return pem;
+}
+
+TestPki generatePki() {
+    TestPki pki;
+    EVP_PKEY *caKey = generateKey();
+    EVP_PKEY *leafKey = generateKey();
+    if (!caKey || !leafKey) {
+        EVP_PKEY_free(caKey);
+        EVP_PKEY_free(leafKey);
+        return pki;
+    }
+    X509 *ca = makeCertificate(caKey, "5250ng Test CA", 1, nullptr, nullptr);
+    X509 *leaf = makeCertificate(leafKey, "localhost", 2, ca, caKey);
+    pki.caPem = toPem(ca);
+    pki.leafPem = toPem(leaf);
+    pki.leafKeyPem = toPem(leafKey);
+    X509_free(leaf);
+    X509_free(ca);
+    EVP_PKEY_free(leafKey);
+    EVP_PKEY_free(caKey);
+    return pki;
+}
+
+// TLS server presenting the generated localhost certificate. With
+// requireClientCert it also demands a client certificate signed by the CA.
+bool startTestServer(QSslServer &server, const TestPki &pki, bool requireClientCert) {
     QSslConfiguration config = QSslConfiguration::defaultConfiguration();
-    config.setLocalCertificate(QSslCertificate(QByteArray(kTestCertPem)));
-    config.setPrivateKey(
-        QSslKey(QByteArray(kTestKeyPem), QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey));
+    config.setLocalCertificateChain({QSslCertificate(pki.leafPem)});
+    config.setPrivateKey(QSslKey(pki.leafKeyPem, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey));
     if (requireClientCert) {
         config.setPeerVerifyMode(QSslSocket::VerifyPeer);
-        config.setCaCertificates({QSslCertificate(QByteArray(kTestCertPem))});
+        config.setCaCertificates({QSslCertificate(pki.caPem)});
     }
     server.setSslConfiguration(config);
     return server.listen(QHostAddress::Any, 0);
@@ -175,16 +283,18 @@ void TestTN5250TlsConnection::testCustomCaCertificateIsTrusted() {
         QSKIP("No SSL backend available at runtime");
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
+    const TestPki pki = generatePki();
+    QVERIFY(!pki.caPem.isEmpty());
     QSslServer server;
-    QVERIFY(startTestServer(server, false));
+    QVERIFY(startTestServer(server, pki, false));
 
     TN5250Client client;
-    client.setTlsCaCertificateFile(writeFile(dir, "ca.pem", kTestCertPem));
+    client.setTlsCaCertificateFile(writeFile(dir, "ca.pem", pki.caPem));
     QStringList errors;
     connect(&client, &TN5250Client::errorOccurred, this,
             [&errors](const QString &e) { errors << e; });
     // Certificate validation stays on: the session-specific CA must make the
-    // self-signed host certificate trusted.
+    // host certificate trusted.
     client.connectToHost(QStringLiteral("localhost"), server.serverPort(), true);
     QTRY_COMPARE_WITH_TIMEOUT(client.state(), TN5250Client::ConnectionState::Negotiating, 5000);
     QVERIFY2(errors.isEmpty(), qPrintable(errors.join("; ")));
@@ -198,8 +308,10 @@ void TestTN5250TlsConnection::testUntrustedCertificateRejectedWithoutCa() {
 #else
     if (!QSslSocket::supportsSsl())
         QSKIP("No SSL backend available at runtime");
+    const TestPki pki = generatePki();
+    QVERIFY(!pki.caPem.isEmpty());
     QSslServer server;
-    QVERIFY(startTestServer(server, false));
+    QVERIFY(startTestServer(server, pki, false));
 
     TN5250Client client;
     QStringList errors;
@@ -220,8 +332,10 @@ void TestTN5250TlsConnection::testClientCertificateIsPresented() {
         QSKIP("No SSL backend available at runtime");
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
+    const TestPki pki = generatePki();
+    QVERIFY(!pki.caPem.isEmpty());
     QSslServer server;
-    QVERIFY(startTestServer(server, true));
+    QVERIFY(startTestServer(server, pki, true));
 
     QSslCertificate seenByServer;
     connect(&server, &QTcpServer::pendingConnectionAvailable, this, [&]() {
@@ -231,14 +345,13 @@ void TestTN5250TlsConnection::testClientCertificateIsPresented() {
     });
 
     TN5250Client client;
-    client.setAllowInvalidCertificates(true); // only the client side is under test
+    client.setTlsCaCertificateFile(writeFile(dir, "ca.pem", pki.caPem));
     // Combined PEM: the key is read from the certificate file
     client.setTlsClientCertificate(
-        writeFile(dir, "client.pem", QByteArray(kTestCertPem) + QByteArray(kTestKeyPem)),
-        QString());
-    client.connectToHost(QStringLiteral("127.0.0.1"), server.serverPort(), true);
+        writeFile(dir, "client.pem", pki.leafPem + pki.leafKeyPem), QString());
+    client.connectToHost(QStringLiteral("localhost"), server.serverPort(), true);
     QTRY_VERIFY_WITH_TIMEOUT(!seenByServer.isNull(), 5000);
-    QCOMPARE(seenByServer, QSslCertificate(QByteArray(kTestCertPem)));
+    QCOMPARE(seenByServer, QSslCertificate(pki.leafPem));
     client.disconnectFromHost();
 #endif
 }
