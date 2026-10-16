@@ -79,6 +79,18 @@ void TN5250Client::connectToHost(const QString &hostname, quint16 port, bool use
         connect(m_sslSocket, &QSslSocket::sslErrors, this, &TN5250Client::onSslErrors);
 #endif
 
+        QString tlsError;
+        if (!applyTlsFiles(&tlsError)) {
+            logger::Logger::instance()->error(
+                QString("[TN5250->Client]: %1").arg(tlsError));
+            m_sslSocket->deleteLater();
+            m_sslSocket = nullptr;
+            m_socket = nullptr;
+            setState(ConnectionState::Error);
+            emit errorOccurred(tlsError);
+            return;
+        }
+
         // Start TLS after connection
         m_sslSocket->connectToHostEncrypted(hostname, port);
 
@@ -122,14 +134,15 @@ void TN5250Client::armConnectTimeout() {
         connect(m_connectTimeoutTimer, &QTimer::timeout,
                 this, &TN5250Client::onConnectTimeout);
     }
-    m_connectTimeoutTimer->start(30000);
+    m_connectTimeoutTimer->start(m_connectTimeoutMs);
 }
 
 void TN5250Client::onConnectTimeout() {
     if (m_state != ConnectionState::Connecting) return;
     const char *what = m_useTLS ? "TLS handshake" : "TCP connection";
     logger::Logger::instance()->error(
-        QString("[TN5250->Client]: %1 timed out after 30 seconds").arg(what));
+        QString("[TN5250->Client]: %1 timed out after %2 seconds")
+            .arg(what).arg(m_connectTimeoutMs / 1000));
     disconnectFromHost();
     emit errorOccurred(m_useTLS ? QStringLiteral("TLS handshake timed out")
                                 : QStringLiteral("Connection timed out"));

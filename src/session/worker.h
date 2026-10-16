@@ -50,6 +50,9 @@ class Worker : public QObject {
     void appData(const QByteArray &data);
     // Emitted by replay sessions once the last captured record was delivered.
     void replayFinished();
+    // Emitted when a dropped session will be reconnected automatically.
+    // maxAttempts is 0 when attempts are unlimited.
+    void reconnectScheduled(int attempt, int maxAttempts, int delaySeconds);
 
   private:
     ::session::SessionConfig m_config;
@@ -61,6 +64,17 @@ class Worker : public QObject {
     int m_replayIndex = 0;
 
     void onClientData(const QByteArray &data);
+    void createClientAndConnect();
+    void onClientStateChanged(tn5250::client::TN5250Client::ConnectionState state);
+    void onClientError(const QString &error);
+    bool shouldAutoReconnect() const;
+    void scheduleReconnect();
+
+    // Auto-reconnect state
+    QTimer *m_reconnectTimer = nullptr;
+    bool m_stopping = false;
+    bool m_everConnected = false; // only reconnect sessions that were established
+    int m_reconnectAttempt = 0;
     void startReplay();
     void onReplayTick();
 };

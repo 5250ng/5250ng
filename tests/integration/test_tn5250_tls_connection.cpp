@@ -16,6 +16,7 @@
 
 #include "network/tn5250_qt/client/client.h"
 
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 #ifdef HAVE_QT6_SSL
@@ -83,6 +84,32 @@ const char kTestKeyPem[] =
     "yHDjiGok8w3AkYkBK9mzHg==\n"
     "-----END PRIVATE KEY-----\n";
 
+#ifdef HAVE_QT6_SSL
+// TLS server presenting the test certificate. With requireClientCert the
+// server also demands a client certificate signed by the test certificate.
+bool startTestServer(QSslServer &server, bool requireClientCert) {
+    QSslConfiguration config = QSslConfiguration::defaultConfiguration();
+    config.setLocalCertificate(QSslCertificate(QByteArray(kTestCertPem)));
+    config.setPrivateKey(
+        QSslKey(QByteArray(kTestKeyPem), QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey));
+    if (requireClientCert) {
+        config.setPeerVerifyMode(QSslSocket::VerifyPeer);
+        config.setCaCertificates({QSslCertificate(QByteArray(kTestCertPem))});
+    }
+    server.setSslConfiguration(config);
+    return server.listen(QHostAddress::Any, 0);
+}
+
+QString writeFile(const QTemporaryDir &dir, const QString &name, const QByteArray &data) {
+    const QString path = dir.filePath(name);
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
+        return QString();
+    f.write(data);
+    return path;
+}
+#endif
+
 } // namespace
 
 // Regression test for issue #135: implicit-TLS sessions never started the
@@ -93,6 +120,10 @@ class TestTN5250TlsConnection : public QObject {
 
   private slots:
     void testTlsHandshakeStartsTelnetNegotiation();
+    void testCustomCaCertificateIsTrusted();
+    void testUntrustedCertificateRejectedWithoutCa();
+    void testClientCertificateIsPresented();
+    void testUnreadableCaFileFailsFast();
 };
 
 void TestTN5250TlsConnection::testTlsHandshakeStartsTelnetNegotiation() {
@@ -133,6 +164,98 @@ void TestTN5250TlsConnection::testTlsHandshakeStartsTelnetNegotiation() {
     QCOMPARE(static_cast<quint8>(serverReceived[0]), quint8(0xFF)); // IAC
 
     client.disconnectFromHost();
+#endif
+}
+
+void TestTN5250TlsConnection::testCustomCaCertificateIsTrusted() {
+#ifndef HAVE_QT6_SSL
+    QSKIP("Built without Qt6 SSL support");
+#else
+    if (!QSslSocket::supportsSsl())
+        QSKIP("No SSL backend available at runtime");
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QSslServer server;
+    QVERIFY(startTestServer(server, false));
+
+    TN5250Client client;
+    client.setTlsCaCertificateFile(writeFile(dir, "ca.pem", kTestCertPem));
+    QStringList errors;
+    connect(&client, &TN5250Client::errorOccurred, this,
+            [&errors](const QString &e) { errors << e; });
+    // Certificate validation stays on: the session-specific CA must make the
+    // self-signed host certificate trusted.
+    client.connectToHost(QStringLiteral("localhost"), server.serverPort(), true);
+    QTRY_COMPARE_WITH_TIMEOUT(client.state(), TN5250Client::ConnectionState::Negotiating, 5000);
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.join("; ")));
+    client.disconnectFromHost();
+#endif
+}
+
+void TestTN5250TlsConnection::testUntrustedCertificateRejectedWithoutCa() {
+#ifndef HAVE_QT6_SSL
+    QSKIP("Built without Qt6 SSL support");
+#else
+    if (!QSslSocket::supportsSsl())
+        QSKIP("No SSL backend available at runtime");
+    QSslServer server;
+    QVERIFY(startTestServer(server, false));
+
+    TN5250Client client;
+    QStringList errors;
+    connect(&client, &TN5250Client::errorOccurred, this,
+            [&errors](const QString &e) { errors << e; });
+    client.connectToHost(QStringLiteral("localhost"), server.serverPort(), true);
+    QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 5000);
+    QVERIFY(errors.first().contains("certificate validation failed"));
+    QVERIFY(client.state() != TN5250Client::ConnectionState::Negotiating);
+#endif
+}
+
+void TestTN5250TlsConnection::testClientCertificateIsPresented() {
+#ifndef HAVE_QT6_SSL
+    QSKIP("Built without Qt6 SSL support");
+#else
+    if (!QSslSocket::supportsSsl())
+        QSKIP("No SSL backend available at runtime");
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QSslServer server;
+    QVERIFY(startTestServer(server, true));
+
+    QSslCertificate seenByServer;
+    connect(&server, &QTcpServer::pendingConnectionAvailable, this, [&]() {
+        auto *socket = qobject_cast<QSslSocket *>(server.nextPendingConnection());
+        if (socket)
+            seenByServer = socket->peerCertificate();
+    });
+
+    TN5250Client client;
+    client.setAllowInvalidCertificates(true); // only the client side is under test
+    // Combined PEM: the key is read from the certificate file
+    client.setTlsClientCertificate(
+        writeFile(dir, "client.pem", QByteArray(kTestCertPem) + QByteArray(kTestKeyPem)),
+        QString());
+    client.connectToHost(QStringLiteral("127.0.0.1"), server.serverPort(), true);
+    QTRY_VERIFY_WITH_TIMEOUT(!seenByServer.isNull(), 5000);
+    QCOMPARE(seenByServer, QSslCertificate(QByteArray(kTestCertPem)));
+    client.disconnectFromHost();
+#endif
+}
+
+void TestTN5250TlsConnection::testUnreadableCaFileFailsFast() {
+#ifndef HAVE_QT6_SSL
+    QSKIP("Built without Qt6 SSL support");
+#else
+    TN5250Client client;
+    client.setTlsCaCertificateFile(QStringLiteral("/nonexistent/ca.pem"));
+    QStringList errors;
+    connect(&client, &TN5250Client::errorOccurred, this,
+            [&errors](const QString &e) { errors << e; });
+    client.connectToHost(QStringLiteral("127.0.0.1"), 1, true);
+    QCOMPARE(errors.size(), 1);
+    QVERIFY(errors.first().contains("Cannot load CA certificate file"));
+    QCOMPARE(client.state(), TN5250Client::ConnectionState::Error);
 #endif
 }
 

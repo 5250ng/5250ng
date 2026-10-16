@@ -528,11 +528,13 @@ void TN5250Client::sendGDS(uint8_t flagsHi, uint8_t opcode, const QByteArray &pa
 }
 
 void TN5250Client::startHeartbeat() {
+    if (m_keepaliveIntervalMs <= 0)
+        return;
     if (!m_heartbeatTimer) {
         m_heartbeatTimer = new QTimer(this);
-        m_heartbeatTimer->setInterval(30000); // 30 seconds
         connect(m_heartbeatTimer, &QTimer::timeout, this, &TN5250Client::sendHeartbeat);
     }
+    m_heartbeatTimer->setInterval(m_keepaliveIntervalMs);
     m_heartbeatTimer->start();
 }
 

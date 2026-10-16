@@ -51,6 +51,13 @@ void Worker::start() {
     if (m_client) {
         return;
     }
+    m_stopping = false;
+    m_everConnected = false;
+    m_reconnectAttempt = 0;
+    createClientAndConnect();
+}
+
+void Worker::createClientAndConnect() {
     m_client = new tn5250::client::TN5250Client(this);
     m_client->setDeviceName(m_config.deviceName());
     // Terminal type is the 5250 model identifier from the device type config
@@ -64,11 +71,16 @@ void Worker::start() {
     m_client->setCredentials(m_config.username(), m_config.password());
     m_client->setCodePage(m_config.codePage());
     m_client->setAllowInvalidCertificates(m_config.allowInvalidCertificates());
+    m_client->setConnectTimeout(m_config.connectTimeoutSeconds() * 1000);
+    m_client->setKeepaliveInterval(m_config.keepaliveIntervalSeconds() * 1000);
+    m_client->setTlsCaCertificateFile(m_config.tlsCaCertificateFile());
+    m_client->setTlsClientCertificate(m_config.tlsClientCertificateFile(),
+                                      m_config.tlsClientKeyFile());
 
     connect(m_client, &tn5250::client::TN5250Client::connected, this, &Worker::connected);
     connect(m_client, &tn5250::client::TN5250Client::disconnected, this, &Worker::disconnected);
-    connect(m_client, &tn5250::client::TN5250Client::errorOccurred, this, &Worker::errorOccurred);
-    connect(m_client, &tn5250::client::TN5250Client::stateChanged, this, &Worker::stateChanged);
+    connect(m_client, &tn5250::client::TN5250Client::errorOccurred, this, &Worker::onClientError);
+    connect(m_client, &tn5250::client::TN5250Client::stateChanged, this, &Worker::onClientStateChanged);
     connect(m_client, &tn5250::client::TN5250Client::dataReceived, this, &Worker::onClientData, Qt::QueuedConnection);
 
     logger::Logger::instance()->debug(
@@ -80,7 +92,73 @@ void Worker::start() {
     m_client->connectToHost(m_config.hostname(), m_config.port(), m_config.useTLS());
 }
 
+void Worker::onClientStateChanged(tn5250::client::TN5250Client::ConnectionState state) {
+    using State = tn5250::client::TN5250Client::ConnectionState;
+    if (state == State::Connected) {
+        m_everConnected = true;
+        m_reconnectAttempt = 0;
+    }
+    emit stateChanged(state);
+    if ((state == State::Disconnected || state == State::Error) && shouldAutoReconnect())
+        scheduleReconnect();
+}
+
+void Worker::onClientError(const QString &error) {
+    // While a reconnect is pending the drop is reported through the status
+    // text instead of an error dialog per attempt. The client emits its
+    // Error state before the error message, so the decision is already made.
+    if (m_reconnectTimer && m_reconnectTimer->isActive()) {
+        logger::Logger::instance()->warning(
+            QString("[Worker] Connection lost (%1), reconnecting").arg(error));
+        return;
+    }
+    emit errorOccurred(error);
+}
+
+bool Worker::shouldAutoReconnect() const {
+    if (!m_config.autoReconnect() || m_stopping || !m_everConnected)
+        return false;
+    if (m_reconnectTimer && m_reconnectTimer->isActive())
+        return false;
+    const int maxAttempts = m_config.autoReconnectMaxAttempts();
+    return maxAttempts == 0 || m_reconnectAttempt < maxAttempts;
+}
+
+void Worker::scheduleReconnect() {
+    ++m_reconnectAttempt;
+    const int delaySeconds = m_config.autoReconnectDelaySeconds();
+
+    // Drop the dead client. We may be inside one of its signals, so only
+    // detach and defer deletion; its destructor closes the socket.
+    if (m_client) {
+        disconnect(m_client, nullptr, this, nullptr);
+        m_client->deleteLater();
+        m_client = nullptr;
+    }
+
+    if (!m_reconnectTimer) {
+        m_reconnectTimer = new QTimer(this);
+        m_reconnectTimer->setSingleShot(true);
+        connect(m_reconnectTimer, &QTimer::timeout, this, [this]() {
+            if (m_stopping || m_client) return;
+            logger::Logger::instance()->info(
+                QString("[Worker] Reconnecting to %1:%2 (attempt %3)")
+                    .arg(m_config.hostname()).arg(m_config.port()).arg(m_reconnectAttempt));
+            createClientAndConnect();
+        });
+    }
+    m_reconnectTimer->start(delaySeconds * 1000);
+    emit reconnectScheduled(m_reconnectAttempt, m_config.autoReconnectMaxAttempts(), delaySeconds);
+}
+
 void Worker::stop() {
+    m_stopping = true;
+    if (m_reconnectTimer && m_reconnectTimer->isActive()) {
+        // Cancelling a pending reconnect: there is no client left to report
+        // the final state, so report it here.
+        m_reconnectTimer->stop();
+        emit stateChanged(tn5250::client::TN5250Client::ConnectionState::Disconnected);
+    }
     // Disconnect logger before destroying client to prevent use-after-free
     // from DirectConnection signals arriving from other threads
     disconnect(logger::Logger::instance(), nullptr, this, nullptr);

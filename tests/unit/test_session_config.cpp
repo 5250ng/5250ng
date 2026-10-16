@@ -47,6 +47,9 @@ class TestSessionConfig : public QObject {
     void testPcCommandPolicyLegacyConfigCompat();
     void testStartupScriptOptionsDefaults();
     void testStartupScriptOptionsRoundTrip();
+    void testConnectionOptionsDefaults();
+    void testConnectionOptionsRoundTrip();
+    void testConnectionOptionsOutOfRangeFallBack();
     void testDistinctNamesDoNotCollideOnDisk();
     void testLegacySessionFilenameLoads();
     void testSavedSessionPermissions();
@@ -590,6 +593,73 @@ void TestSessionConfig::testStartupScriptOptionsRoundTrip() {
     SessionConfig unknown;
     QVERIFY(unknown.fromJson(json));
     QCOMPARE(unknown.startupScriptTrigger(), StartupScriptTrigger::AfterConnect);
+}
+
+void TestSessionConfig::testConnectionOptionsDefaults() {
+    QCOMPARE(m_config->connectTimeoutSeconds(), 30);
+    QCOMPARE(m_config->keepaliveIntervalSeconds(), 30);
+    QCOMPARE(m_config->autoReconnect(), false);
+    QCOMPARE(m_config->autoReconnectDelaySeconds(), 5);
+    QCOMPARE(m_config->autoReconnectMaxAttempts(), 5);
+    QVERIFY(m_config->tlsCaCertificateFile().isEmpty());
+    QVERIFY(m_config->tlsClientCertificateFile().isEmpty());
+    QVERIFY(m_config->tlsClientKeyFile().isEmpty());
+
+    // Defaults stay out of the JSON so existing session files are unchanged
+    m_config->setHostname("host.example.com");
+    QJsonObject json = m_config->toJson();
+    for (const char *key : {"connectTimeout", "keepaliveInterval", "autoReconnect",
+                            "autoReconnectDelay", "autoReconnectMaxAttempts",
+                            "tlsCaCertificateFile", "tlsClientCertificateFile",
+                            "tlsClientKeyFile"})
+        QVERIFY2(!json.contains(key), key);
+}
+
+void TestSessionConfig::testConnectionOptionsRoundTrip() {
+    m_config->setName("Tuned");
+    m_config->setHostname("host.example.com");
+    m_config->setConnectTimeoutSeconds(90);
+    m_config->setKeepaliveIntervalSeconds(0);
+    m_config->setAutoReconnect(true);
+    m_config->setAutoReconnectDelaySeconds(15);
+    m_config->setAutoReconnectMaxAttempts(0);
+    m_config->setTlsCaCertificateFile("/etc/ca.pem");
+    m_config->setTlsClientCertificateFile("/home/u/client.pem");
+    m_config->setTlsClientKeyFile("/home/u/client.key");
+
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(m_config->toJson()));
+    SessionConfig copy(loaded);
+    SessionConfig assigned;
+    assigned = loaded;
+    for (const SessionConfig *c : {&loaded, &copy, &assigned}) {
+        QCOMPARE(c->connectTimeoutSeconds(), 90);
+        QCOMPARE(c->keepaliveIntervalSeconds(), 0);
+        QCOMPARE(c->autoReconnect(), true);
+        QCOMPARE(c->autoReconnectDelaySeconds(), 15);
+        QCOMPARE(c->autoReconnectMaxAttempts(), 0);
+        QCOMPARE(c->tlsCaCertificateFile(), QString("/etc/ca.pem"));
+        QCOMPARE(c->tlsClientCertificateFile(), QString("/home/u/client.pem"));
+        QCOMPARE(c->tlsClientKeyFile(), QString("/home/u/client.key"));
+    }
+}
+
+void TestSessionConfig::testConnectionOptionsOutOfRangeFallBack() {
+    m_config->setHostname("host.example.com");
+    QJsonObject json = m_config->toJson();
+    json["connectTimeout"] = 1;          // below minimum
+    json["keepaliveInterval"] = -5;
+    json["autoReconnect"] = "yes";       // wrong type
+    json["autoReconnectDelay"] = 100000;
+    json["autoReconnectMaxAttempts"] = 1000;
+
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QCOMPARE(loaded.connectTimeoutSeconds(), 30);
+    QCOMPARE(loaded.keepaliveIntervalSeconds(), 30);
+    QCOMPARE(loaded.autoReconnect(), false);
+    QCOMPARE(loaded.autoReconnectDelaySeconds(), 5);
+    QCOMPARE(loaded.autoReconnectMaxAttempts(), 5);
 }
 
 QTEST_MAIN(TestSessionConfig)

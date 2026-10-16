@@ -99,6 +99,28 @@ class TN5250Client : public QObject {
     void setAllowInvalidCertificates(bool allow) { m_allowInvalidCertificates = allow; }
     bool allowInvalidCertificates() const { return m_allowInvalidCertificates; }
 
+    // How long the TCP connection plus TLS handshake may take (default 30 s).
+    void setConnectTimeout(int ms) { m_connectTimeoutMs = ms; }
+    int connectTimeout() const { return m_connectTimeoutMs; }
+
+    // Interval between IAC NOP keep-alives once connected; 0 disables them.
+    void setKeepaliveInterval(int ms) { m_keepaliveIntervalMs = ms; }
+    int keepaliveInterval() const { return m_keepaliveIntervalMs; }
+
+    // Extra trusted CA certificate file (PEM or DER) for TLS, added to the
+    // system CA store.
+    void setTlsCaCertificateFile(const QString &path) { m_tlsCaCertificateFile = path; }
+    QString tlsCaCertificateFile() const { return m_tlsCaCertificateFile; }
+
+    // Client certificate for TLS. An empty key path reads the private key
+    // from the certificate file (combined PEM).
+    void setTlsClientCertificate(const QString &certPath, const QString &keyPath) {
+        m_tlsClientCertificateFile = certPath;
+        m_tlsClientKeyFile = keyPath;
+    }
+    QString tlsClientCertificateFile() const { return m_tlsClientCertificateFile; }
+    QString tlsClientKeyFile() const { return m_tlsClientKeyFile; }
+
   signals:
     void connected();
     void disconnected();
@@ -136,8 +158,16 @@ class TN5250Client : public QObject {
     // TLS negotiation
     void startTLS();
     void handleStartTLS();
+    // Load the configured CA / client certificate files into the TLS socket.
+    // Returns false with a user-facing message when a file can't be used.
+    bool applyTlsFiles(QString *error);
 
     bool m_allowInvalidCertificates = false;
+    int m_connectTimeoutMs = 30000;
+    int m_keepaliveIntervalMs = 30000;
+    QString m_tlsCaCertificateFile;
+    QString m_tlsClientCertificateFile;
+    QString m_tlsClientKeyFile;
     QAbstractSocket *m_socket;
 #ifdef HAVE_QT6_SSL
     QSslSocket *m_sslSocket;
