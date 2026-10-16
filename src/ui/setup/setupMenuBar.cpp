@@ -97,6 +97,12 @@ void MainWindow::setupMenuBar() {
     m_duplicateAction =
         sessionMenu->addAction("&Duplicate Session", this, &MainWindow::onDuplicateSession);
     m_duplicateAction->setEnabled(false);
+    m_saveSessionAction =
+        sessionMenu->addAction("&Save Session", this, &MainWindow::onSaveSession);
+    m_saveSessionAction->setEnabled(false);
+    m_saveSessionAsAction =
+        sessionMenu->addAction("Save Session &As...", this, &MainWindow::onSaveSessionAs);
+    m_saveSessionAsAction->setEnabled(false);
     sessionMenu->addSeparator();
     // Quick open saved sessions submenu inside Session menu
     m_quickOpenMenu = sessionMenu->addMenu("Open saved session");

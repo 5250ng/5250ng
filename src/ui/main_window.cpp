@@ -1058,6 +1058,8 @@ void MainWindow::setActiveSession(int index) {
         m_disconnectAction->setEnabled(false);
         m_reconnectAction->setEnabled(false);
         m_duplicateAction->setEnabled(false);
+        m_saveSessionAction->setEnabled(false);
+        m_saveSessionAsAction->setEnabled(false);
         m_copyGuidAction->setEnabled(false);
         m_sessionLogsAction->setEnabled(false);
         // Reset global status to disconnected when no session is active
@@ -1080,6 +1082,8 @@ void MainWindow::setActiveSession(int index) {
     m_disconnectAction->setEnabled(connected);
     m_reconnectAction->setEnabled(true);
     m_duplicateAction->setEnabled(true);
+    m_saveSessionAction->setEnabled(true);
+    m_saveSessionAsAction->setEnabled(true);
     m_copyGuidAction->setEnabled(true);
     m_sessionLogsAction->setEnabled(true);
     // Sync global bottom-bar status from active session

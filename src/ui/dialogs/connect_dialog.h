@@ -50,8 +50,18 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
 
     // Session management
     void loadSession(const QString &sessionName);
+    void saveCurrentSession();
     void saveCurrentAsSession();
     QStringList availableSessions() const;
+
+    // True when the name belongs to a saved session rather than one of the
+    // placeholder names used for unsaved / command-line sessions.
+    static bool isSavedSessionName(const QString &name);
+
+    // Prompt for a session name and save `config` under it, asking before
+    // overwriting a different saved session. On success `config` carries the
+    // chosen name and true is returned.
+    static bool promptSaveSessionAs(QWidget *parent, session::SessionConfig &config);
 
   signals:
     void connectRequested(const session::SessionConfig &config);
@@ -61,6 +71,7 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     void onConnectClicked();
     void onCancelClicked();
     void onSaveSessionClicked();
+    void onSaveSessionAsClicked();
     void onLoadSessionClicked();
     void onSessionComboChanged(const QString &sessionName);
     void onDeviceComboChanged(int index);
@@ -93,6 +104,7 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     QPushButton *m_connectButton;
     QPushButton *m_cancelButton;
     QPushButton *m_saveSessionButton;
+    QPushButton *m_saveSessionAsButton;
     QPushButton *m_loadSessionButton;
     QPushButton *m_deleteSessionButton;
     QGroupBox *m_displayGroup;
@@ -108,6 +120,9 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     QStackedWidget *m_pages;
 
     session::SessionConfig m_currentConfig;
+    // Name of the saved session currently loaded in the form; empty for a
+    // new, not-yet-saved session.
+    QString m_savedSessionName;
     QVector<tn5250::devices::Device> m_supported;
     int m_customDeviceIndex = -1;
 };
