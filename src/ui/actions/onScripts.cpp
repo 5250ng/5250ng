@@ -17,6 +17,7 @@
 #include "../main_window.h"
 #include "core/aid_key_map.h"
 #include "core/macro_to_script.h"
+#include "core/script_config.h"
 #include "core/script_library.h"
 #include "ui/dialogs/script_editor_window.h"
 #include <5250script/script_compiler.h>
@@ -469,6 +470,8 @@ void MainWindow::onRunScript(const QString &path) {
     }
     m_scriptStopAction->setEnabled(true);
 
+    // Settings > Scripts defaults; the script's GLOBAL commands override them
+    s->scriptExecutor->setDefaults(core::ScriptConfig::instance().executionDefaults());
     s->scriptExecutor->execute(parseResult);
 }
 
@@ -487,11 +490,13 @@ void MainWindow::onEditScript(const QString &path) {
 
 void MainWindow::onDeleteScript(const QString &path) {
     QFileInfo fi(path);
-    auto answer = qt_ui_style::StyledMessageBox::question(this, "Delete Script",
-        QString("Delete script '%1'?").arg(fi.baseName()));
-    if (answer == qt_ui_style::StyledMessageBox::Yes) {
-        QFile::remove(path);
+    if (core::ScriptConfig::instance().confirmDelete()) {
+        auto answer = qt_ui_style::StyledMessageBox::question(this, "Delete Script",
+            QString("Delete script '%1'?").arg(fi.baseName()));
+        if (answer != qt_ui_style::StyledMessageBox::Yes)
+            return;
     }
+    QFile::remove(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -872,6 +877,8 @@ void MainWindow::runStartupScript(Session *s) {
     }
     m_scriptStopAction->setEnabled(true);
 
+    // Settings > Scripts defaults; the script's GLOBAL commands override them
+    s->scriptExecutor->setDefaults(core::ScriptConfig::instance().executionDefaults());
     s->scriptExecutor->execute(parseResult);
 }
 
