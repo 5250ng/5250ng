@@ -17,6 +17,7 @@
 #include "../main_window.h"
 #include "core/aid_key_map.h"
 #include "core/macro_to_script.h"
+#include "core/script_library.h"
 #include <5250script/script_compiler.h>
 #include <5250script/script_executor.h>
 #include <5250script/script_parser.h>
@@ -36,15 +37,11 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUrl>
 #include <memory>
 
-static QString scriptsDir() {
-    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-                  + "/scripts";
-    QDir().mkpath(dir);
-    return dir;
-}
+static QString scriptsDir() { return core::scriptsDirectory(); }
 
 // ---------------------------------------------------------------------------
 // Record
@@ -532,29 +529,8 @@ void MainWindow::onNewScript() {
 
     if (result != QDialog::Accepted || name.isEmpty()) return;
 
-    QString safeName = core::MacroRecorder::sanitizeFileName(name);
-    QDir dir(scriptsDir());
-    QString path = dir.filePath(safeName + ".5250script");
-    int suffix = 1;
-    while (QFile::exists(path))
-        path = dir.filePath(safeName + "_" + QString::number(suffix++) + ".5250script");
-
-    // Write a starter template
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        file.write(QString(
-            "# @script.name = \"%1\"\n"
-            "# @script.description = \"\"\n"
-            "# @script.version = \"1.0\"\n"
-            "# @menu.path = \"%1\"\n"
-            "\n"
-            "EXPECT KEYBOARD UNLOCKED\n"
-            "TYPE \"hello\"\n"
-            "PRESS ENTER\n"
-        ).arg(name).toUtf8());
-        file.close();
-    }
-
+    QString path = core::createScriptFromTemplate(name);
+    if (path.isEmpty()) return;
     QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 
@@ -593,6 +569,77 @@ void MainWindow::onOpenScriptsFolder() {
 }
 
 // ---------------------------------------------------------------------------
+// Start a session's startup script at the moment its trigger asks for
+// ---------------------------------------------------------------------------
+
+static bool hasInputScreen(const ui::widgets::Q5250ScreenWidget *display) {
+    if (display->keyboardState() != ui::widgets::KeyboardState::Unlocked)
+        return false;
+    const auto *buffer = display->screenBuffer();
+    if (!buffer)
+        return false;
+    for (const auto &field : buffer->fields()) {
+        if (!field.protected_field)
+            return true;
+    }
+    return false;
+}
+
+void MainWindow::scheduleStartupScript(Session *s) {
+    if (!s || !s->displayWidget) return;
+
+    QPointer<ui::widgets::Q5250ScreenWidget> display = s->displayWidget;
+    auto start = [this, s, display]() {
+        // The tab may have been closed while we were waiting
+        if (display.isNull() || !m_sessions.contains(s)) return;
+        runStartupScript(s);
+    };
+
+    if (s->config.startupScriptTrigger() != session::StartupScriptTrigger::FirstScreen) {
+        // Delay to let the terminal finish setup
+        QTimer::singleShot(500, this, start);
+        return;
+    }
+
+    // Wait for the host's first input screen (normally sign-on) with the
+    // keyboard unlocked. Give up waiting after a while and run anyway so a
+    // host that never shows input fields still gets its script.
+    constexpr int kFirstScreenTimeoutMs = 30000;
+    auto done = std::make_shared<bool>(false);
+    auto conns = std::make_shared<QVector<QMetaObject::Connection>>();
+    auto *timeout = new QTimer(display);
+    timeout->setSingleShot(true);
+
+    auto finish = [this, s, display, done, conns, timeout, start](bool timedOut) {
+        if (*done) return;
+        *done = true;
+        for (const auto &c : *conns)
+            QObject::disconnect(c);
+        timeout->deleteLater();
+        if (timedOut) {
+            LOG_WARNING("Startup script: no input screen after 30s, running anyway");
+            if (m_sessions.contains(s) && s->sessionLogger)
+                s->sessionLogger->logEvent("[SCRIPT] No input screen after 30s, running startup script anyway");
+        }
+        // Let the rest of the host's write land before the script reads the screen
+        QTimer::singleShot(200, this, start);
+    };
+    auto check = [display, finish]() {
+        if (!display.isNull() && hasInputScreen(display))
+            finish(false);
+    };
+
+    conns->append(connect(display, &ui::widgets::Q5250ScreenWidget::terminalStateChanged,
+                          timeout, check));
+    if (display->screenBuffer())
+        conns->append(connect(display->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
+                              timeout, check));
+    connect(timeout, &QTimer::timeout, this, [finish]() { finish(true); });
+    timeout->start(kFirstScreenTimeoutMs);
+    check();
+}
+
+// ---------------------------------------------------------------------------
 // Run startup script for a session (with $SESSION_* variables pre-seeded)
 // ---------------------------------------------------------------------------
 
@@ -610,11 +657,33 @@ void MainWindow::runStartupScript(Session *s) {
     for (auto it = sessionVars.constBegin(); it != sessionVars.constEnd(); ++it)
         initialVars[it.key()] = it.value();
 
-    // Parse embedded script source
+    // A linked script is re-read from its file; the copy saved with the
+    // session is the fallback when the file is gone.
     QString scriptText = s->config.startupScriptSource();
+    const QString scriptPath = s->config.startupScriptPath();
+    if (s->config.startupScriptLinked() && !scriptPath.isEmpty()) {
+        QFile file(scriptPath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            scriptText = QString::fromUtf8(file.readAll());
+        } else {
+            LOG_WARNING(QString("Startup script: cannot read %1, using the saved copy").arg(scriptPath));
+            if (s->sessionLogger)
+                s->sessionLogger->logEvent(
+                    QString("[SCRIPT] Cannot read %1, using the saved copy").arg(scriptPath));
+        }
+    }
+
     core::scripting::ScriptParser parser;
     auto parseResult = parser.parse(scriptText);
-    if (parseResult.hasErrors()) return;
+    if (parseResult.hasErrors()) {
+        QStringList msgs;
+        for (const auto &err : parseResult.errors)
+            msgs << QString("Line %1: %2").arg(err.line).arg(err.message);
+        qt_ui_style::StyledMessageBox::warning(this, "Startup Script",
+            QString("The startup script '%1' was not run because it contains errors:\n\n%2")
+                .arg(s->config.startupScriptName(), msgs.join("\n")));
+        return;
+    }
 
     // Create executor
     if (!s->scriptExecutor) {

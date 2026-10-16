@@ -110,6 +110,8 @@ set(CORE_SOURCES
     src/core/match_replace_engine.h
     src/core/macro_to_script.cpp
     src/core/macro_to_script.h
+    src/core/script_library.cpp
+    src/core/script_library.h
     src/core/command_runner.cpp
     src/core/command_runner.h
     src/core/pcap_replay.cpp

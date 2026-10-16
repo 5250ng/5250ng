@@ -585,7 +585,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     connect(session->thread, &QThread::finished, session->worker, &QObject::deleteLater);
     // Per-session state handling - always updates this session's status widget,
     // and only touches global menu actions when this is the active tab.
-    auto startupScriptRan = std::make_shared<bool>(false);
+    auto startupScriptRan = std::make_shared<bool>(m_skipStartupScriptOnce);
+    m_skipStartupScriptOnce = false;
     connect(session->worker, &tn5250::session::Worker::stateChanged, this,
         [this, session, startupScriptRan](tn5250::client::TN5250Client::ConnectionState state) {
             if (session->connectionStatus) {
@@ -601,10 +602,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                     // Run startup script once on first connect
                     if (!*startupScriptRan && !session->config.startupScriptSource().isEmpty()) {
                         *startupScriptRan = true;
-                        // Delay to let the terminal finish setup
-                        QTimer::singleShot(500, this, [this, session]() {
-                            runStartupScript(session);
-                        });
+                        scheduleStartupScript(session);
                     }
                     break;
                 case tn5250::client::TN5250Client::ConnectionState::Connecting:

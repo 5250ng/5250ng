@@ -26,6 +26,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
@@ -76,13 +77,20 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     void onSessionComboChanged(const QString &sessionName);
     void onDeviceComboChanged(int index);
     void onDeleteSessionClicked();
-    void onAttachScriptClicked();
-    void onDetachScriptClicked();
+    void onScriptComboChanged(int index);
+    void onBrowseScriptClicked();
+    void onNewScriptClicked();
+    void onEditScriptClicked();
+    void onReloadScriptClicked();
 
   private:
     void setupUI();
     void updateUI();
     void rebuildScriptVariableFields();
+    bool attachScriptFromFile(const QString &filePath, bool quiet);
+    void detachScript();
+    void populateScriptCombo();
+    void updateScriptControls();
 
     QLineEdit *m_hostnameEdit;
     QSpinBox *m_portSpin;
@@ -110,9 +118,16 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     QGroupBox *m_displayGroup;
     QComboBox *m_codePageCombo;
     QComboBox *m_themeCombo;
-    QLabel *m_scriptNameLabel;
-    QPushButton *m_attachScriptButton;
-    QPushButton *m_detachScriptButton;
+    QComboBox *m_scriptCombo;
+    QPushButton *m_browseScriptButton;
+    QPushButton *m_newScriptButton;
+    QPushButton *m_editScriptButton;
+    QPushButton *m_reloadScriptButton;
+    QLabel *m_scriptSourceLabel;
+    QCheckBox *m_scriptLinkedCheck;
+    QComboBox *m_scriptTriggerCombo;
+    QCheckBox *m_scriptOnReconnectCheck;
+    QPlainTextEdit *m_scriptPreview;
     QGroupBox *m_scriptVarsGroup;
     QFormLayout *m_scriptVarsLayout;
     QHash<QString, QLineEdit*> m_scriptVarEdits;

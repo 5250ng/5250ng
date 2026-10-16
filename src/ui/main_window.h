@@ -210,6 +210,7 @@ class MainWindow : public MainWindowBase {
     };
 
     void runStartupScript(Session *session);
+    void scheduleStartupScript(Session *session);
     void applyThemeToSession(Session *session, const QString &themeId);
 
     QTabWidget *m_tabWidget = nullptr;
@@ -224,6 +225,9 @@ class MainWindow : public MainWindowBase {
     ui::widgets::Q5250ScreenWidget *m_displayWidget;
     tn5250::client::DecoderAdapter *m_parser;
     session::SessionConfig m_currentSession;
+    // Set by onReconnect() when the session's startup script must not run
+    // for the tab it is about to open; consumed by connectToServer().
+    bool m_skipStartupScriptOnce = false;
 
     // UI elements
     QAction *m_connectAction;

@@ -18,17 +18,19 @@
 #include "5250script/script_parser.h"
 #include "5250script/script_utils.h"
 #include "core/codepage.h"
+#include "core/script_library.h"
 #include "session/manager.h"
 #include "ui/themes/terminal_theme_manager.h"
-#include <QDir>
+#include <QDesktopServices>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QFrame>
 #include <QSignalBlocker>
 #include <QGroupBox>
 #include <QSplitter>
-#include <QStandardPaths>
+#include <QUrl>
 #include <QtUiStyle/StyledInputDialog.h>
 #include <QtUiStyle/StyledMessageBox.h>
 
@@ -259,15 +261,61 @@ void ConnectDialog::setupUI() {
     // Startup script group
     QGroupBox *scriptGroup = new QGroupBox("Startup Script", this);
     QFormLayout *scriptLayout = new QFormLayout(scriptGroup);
-    m_scriptNameLabel = new QLabel("(None)", this);
-    scriptLayout->addRow("Script:", m_scriptNameLabel);
+
+    // Library scripts plus whatever is currently attached
+    m_scriptCombo = new QComboBox(this);
+    m_scriptCombo->setToolTip(QString("Scripts in %1").arg(core::scriptsDirectory()));
+    scriptLayout->addRow("Script:", m_scriptCombo);
+
     QHBoxLayout *scriptButtonsLayout = new QHBoxLayout();
-    m_attachScriptButton = new QPushButton("Attach Script...", this);
-    m_detachScriptButton = new QPushButton("Detach", this);
-    m_detachScriptButton->setEnabled(false);
-    scriptButtonsLayout->addWidget(m_attachScriptButton);
-    scriptButtonsLayout->addWidget(m_detachScriptButton);
-    scriptLayout->addRow(scriptButtonsLayout);
+    m_browseScriptButton = new QPushButton("Browse...", this);
+    m_browseScriptButton->setToolTip("Attach a script file from anywhere on disk");
+    m_newScriptButton = new QPushButton("New...", this);
+    m_newScriptButton->setToolTip("Create a script in the library, attach it and open it for editing");
+    m_editScriptButton = new QPushButton("Edit...", this);
+    m_editScriptButton->setToolTip("Open the attached script file in the default editor");
+    m_reloadScriptButton = new QPushButton("Reload", this);
+    m_reloadScriptButton->setToolTip("Re-read the attached script file into this session");
+    scriptButtonsLayout->addWidget(m_browseScriptButton);
+    scriptButtonsLayout->addWidget(m_newScriptButton);
+    scriptButtonsLayout->addWidget(m_editScriptButton);
+    scriptButtonsLayout->addWidget(m_reloadScriptButton);
+    scriptButtonsLayout->addStretch();
+    scriptLayout->addRow("", scriptButtonsLayout);
+
+    m_scriptSourceLabel = new QLabel(this);
+    m_scriptSourceLabel->setWordWrap(true);
+    m_scriptSourceLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    scriptLayout->addRow("Source:", m_scriptSourceLabel);
+
+    m_scriptLinkedCheck = new QCheckBox("Re-read the script file every time the session connects", this);
+    m_scriptLinkedCheck->setToolTip(
+        "When enabled, edits to the script file apply on the next connect. "
+        "When disabled, the session keeps the copy taken when the script was attached. "
+        "The saved copy is still used if the file is missing.");
+    scriptLayout->addRow("", m_scriptLinkedCheck);
+
+    m_scriptTriggerCombo = new QComboBox(this);
+    m_scriptTriggerCombo->addItem("Shortly after connecting",
+                                  static_cast<int>(session::StartupScriptTrigger::AfterConnect));
+    m_scriptTriggerCombo->addItem("When the first input screen is ready",
+                                  static_cast<int>(session::StartupScriptTrigger::FirstScreen));
+    m_scriptTriggerCombo->setToolTip(
+        "\"First input screen\" waits until the host has sent a screen with input "
+        "fields (usually the sign-on screen) and unlocked the keyboard.");
+    scriptLayout->addRow("Run:", m_scriptTriggerCombo);
+
+    m_scriptOnReconnectCheck = new QCheckBox("Run again when the session is reconnected", this);
+    m_scriptOnReconnectCheck->setChecked(true);
+    scriptLayout->addRow("", m_scriptOnReconnectCheck);
+
+    m_scriptPreview = new QPlainTextEdit(this);
+    m_scriptPreview->setReadOnly(true);
+    m_scriptPreview->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_scriptPreview->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_scriptPreview->setPlaceholderText("No startup script attached.");
+    m_scriptPreview->setMinimumHeight(140);
+    scriptLayout->addRow(m_scriptPreview);
     scriptGroup->setLayout(scriptLayout);
 
     // Script variables group (dynamic, initially hidden)
@@ -352,8 +400,11 @@ void ConnectDialog::setupUI() {
     connect(m_saveSessionAsButton, &QPushButton::clicked, this, &ConnectDialog::onSaveSessionAsClicked);
     connect(m_loadSessionButton, &QPushButton::clicked, this, &ConnectDialog::onLoadSessionClicked);
     connect(m_deleteSessionButton, &QPushButton::clicked, this, &ConnectDialog::onDeleteSessionClicked);
-    connect(m_attachScriptButton, &QPushButton::clicked, this, &ConnectDialog::onAttachScriptClicked);
-    connect(m_detachScriptButton, &QPushButton::clicked, this, &ConnectDialog::onDetachScriptClicked);
+    connect(m_scriptCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ConnectDialog::onScriptComboChanged);
+    connect(m_browseScriptButton, &QPushButton::clicked, this, &ConnectDialog::onBrowseScriptClicked);
+    connect(m_newScriptButton, &QPushButton::clicked, this, &ConnectDialog::onNewScriptClicked);
+    connect(m_editScriptButton, &QPushButton::clicked, this, &ConnectDialog::onEditScriptClicked);
+    connect(m_reloadScriptButton, &QPushButton::clicked, this, &ConnectDialog::onReloadScriptClicked);
     connect(m_sessionCombo, QOverload<const QString &>::of(&QComboBox::currentTextChanged), this, &ConnectDialog::onSessionComboChanged);
     // Initial state: disable delete for "(New Session)"
     m_deleteSessionButton->setEnabled(false);
@@ -422,14 +473,21 @@ void ConnectDialog::updateUI() {
         m_themeCombo->setCurrentIndex(themeIdx);
     }
 
-    // Startup script
-    if (!m_currentConfig.startupScriptSource().isEmpty()) {
-        m_scriptNameLabel->setText(m_currentConfig.startupScriptName());
-        m_detachScriptButton->setEnabled(true);
-    } else {
-        m_scriptNameLabel->setText("(None)");
-        m_detachScriptButton->setEnabled(false);
+    // Startup script. A linked script picks up edits made to its file since
+    // the session was saved; a missing or broken file keeps the saved copy.
+    if (m_currentConfig.startupScriptLinked() && !m_currentConfig.startupScriptPath().isEmpty()) {
+        // Reset the variable fields to this config first so the reload does
+        // not carry over values typed for a previously loaded session.
+        rebuildScriptVariableFields();
+        attachScriptFromFile(m_currentConfig.startupScriptPath(), /*quiet*/ true);
     }
+    m_scriptLinkedCheck->setChecked(m_currentConfig.startupScriptLinked());
+    int triggerIdx = m_scriptTriggerCombo->findData(
+        static_cast<int>(m_currentConfig.startupScriptTrigger()));
+    m_scriptTriggerCombo->setCurrentIndex(triggerIdx >= 0 ? triggerIdx : 0);
+    m_scriptOnReconnectCheck->setChecked(m_currentConfig.startupScriptOnReconnect());
+    populateScriptCombo();
+    updateScriptControls();
     rebuildScriptVariableFields();
 }
 
@@ -465,6 +523,11 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setTerminalThemeId(m_themeCombo->currentData().toString());
     config.setStartupScriptSource(m_currentConfig.startupScriptSource());
     config.setStartupScriptName(m_currentConfig.startupScriptName());
+    config.setStartupScriptPath(m_currentConfig.startupScriptPath());
+    config.setStartupScriptLinked(m_scriptLinkedCheck->isChecked());
+    config.setStartupScriptTrigger(static_cast<session::StartupScriptTrigger>(
+        m_scriptTriggerCombo->currentData().toInt()));
+    config.setStartupScriptOnReconnect(m_scriptOnReconnectCheck->isChecked());
     QHash<QString, QString> vars;
     for (auto it = m_scriptVarEdits.constBegin(); it != m_scriptVarEdits.constEnd(); ++it)
         vars[it.key()] = it.value()->text();
@@ -657,21 +720,13 @@ void ConnectDialog::onDeviceComboChanged(int index) {
     }
 }
 
-void ConnectDialog::onAttachScriptClicked() {
-    QString startDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-                       + "/scripts";
-    if (!QDir(startDir).exists())
-        startDir = QDir::homePath();
-
-    QString filePath = QFileDialog::getOpenFileName(
-        this, "Attach Startup Script", startDir, "5250 Scripts (*.5250script);;All Files (*)");
-    if (filePath.isEmpty())
-        return;
-
+bool ConnectDialog::attachScriptFromFile(const QString &filePath, bool quiet) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qt_ui_style::StyledMessageBox::warning(this, "Attach Script", "Failed to read script file.");
-        return;
+        if (!quiet)
+            qt_ui_style::StyledMessageBox::warning(this, "Attach Script",
+                QString("Failed to read script file:\n%1").arg(filePath));
+        return false;
     }
     QString source = QString::fromUtf8(file.readAll());
     file.close();
@@ -680,29 +735,142 @@ void ConnectDialog::onAttachScriptClicked() {
     core::scripting::ScriptParser parser;
     auto result = parser.parse(source);
     if (result.hasErrors()) {
-        QStringList msgs;
-        for (const auto &err : result.errors)
-            msgs << QString("Line %1: %2").arg(err.line).arg(err.message);
-        qt_ui_style::StyledMessageBox::warning(
-            this, "Script Error",
-            QString("The script contains errors:\n\n%1").arg(msgs.join("\n")));
-        return;
+        if (!quiet) {
+            QStringList msgs;
+            for (const auto &err : result.errors)
+                msgs << QString("Line %1: %2").arg(err.line).arg(err.message);
+            qt_ui_style::StyledMessageBox::warning(
+                this, "Script Error",
+                QString("The script contains errors:\n\n%1").arg(msgs.join("\n")));
+        }
+        return false;
     }
+
+    // Keep values already typed into the variable fields
+    QHash<QString, QString> vars = m_currentConfig.sessionVariables();
+    for (auto it = m_scriptVarEdits.constBegin(); it != m_scriptVarEdits.constEnd(); ++it)
+        vars[it.key()] = it.value()->text();
+    m_currentConfig.setSessionVariables(vars);
 
     m_currentConfig.setStartupScriptSource(source);
     m_currentConfig.setStartupScriptName(QFileInfo(filePath).fileName());
-    m_scriptNameLabel->setText(m_currentConfig.startupScriptName());
-    m_detachScriptButton->setEnabled(true);
+    m_currentConfig.setStartupScriptPath(QFileInfo(filePath).absoluteFilePath());
     rebuildScriptVariableFields();
+    updateScriptControls();
+    return true;
 }
 
-void ConnectDialog::onDetachScriptClicked() {
+void ConnectDialog::detachScript() {
     m_currentConfig.setStartupScriptSource(QString());
     m_currentConfig.setStartupScriptName(QString());
+    m_currentConfig.setStartupScriptPath(QString());
     m_currentConfig.setSessionVariables({});
-    m_scriptNameLabel->setText("(None)");
-    m_detachScriptButton->setEnabled(false);
+    m_scriptLinkedCheck->setChecked(false);
     rebuildScriptVariableFields();
+    updateScriptControls();
+}
+
+void ConnectDialog::populateScriptCombo() {
+    QSignalBlocker blocker(m_scriptCombo);
+    m_scriptCombo->clear();
+    m_scriptCombo->addItem("(None)", QString());
+
+    const QString attachedPath = m_currentConfig.startupScriptPath();
+    const bool attached = !m_currentConfig.startupScriptSource().isEmpty();
+    int selected = 0;
+    for (const QFileInfo &fi : core::listLibraryScripts()) {
+        m_scriptCombo->addItem(fi.fileName(), fi.absoluteFilePath());
+        if (attached && fi.absoluteFilePath() == attachedPath)
+            selected = m_scriptCombo->count() - 1;
+    }
+
+    // An attached script outside the library (or one saved without a path)
+    // still needs an entry so the combo reflects what will run.
+    if (attached && selected == 0) {
+        const QString label = attachedPath.isEmpty()
+            ? QString("%1 (saved copy)").arg(m_currentConfig.startupScriptName())
+            : QFileInfo(attachedPath).fileName() + " (external)";
+        m_scriptCombo->addItem(label, attachedPath);
+        selected = m_scriptCombo->count() - 1;
+    }
+    m_scriptCombo->setCurrentIndex(selected);
+}
+
+void ConnectDialog::updateScriptControls() {
+    const bool attached = !m_currentConfig.startupScriptSource().isEmpty();
+    const QString path = m_currentConfig.startupScriptPath();
+    const bool hasFile = attached && !path.isEmpty() && QFileInfo::exists(path);
+
+    m_editScriptButton->setEnabled(hasFile);
+    m_reloadScriptButton->setEnabled(hasFile);
+    m_scriptLinkedCheck->setEnabled(attached && !path.isEmpty());
+    m_scriptTriggerCombo->setEnabled(attached);
+    m_scriptOnReconnectCheck->setEnabled(attached);
+
+    if (!attached) {
+        m_scriptSourceLabel->setText("(None)");
+    } else if (path.isEmpty()) {
+        m_scriptSourceLabel->setText("Saved copy only - no file is linked to this session.");
+    } else if (!hasFile) {
+        m_scriptSourceLabel->setText(QString("%1 (file not found - the saved copy will be used)").arg(path));
+    } else {
+        m_scriptSourceLabel->setText(path);
+    }
+    m_scriptPreview->setPlainText(m_currentConfig.startupScriptSource());
+}
+
+void ConnectDialog::onScriptComboChanged(int index) {
+    if (index <= 0) {
+        detachScript();
+        return;
+    }
+    const QString path = m_scriptCombo->itemData(index).toString();
+    if (path.isEmpty() || path == m_currentConfig.startupScriptPath())
+        return;
+    attachScriptFromFile(path, /*quiet*/ false);
+    // Re-sync the combo: on failure this restores the previous selection
+    populateScriptCombo();
+}
+
+void ConnectDialog::onBrowseScriptClicked() {
+    QString filePath = QFileDialog::getOpenFileName(
+        this, "Attach Startup Script", core::scriptsDirectory(),
+        "5250 Scripts (*.5250script);;All Files (*)");
+    if (filePath.isEmpty())
+        return;
+    attachScriptFromFile(filePath, /*quiet*/ false);
+    populateScriptCombo();
+}
+
+void ConnectDialog::onNewScriptClicked() {
+    bool ok = false;
+    const QString name = qt_ui_style::StyledInputDialog::getText(
+        this, "New Script", "Script name:", QLineEdit::Normal, "startup", &ok).trimmed();
+    if (!ok || name.isEmpty())
+        return;
+    const QString path = core::createScriptFromTemplate(name);
+    if (path.isEmpty()) {
+        qt_ui_style::StyledMessageBox::warning(this, "New Script", "Failed to create the script file.");
+        return;
+    }
+    if (attachScriptFromFile(path, /*quiet*/ false)) {
+        // The user is about to edit the file, so pick up those edits on connect
+        m_scriptLinkedCheck->setChecked(true);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    }
+    populateScriptCombo();
+}
+
+void ConnectDialog::onEditScriptClicked() {
+    const QString path = m_currentConfig.startupScriptPath();
+    if (!path.isEmpty())
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
+
+void ConnectDialog::onReloadScriptClicked() {
+    const QString path = m_currentConfig.startupScriptPath();
+    if (!path.isEmpty())
+        attachScriptFromFile(path, /*quiet*/ false);
 }
 
 void ConnectDialog::rebuildScriptVariableFields() {
