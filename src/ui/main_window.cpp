@@ -641,6 +641,27 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                 m_mcpServer->updateSessionStatus(session->mcpSessionId, isConnected);
             }
         });
+    // Automatic reconnect after a dropped connection: show progress in the
+    // status bar and let the startup script run again if the session wants it.
+    connect(session->worker, &tn5250::session::Worker::reconnectScheduled, this,
+        [this, session, startupScriptRan](int attempt, int maxAttempts, int delaySeconds) {
+            if (session->config.startupScriptOnReconnect())
+                *startupScriptRan = false;
+            const QString text = maxAttempts > 0
+                ? QString("Connection lost - reconnecting in %1 s (attempt %2 of %3)")
+                      .arg(delaySeconds).arg(attempt).arg(maxAttempts)
+                : QString("Connection lost - reconnecting in %1 s (attempt %2)")
+                      .arg(delaySeconds).arg(attempt);
+            if (session->connectionStatus)
+                session->connectionStatus->setStatusText(text);
+            if (m_sessions.indexOf(session) == m_activeIndex) {
+                m_globalConnectionStatus->setStatusText(text);
+                // Session > Disconnect cancels the pending reconnect
+                m_disconnectAction->setEnabled(true);
+            }
+            if (session->sessionLogger)
+                session->sessionLogger->logEvent(QString("[CONNECTION] %1").arg(text));
+        });
     connect(session->worker, &tn5250::session::Worker::errorOccurred, this,
         [this, session](const QString &error) {
             logger::Logger::instance()->error(QString("Connection error: %1").arg(error));

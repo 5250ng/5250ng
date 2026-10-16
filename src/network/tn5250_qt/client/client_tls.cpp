@@ -17,7 +17,12 @@
 #include "client.h"
 #include "logger/logger.h"
 
+#include <QFile>
+
 #ifdef HAVE_QT6_SSL
+#include <QSslCertificate>
+#include <QSslConfiguration>
+#include <QSslKey>
 #include <QSslSocket>
 #endif
 
@@ -46,6 +51,76 @@ void TN5250Client::handleStartTLS() {
 #else
     logger::Logger::instance()->warning("[TN5250->Client]: TLS not supported");
 #endif
+}
+
+#ifdef HAVE_QT6_SSL
+namespace {
+
+QList<QSslCertificate> loadCertificates(const QString &path) {
+    QList<QSslCertificate> certs = QSslCertificate::fromPath(path, QSsl::Pem);
+    if (certs.isEmpty())
+        certs = QSslCertificate::fromPath(path, QSsl::Der);
+    return certs;
+}
+
+QSslKey loadPrivateKey(const QString &path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return QSslKey();
+    const QByteArray data = file.readAll();
+    for (QSsl::EncodingFormat format : {QSsl::Pem, QSsl::Der}) {
+        for (QSsl::KeyAlgorithm algorithm : {QSsl::Rsa, QSsl::Ec, QSsl::Dsa}) {
+            QSslKey key(data, algorithm, format, QSsl::PrivateKey);
+            if (!key.isNull())
+                return key;
+        }
+    }
+    return QSslKey();
+}
+
+} // namespace
+#endif
+
+bool TN5250Client::applyTlsFiles(QString *error) {
+#ifdef HAVE_QT6_SSL
+    if (!m_sslSocket)
+        return true;
+    if (m_tlsCaCertificateFile.isEmpty() && m_tlsClientCertificateFile.isEmpty())
+        return true;
+
+    QSslConfiguration conf = m_sslSocket->sslConfiguration();
+    if (!m_tlsCaCertificateFile.isEmpty()) {
+        const QList<QSslCertificate> cas = loadCertificates(m_tlsCaCertificateFile);
+        if (cas.isEmpty()) {
+            *error = QString("Cannot load CA certificate file: %1").arg(m_tlsCaCertificateFile);
+            return false;
+        }
+        conf.addCaCertificates(cas);
+    }
+    if (!m_tlsClientCertificateFile.isEmpty()) {
+        const QList<QSslCertificate> certs = loadCertificates(m_tlsClientCertificateFile);
+        if (certs.isEmpty()) {
+            *error = QString("Cannot load client certificate file: %1")
+                         .arg(m_tlsClientCertificateFile);
+            return false;
+        }
+        const QString keyPath = m_tlsClientKeyFile.isEmpty() ? m_tlsClientCertificateFile
+                                                             : m_tlsClientKeyFile;
+        const QSslKey key = loadPrivateKey(keyPath);
+        if (key.isNull()) {
+            *error = QString("Cannot load the client private key from %1 "
+                             "(passphrase-protected keys are not supported)").arg(keyPath);
+            return false;
+        }
+        // Any further certificates in the file form the chain sent to the host
+        conf.setLocalCertificateChain(certs);
+        conf.setPrivateKey(key);
+    }
+    m_sslSocket->setSslConfiguration(conf);
+#else
+    Q_UNUSED(error);
+#endif
+    return true;
 }
 
 } // namespace tn5250::client

@@ -23,7 +23,7 @@ namespace session {
 
 SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceType("IBM-3179-2"), m_deviceName(""), m_screenRows(24), m_screenCols(80), m_codePage(core::CodePage::ID::CP037), m_terminalThemeId("classic_green") {}
 
-SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_startupScriptPath(other.m_startupScriptPath), m_startupScriptLinked(other.m_startupScriptLinked), m_startupScriptTrigger(other.m_startupScriptTrigger), m_startupScriptOnReconnect(other.m_startupScriptOnReconnect), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_pcCommandPolicy(other.m_pcCommandPolicy), m_replayPcapFile(other.m_replayPcapFile) {}
+SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_startupScriptPath(other.m_startupScriptPath), m_startupScriptLinked(other.m_startupScriptLinked), m_startupScriptTrigger(other.m_startupScriptTrigger), m_startupScriptOnReconnect(other.m_startupScriptOnReconnect), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_pcCommandPolicy(other.m_pcCommandPolicy), m_connectTimeoutSeconds(other.m_connectTimeoutSeconds), m_keepaliveIntervalSeconds(other.m_keepaliveIntervalSeconds), m_autoReconnect(other.m_autoReconnect), m_autoReconnectDelaySeconds(other.m_autoReconnectDelaySeconds), m_autoReconnectMaxAttempts(other.m_autoReconnectMaxAttempts), m_tlsCaCertificateFile(other.m_tlsCaCertificateFile), m_tlsClientCertificateFile(other.m_tlsClientCertificateFile), m_tlsClientKeyFile(other.m_tlsClientKeyFile), m_replayPcapFile(other.m_replayPcapFile) {}
 
 SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
     if (this != &other) {
@@ -48,6 +48,14 @@ SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
         m_username = other.m_username;
         m_password = other.m_password;
         m_pcCommandPolicy = other.m_pcCommandPolicy;
+        m_connectTimeoutSeconds = other.m_connectTimeoutSeconds;
+        m_keepaliveIntervalSeconds = other.m_keepaliveIntervalSeconds;
+        m_autoReconnect = other.m_autoReconnect;
+        m_autoReconnectDelaySeconds = other.m_autoReconnectDelaySeconds;
+        m_autoReconnectMaxAttempts = other.m_autoReconnectMaxAttempts;
+        m_tlsCaCertificateFile = other.m_tlsCaCertificateFile;
+        m_tlsClientCertificateFile = other.m_tlsClientCertificateFile;
+        m_tlsClientKeyFile = other.m_tlsClientKeyFile;
         m_replayPcapFile = other.m_replayPcapFile;
         emit changed();
     }
@@ -122,6 +130,22 @@ QJsonObject SessionConfig::toJson() const {
     // so existing config files do not gain a surprising new key on first save.
     if (m_pcCommandPolicy != PcCommandPolicy::DenyAndAlert)
         json["pcCommandPolicy"] = pcCommandPolicyToString(m_pcCommandPolicy);
+    if (m_connectTimeoutSeconds != kDefaultConnectTimeoutSeconds)
+        json["connectTimeout"] = m_connectTimeoutSeconds;
+    if (m_keepaliveIntervalSeconds != kDefaultKeepaliveIntervalSeconds)
+        json["keepaliveInterval"] = m_keepaliveIntervalSeconds;
+    if (m_autoReconnect)
+        json["autoReconnect"] = true;
+    if (m_autoReconnectDelaySeconds != kDefaultAutoReconnectDelaySeconds)
+        json["autoReconnectDelay"] = m_autoReconnectDelaySeconds;
+    if (m_autoReconnectMaxAttempts != kDefaultAutoReconnectMaxAttempts)
+        json["autoReconnectMaxAttempts"] = m_autoReconnectMaxAttempts;
+    if (!m_tlsCaCertificateFile.isEmpty())
+        json["tlsCaCertificateFile"] = m_tlsCaCertificateFile;
+    if (!m_tlsClientCertificateFile.isEmpty())
+        json["tlsClientCertificateFile"] = m_tlsClientCertificateFile;
+    if (!m_tlsClientKeyFile.isEmpty())
+        json["tlsClientKeyFile"] = m_tlsClientKeyFile;
     return json;
 }
 
@@ -247,6 +271,30 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     } else {
         m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
     }
+
+    // Connection settings: values outside their range fall back to the
+    // default instead of failing the load.
+    auto readInt = [&json](const char *key, int min, int max, int fallback) {
+        if (!json.contains(key) || !json[key].isDouble())
+            return fallback;
+        const double v = json[key].toDouble();
+        return (v >= min && v <= max) ? static_cast<int>(v) : fallback;
+    };
+    m_connectTimeoutSeconds = readInt("connectTimeout", kMinConnectTimeoutSeconds,
+                                      kMaxConnectTimeoutSeconds, kDefaultConnectTimeoutSeconds);
+    m_keepaliveIntervalSeconds = readInt("keepaliveInterval", 0, kMaxKeepaliveIntervalSeconds,
+                                         kDefaultKeepaliveIntervalSeconds);
+    m_autoReconnect = json.contains("autoReconnect") && json["autoReconnect"].isBool()
+                      && json["autoReconnect"].toBool();
+    m_autoReconnectDelaySeconds = readInt("autoReconnectDelay", kMinAutoReconnectDelaySeconds,
+                                          kMaxAutoReconnectDelaySeconds,
+                                          kDefaultAutoReconnectDelaySeconds);
+    m_autoReconnectMaxAttempts = readInt("autoReconnectMaxAttempts", 0,
+                                         kMaxAutoReconnectMaxAttempts,
+                                         kDefaultAutoReconnectMaxAttempts);
+    m_tlsCaCertificateFile = json["tlsCaCertificateFile"].toString();
+    m_tlsClientCertificateFile = json["tlsClientCertificateFile"].toString();
+    m_tlsClientKeyFile = json["tlsClientKeyFile"].toString();
     emit changed();
     return isValid();
 }

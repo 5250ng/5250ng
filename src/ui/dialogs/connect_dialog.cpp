@@ -22,6 +22,7 @@
 #include "session/manager.h"
 #include "ui/themes/terminal_theme_manager.h"
 #include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -152,8 +153,105 @@ void ConnectDialog::setupUI() {
     m_deviceNameEdit->setMaxLength(10); // IBM i device names max 10 chars
     formLayout->addRow("Device Name:", m_deviceNameEdit);
 
+    // Try the connection (TCP + TLS) with the settings from every page
+    QHBoxLayout *testLayout = new QHBoxLayout();
+    m_testConnectionButton = new QPushButton("Test Connection", this);
+    m_testConnectionButton->setToolTip(
+        "Open a TCP connection (and TLS handshake) with the current settings, "
+        "then close it without signing on");
+    m_testConnectionResult = new QLabel(this);
+    m_testConnectionResult->setWordWrap(true);
+    m_testConnectionResult->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    testLayout->addWidget(m_testConnectionButton);
+    testLayout->addWidget(m_testConnectionResult, 1);
+    formLayout->addRow("", testLayout);
+
     connectionGroup->setLayout(formLayout);
     const int connectionPage = addPage(connectionGroup);
+
+    // TLS certificates
+    QGroupBox *tlsGroup = new QGroupBox("TLS Certificates", this);
+    QFormLayout *tlsLayout = new QFormLayout(tlsGroup);
+    QLabel *tlsNote = new QLabel(
+        "Used when \"Use TLS/SSL\" is enabled on the Server page. Leave empty "
+        "to rely on the system certificate store and no client certificate.", this);
+    tlsNote->setWordWrap(true);
+    tlsLayout->addRow(tlsNote);
+    auto addFileRow = [this, tlsLayout](const QString &label, const QString &placeholder,
+                                        const QString &tooltip, const QString &filter) {
+        QLineEdit *edit = new QLineEdit(this);
+        edit->setPlaceholderText(placeholder);
+        edit->setToolTip(tooltip);
+        QPushButton *browse = new QPushButton("Browse...", this);
+        connect(browse, &QPushButton::clicked, this, [this, edit, label, filter]() {
+            const QString path = QFileDialog::getOpenFileName(
+                this, label, edit->text().isEmpty() ? QDir::homePath() : edit->text(), filter);
+            if (!path.isEmpty())
+                edit->setText(path);
+        });
+        QHBoxLayout *row = new QHBoxLayout();
+        row->addWidget(edit, 1);
+        row->addWidget(browse);
+        tlsLayout->addRow(label + ":", row);
+        return edit;
+    };
+    const QString certFilter = "Certificates (*.pem *.crt *.cer *.der);;All Files (*)";
+    m_tlsCaFileEdit = addFileRow(
+        "CA certificate", "(system store only)",
+        "Extra CA certificate(s) to trust for this host, in addition to the system store. "
+        "Use this for hosts with a certificate from a private CA.",
+        certFilter);
+    m_tlsClientCertEdit = addFileRow(
+        "Client certificate", "(none)",
+        "Certificate presented to the host during the TLS handshake (PEM or DER).",
+        certFilter);
+    m_tlsClientKeyEdit = addFileRow(
+        "Client private key", "(read from the certificate file)",
+        "Unencrypted private key for the client certificate. Leave empty when the "
+        "certificate file also contains the key.",
+        "Private keys (*.pem *.key *.der);;All Files (*)");
+    tlsGroup->setLayout(tlsLayout);
+    const int tlsPage = addPage(tlsGroup);
+
+    // Timeouts and automatic reconnect
+    QGroupBox *reliabilityGroup = new QGroupBox("Timeouts && Reconnect", this);
+    QFormLayout *reliabilityLayout = new QFormLayout(reliabilityGroup);
+    m_connectTimeoutSpin = new QSpinBox(this);
+    m_connectTimeoutSpin->setRange(session::SessionConfig::kMinConnectTimeoutSeconds,
+                                   session::SessionConfig::kMaxConnectTimeoutSeconds);
+    m_connectTimeoutSpin->setSuffix(" s");
+    m_connectTimeoutSpin->setToolTip("How long to wait for the connection and TLS handshake");
+    reliabilityLayout->addRow("Connect timeout:", m_connectTimeoutSpin);
+
+    m_keepaliveSpin = new QSpinBox(this);
+    m_keepaliveSpin->setRange(0, session::SessionConfig::kMaxKeepaliveIntervalSeconds);
+    m_keepaliveSpin->setSuffix(" s");
+    m_keepaliveSpin->setSpecialValueText("Off");
+    m_keepaliveSpin->setToolTip(
+        "Send a telnet NOP this often while connected, so firewalls and the host "
+        "do not drop an idle session");
+    reliabilityLayout->addRow("Keep-alive interval:", m_keepaliveSpin);
+
+    m_autoReconnectCheck = new QCheckBox("Reconnect automatically when the connection drops", this);
+    m_autoReconnectCheck->setToolTip(
+        "Applies to sessions that were connected and then lost the connection. "
+        "Disconnecting from the menu never reconnects.");
+    reliabilityLayout->addRow("", m_autoReconnectCheck);
+
+    m_reconnectDelaySpin = new QSpinBox(this);
+    m_reconnectDelaySpin->setRange(session::SessionConfig::kMinAutoReconnectDelaySeconds,
+                                   session::SessionConfig::kMaxAutoReconnectDelaySeconds);
+    m_reconnectDelaySpin->setSuffix(" s");
+    reliabilityLayout->addRow("Delay between attempts:", m_reconnectDelaySpin);
+
+    m_reconnectAttemptsSpin = new QSpinBox(this);
+    m_reconnectAttemptsSpin->setRange(0, session::SessionConfig::kMaxAutoReconnectMaxAttempts);
+    m_reconnectAttemptsSpin->setSpecialValueText("Unlimited");
+    reliabilityLayout->addRow("Maximum attempts:", m_reconnectAttemptsSpin);
+    connect(m_autoReconnectCheck, &QCheckBox::toggled, m_reconnectDelaySpin, &QWidget::setEnabled);
+    connect(m_autoReconnectCheck, &QCheckBox::toggled, m_reconnectAttemptsSpin, &QWidget::setEnabled);
+    reliabilityGroup->setLayout(reliabilityLayout);
+    const int reliabilityPage = addPage(reliabilityGroup);
 
     // Display settings group
     m_displayGroup = new QGroupBox("Display Settings", this);
@@ -347,6 +445,8 @@ void ConnectDialog::setupUI() {
 
     QTreeWidgetItem *connectionCategory = addCategory(nullptr, "Connection", connectionPage);
     QTreeWidgetItem *serverItem = addCategory(connectionCategory, "Server", connectionPage);
+    addCategory(connectionCategory, "TLS Certificates", tlsPage);
+    addCategory(connectionCategory, "Timeouts & Reconnect", reliabilityPage);
     addCategory(connectionCategory, "PC Commands", pcCommandsPage);
     connectionCategory->setExpanded(true);
 
@@ -396,6 +496,7 @@ void ConnectDialog::setupUI() {
     // Connect signals
     connect(m_connectButton, &QPushButton::clicked, this, &ConnectDialog::onConnectClicked);
     connect(m_cancelButton, &QPushButton::clicked, this, &ConnectDialog::onCancelClicked);
+    connect(m_testConnectionButton, &QPushButton::clicked, this, &ConnectDialog::onTestConnectionClicked);
     connect(m_saveSessionButton, &QPushButton::clicked, this, &ConnectDialog::onSaveSessionClicked);
     connect(m_saveSessionAsButton, &QPushButton::clicked, this, &ConnectDialog::onSaveSessionAsClicked);
     connect(m_loadSessionButton, &QPushButton::clicked, this, &ConnectDialog::onLoadSessionClicked);
@@ -430,6 +531,16 @@ void ConnectDialog::updateUI() {
         break;
     }
     m_usernameEdit->setText(m_currentConfig.username());
+    m_connectTimeoutSpin->setValue(m_currentConfig.connectTimeoutSeconds());
+    m_keepaliveSpin->setValue(m_currentConfig.keepaliveIntervalSeconds());
+    m_autoReconnectCheck->setChecked(m_currentConfig.autoReconnect());
+    m_reconnectDelaySpin->setValue(m_currentConfig.autoReconnectDelaySeconds());
+    m_reconnectAttemptsSpin->setValue(m_currentConfig.autoReconnectMaxAttempts());
+    m_reconnectDelaySpin->setEnabled(m_currentConfig.autoReconnect());
+    m_reconnectAttemptsSpin->setEnabled(m_currentConfig.autoReconnect());
+    m_tlsCaFileEdit->setText(m_currentConfig.tlsCaCertificateFile());
+    m_tlsClientCertEdit->setText(m_currentConfig.tlsClientCertificateFile());
+    m_tlsClientKeyEdit->setText(m_currentConfig.tlsClientKeyFile());
     m_passwordEdit->setText(m_currentConfig.password());
     // Select device type in combo if supported
     int idx = m_deviceCombo->findText(m_currentConfig.deviceType());
@@ -508,6 +619,14 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     } else {
         config.setPcCommandPolicy(session::PcCommandPolicy::Deny);
     }
+    config.setConnectTimeoutSeconds(m_connectTimeoutSpin->value());
+    config.setKeepaliveIntervalSeconds(m_keepaliveSpin->value());
+    config.setAutoReconnect(m_autoReconnectCheck->isChecked());
+    config.setAutoReconnectDelaySeconds(m_reconnectDelaySpin->value());
+    config.setAutoReconnectMaxAttempts(m_reconnectAttemptsSpin->value());
+    config.setTlsCaCertificateFile(m_tlsCaFileEdit->text().trimmed());
+    config.setTlsClientCertificateFile(m_tlsClientCertEdit->text().trimmed());
+    config.setTlsClientKeyFile(m_tlsClientKeyEdit->text().trimmed());
     if (m_deviceCombo->currentIndex() == m_customDeviceIndex) {
         config.setDeviceType(m_customDeviceEdit->text());
     } else {
@@ -677,6 +796,58 @@ void ConnectDialog::onConnectClicked() {
 }
 
 void ConnectDialog::onCancelClicked() { reject(); }
+
+void ConnectDialog::onTestConnectionClicked() {
+    if (m_testClient)
+        return;
+    const session::SessionConfig config = getSessionConfig();
+    if (config.hostname().isEmpty()) {
+        finishConnectionTest("Enter a hostname first.", false);
+        return;
+    }
+
+    using tn5250::client::TN5250Client;
+    m_testClient = new TN5250Client(this);
+    m_testClient->setAllowInvalidCertificates(config.allowInvalidCertificates());
+    m_testClient->setConnectTimeout(config.connectTimeoutSeconds() * 1000);
+    m_testClient->setTlsCaCertificateFile(config.tlsCaCertificateFile());
+    m_testClient->setTlsClientCertificate(config.tlsClientCertificateFile(),
+                                          config.tlsClientKeyFile());
+
+    const QString target = QString("%1:%2").arg(config.hostname()).arg(config.port());
+    const bool tls = config.useTLS();
+    // Negotiating means TCP is up and, for TLS, the handshake succeeded.
+    // Stop there so the host never creates a device for the test.
+    connect(m_testClient, &TN5250Client::stateChanged, this,
+        [this, target, tls](TN5250Client::ConnectionState state) {
+            if (state == TN5250Client::ConnectionState::Negotiating)
+                finishConnectionTest(tls ? QString("OK - %1 reachable, TLS handshake succeeded.").arg(target)
+                                         : QString("OK - %1 reachable.").arg(target),
+                                     true);
+        });
+    connect(m_testClient, &TN5250Client::errorOccurred, this,
+        [this, target](const QString &error) {
+            finishConnectionTest(QString("Failed - %1: %2").arg(target, error), false);
+        });
+
+    m_testConnectionButton->setEnabled(false);
+    m_testConnectionResult->setText(QString("Connecting to %1...").arg(target));
+    m_testConnectionResult->setStyleSheet(QString());
+    m_testClient->connectToHost(config.hostname(), config.port(), tls);
+}
+
+void ConnectDialog::finishConnectionTest(const QString &message, bool ok) {
+    if (m_testClient) {
+        // We are inside one of the client's signals: detach and delete later;
+        // its destructor closes the socket.
+        m_testClient->disconnect(this);
+        m_testClient->deleteLater();
+        m_testClient = nullptr;
+    }
+    m_testConnectionButton->setEnabled(true);
+    m_testConnectionResult->setText(message);
+    m_testConnectionResult->setStyleSheet(ok ? "color: #2e9d4f;" : "color: #d9534f;");
+}
 
 void ConnectDialog::onSaveSessionClicked() { saveCurrentSession(); }
 

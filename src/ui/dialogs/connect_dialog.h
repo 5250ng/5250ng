@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "network/tn5250_qt/client/client.h"
 #include "network/tn5250_qt/devices/devices.h"
 #include "session/config.h"
 #include <QtUiStyle/BaseFramelessDialog.h>
@@ -34,6 +35,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QHash>
+#include <QPointer>
 #include <QVector>
 
 namespace ui::themes { class TerminalThemeManager; }
@@ -76,6 +78,7 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     void onLoadSessionClicked();
     void onSessionComboChanged(const QString &sessionName);
     void onDeviceComboChanged(int index);
+    void onTestConnectionClicked();
     void onDeleteSessionClicked();
     void onScriptComboChanged(int index);
     void onBrowseScriptClicked();
@@ -131,6 +134,18 @@ class ConnectDialog : public qt_ui_style::BaseFramelessDialog {
     QGroupBox *m_scriptVarsGroup;
     QFormLayout *m_scriptVarsLayout;
     QHash<QString, QLineEdit*> m_scriptVarEdits;
+    QPushButton *m_testConnectionButton;
+    QLabel *m_testConnectionResult;
+    QPointer<tn5250::client::TN5250Client> m_testClient;
+    void finishConnectionTest(const QString &message, bool ok);
+    QSpinBox *m_connectTimeoutSpin;
+    QSpinBox *m_keepaliveSpin;
+    QCheckBox *m_autoReconnectCheck;
+    QSpinBox *m_reconnectDelaySpin;
+    QSpinBox *m_reconnectAttemptsSpin;
+    QLineEdit *m_tlsCaFileEdit;
+    QLineEdit *m_tlsClientCertEdit;
+    QLineEdit *m_tlsClientKeyEdit;
     QTreeWidget *m_categoryTree;
     QStackedWidget *m_pages;
 

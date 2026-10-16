@@ -135,6 +135,52 @@ class SessionConfig : public QObject {
     PcCommandPolicy pcCommandPolicy() const { return m_pcCommandPolicy; }
     void setPcCommandPolicy(PcCommandPolicy policy) { m_pcCommandPolicy = policy; }
 
+    // Seconds to wait for the TCP connection (and TLS handshake) before
+    // giving up. Default 30.
+    int connectTimeoutSeconds() const { return m_connectTimeoutSeconds; }
+    void setConnectTimeoutSeconds(int seconds) { m_connectTimeoutSeconds = seconds; }
+
+    // Seconds between telnet NOP keep-alives once connected; 0 disables
+    // them. Default 30.
+    int keepaliveIntervalSeconds() const { return m_keepaliveIntervalSeconds; }
+    void setKeepaliveIntervalSeconds(int seconds) { m_keepaliveIntervalSeconds = seconds; }
+
+    // Reconnect automatically when an established session drops. Attempts
+    // are spaced by the delay; max attempts 0 means keep trying.
+    bool autoReconnect() const { return m_autoReconnect; }
+    void setAutoReconnect(bool enabled) { m_autoReconnect = enabled; }
+
+    int autoReconnectDelaySeconds() const { return m_autoReconnectDelaySeconds; }
+    void setAutoReconnectDelaySeconds(int seconds) { m_autoReconnectDelaySeconds = seconds; }
+
+    int autoReconnectMaxAttempts() const { return m_autoReconnectMaxAttempts; }
+    void setAutoReconnectMaxAttempts(int attempts) { m_autoReconnectMaxAttempts = attempts; }
+
+    // Extra CA certificate(s) trusted for this session's TLS connection, on
+    // top of the system store (PEM or DER file).
+    QString tlsCaCertificateFile() const { return m_tlsCaCertificateFile; }
+    void setTlsCaCertificateFile(const QString &path) { m_tlsCaCertificateFile = path; }
+
+    // Client certificate presented during the TLS handshake. An empty key
+    // file means the key is read from the certificate file.
+    QString tlsClientCertificateFile() const { return m_tlsClientCertificateFile; }
+    void setTlsClientCertificateFile(const QString &path) { m_tlsClientCertificateFile = path; }
+
+    QString tlsClientKeyFile() const { return m_tlsClientKeyFile; }
+    void setTlsClientKeyFile(const QString &path) { m_tlsClientKeyFile = path; }
+
+    // Allowed ranges for the numeric connection settings above
+    static constexpr int kDefaultConnectTimeoutSeconds = 30;
+    static constexpr int kMinConnectTimeoutSeconds = 5;
+    static constexpr int kMaxConnectTimeoutSeconds = 300;
+    static constexpr int kDefaultKeepaliveIntervalSeconds = 30;
+    static constexpr int kMaxKeepaliveIntervalSeconds = 3600;
+    static constexpr int kDefaultAutoReconnectDelaySeconds = 5;
+    static constexpr int kMinAutoReconnectDelaySeconds = 1;
+    static constexpr int kMaxAutoReconnectDelaySeconds = 300;
+    static constexpr int kDefaultAutoReconnectMaxAttempts = 5;
+    static constexpr int kMaxAutoReconnectMaxAttempts = 100;
+
     // Path to a pcap/pcapng capture to replay instead of opening a live
     // connection. Transient: never serialized to JSON — a replay session is
     // bound to a file picked at open time, not a saved profile.
@@ -174,6 +220,14 @@ class SessionConfig : public QObject {
     QString m_username;
     QString m_password;
     PcCommandPolicy m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
+    int m_connectTimeoutSeconds = kDefaultConnectTimeoutSeconds;
+    int m_keepaliveIntervalSeconds = kDefaultKeepaliveIntervalSeconds;
+    bool m_autoReconnect = false;
+    int m_autoReconnectDelaySeconds = kDefaultAutoReconnectDelaySeconds;
+    int m_autoReconnectMaxAttempts = kDefaultAutoReconnectMaxAttempts;
+    QString m_tlsCaCertificateFile;
+    QString m_tlsClientCertificateFile;
+    QString m_tlsClientKeyFile;
     QString m_replayPcapFile;
 
 };
