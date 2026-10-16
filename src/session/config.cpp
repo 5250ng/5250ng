@@ -23,7 +23,7 @@ namespace session {
 
 SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceType("IBM-3179-2"), m_deviceName(""), m_screenRows(24), m_screenCols(80), m_codePage(core::CodePage::ID::CP037), m_terminalThemeId("classic_green") {}
 
-SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_pcCommandPolicy(other.m_pcCommandPolicy), m_replayPcapFile(other.m_replayPcapFile) {}
+SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_startupScriptPath(other.m_startupScriptPath), m_startupScriptLinked(other.m_startupScriptLinked), m_startupScriptTrigger(other.m_startupScriptTrigger), m_startupScriptOnReconnect(other.m_startupScriptOnReconnect), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_pcCommandPolicy(other.m_pcCommandPolicy), m_replayPcapFile(other.m_replayPcapFile) {}
 
 SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
     if (this != &other) {
@@ -40,6 +40,10 @@ SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
         m_terminalThemeId = other.m_terminalThemeId;
         m_startupScriptSource = other.m_startupScriptSource;
         m_startupScriptName = other.m_startupScriptName;
+        m_startupScriptPath = other.m_startupScriptPath;
+        m_startupScriptLinked = other.m_startupScriptLinked;
+        m_startupScriptTrigger = other.m_startupScriptTrigger;
+        m_startupScriptOnReconnect = other.m_startupScriptOnReconnect;
         m_sessionVariables = other.m_sessionVariables;
         m_username = other.m_username;
         m_password = other.m_password;
@@ -95,6 +99,14 @@ QJsonObject SessionConfig::toJson() const {
     if (!m_startupScriptSource.isEmpty()) {
         json["startupScriptSource"] = m_startupScriptSource;
         json["startupScriptName"] = m_startupScriptName;
+        if (!m_startupScriptPath.isEmpty())
+            json["startupScriptPath"] = m_startupScriptPath;
+        if (m_startupScriptLinked)
+            json["startupScriptLinked"] = true;
+        if (m_startupScriptTrigger == StartupScriptTrigger::FirstScreen)
+            json["startupScriptTrigger"] = QStringLiteral("firstScreen");
+        if (!m_startupScriptOnReconnect)
+            json["startupScriptOnReconnect"] = false;
     }
     if (!m_sessionVariables.isEmpty()) {
         QJsonObject vars;
@@ -186,6 +198,21 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     }
     if (json.contains("startupScriptName") && json["startupScriptName"].isString()) {
         m_startupScriptName = json["startupScriptName"].toString();
+    }
+    if (json.contains("startupScriptPath") && json["startupScriptPath"].isString()) {
+        m_startupScriptPath = json["startupScriptPath"].toString();
+    }
+    if (json.contains("startupScriptLinked") && json["startupScriptLinked"].isBool()) {
+        m_startupScriptLinked = json["startupScriptLinked"].toBool();
+    }
+    // Unknown trigger strings fall back to the default AfterConnect.
+    if (json.contains("startupScriptTrigger") && json["startupScriptTrigger"].isString()) {
+        m_startupScriptTrigger = json["startupScriptTrigger"].toString() == QStringLiteral("firstScreen")
+            ? StartupScriptTrigger::FirstScreen
+            : StartupScriptTrigger::AfterConnect;
+    }
+    if (json.contains("startupScriptOnReconnect") && json["startupScriptOnReconnect"].isBool()) {
+        m_startupScriptOnReconnect = json["startupScriptOnReconnect"].toBool();
     }
     if (json.contains("sessionVariables") && json["sessionVariables"].isObject()) {
         m_sessionVariables.clear();

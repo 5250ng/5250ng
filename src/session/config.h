@@ -37,6 +37,12 @@ enum class PcCommandPolicy {
     AllowAlways,      // Run every command silently. Insecure; only for trusted hosts.
 };
 
+// When an attached startup script starts running after the connection is up.
+enum class StartupScriptTrigger {
+    AfterConnect,  // Shortly after the session reports Connected (default).
+    FirstScreen,   // Once the host has sent an input screen and unlocked the keyboard.
+};
+
 // Session configuration for TN5250 connections
 class SessionConfig : public QObject {
     Q_OBJECT
@@ -97,6 +103,22 @@ class SessionConfig : public QObject {
     QString startupScriptName() const { return m_startupScriptName; }
     void setStartupScriptName(const QString &name) { m_startupScriptName = name; }
 
+    // File the startup script was attached from. When linked, the file is
+    // re-read on every connect and the embedded source is only a fallback
+    // for when the file is missing.
+    QString startupScriptPath() const { return m_startupScriptPath; }
+    void setStartupScriptPath(const QString &path) { m_startupScriptPath = path; }
+
+    bool startupScriptLinked() const { return m_startupScriptLinked; }
+    void setStartupScriptLinked(bool linked) { m_startupScriptLinked = linked; }
+
+    StartupScriptTrigger startupScriptTrigger() const { return m_startupScriptTrigger; }
+    void setStartupScriptTrigger(StartupScriptTrigger trigger) { m_startupScriptTrigger = trigger; }
+
+    // Whether Session > Reconnect runs the startup script again.
+    bool startupScriptOnReconnect() const { return m_startupScriptOnReconnect; }
+    void setStartupScriptOnReconnect(bool run) { m_startupScriptOnReconnect = run; }
+
     // Session variables (for $SESSION_* script variables)
     QHash<QString, QString> sessionVariables() const { return m_sessionVariables; }
     void setSessionVariables(const QHash<QString, QString> &vars) { m_sessionVariables = vars; }
@@ -144,6 +166,10 @@ class SessionConfig : public QObject {
     QString m_terminalThemeId;
     QString m_startupScriptSource;
     QString m_startupScriptName;
+    QString m_startupScriptPath;
+    bool m_startupScriptLinked = false;
+    StartupScriptTrigger m_startupScriptTrigger = StartupScriptTrigger::AfterConnect;
+    bool m_startupScriptOnReconnect = true;
     QHash<QString, QString> m_sessionVariables;
     QString m_username;
     QString m_password;

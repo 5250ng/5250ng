@@ -34,5 +34,6 @@ void MainWindow::onReconnect() {
     // Close the old tab and open a new one with the same config
     int oldIndex = m_activeIndex;
     onCloseTabRequested(oldIndex);
+    m_skipStartupScriptOnce = !config.startupScriptOnReconnect();
     connectToServer(config);
 }

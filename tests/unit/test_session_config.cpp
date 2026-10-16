@@ -45,6 +45,8 @@ class TestSessionConfig : public QObject {
     void testPcCommandPolicyDefaults();
     void testPcCommandPolicyRoundTrip();
     void testPcCommandPolicyLegacyConfigCompat();
+    void testStartupScriptOptionsDefaults();
+    void testStartupScriptOptionsRoundTrip();
     void testDistinctNamesDoNotCollideOnDisk();
     void testLegacySessionFilenameLoads();
     void testSavedSessionPermissions();
@@ -542,6 +544,53 @@ void TestSessionConfig::testSavedSessionPermissions() {
 // Make the enum visible to QCOMPARE's diagnostics (the registration is only
 // for nicer failure messages — equality already works on plain enums).
 Q_DECLARE_METATYPE(PcCommandPolicy)
+
+void TestSessionConfig::testStartupScriptOptionsDefaults() {
+    QCOMPARE(m_config->startupScriptLinked(), false);
+    QCOMPARE(m_config->startupScriptTrigger(), StartupScriptTrigger::AfterConnect);
+    QCOMPARE(m_config->startupScriptOnReconnect(), true);
+
+    // Defaults stay out of the JSON so existing session files are unchanged
+    m_config->setHostname("host.example.com");
+    m_config->setStartupScriptSource("PRESS ENTER\n");
+    m_config->setStartupScriptName("login.5250script");
+    QJsonObject json = m_config->toJson();
+    QVERIFY(!json.contains("startupScriptPath"));
+    QVERIFY(!json.contains("startupScriptLinked"));
+    QVERIFY(!json.contains("startupScriptTrigger"));
+    QVERIFY(!json.contains("startupScriptOnReconnect"));
+}
+
+void TestSessionConfig::testStartupScriptOptionsRoundTrip() {
+    m_config->setName("Scripted");
+    m_config->setHostname("host.example.com");
+    m_config->setStartupScriptSource("PRESS ENTER\n");
+    m_config->setStartupScriptName("login.5250script");
+    m_config->setStartupScriptPath("/tmp/login.5250script");
+    m_config->setStartupScriptLinked(true);
+    m_config->setStartupScriptTrigger(StartupScriptTrigger::FirstScreen);
+    m_config->setStartupScriptOnReconnect(false);
+
+    QJsonObject json = m_config->toJson();
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QCOMPARE(loaded.startupScriptPath(), QString("/tmp/login.5250script"));
+    QCOMPARE(loaded.startupScriptLinked(), true);
+    QCOMPARE(loaded.startupScriptTrigger(), StartupScriptTrigger::FirstScreen);
+    QCOMPARE(loaded.startupScriptOnReconnect(), false);
+
+    SessionConfig copy(loaded);
+    QCOMPARE(copy.startupScriptPath(), loaded.startupScriptPath());
+    QCOMPARE(copy.startupScriptLinked(), true);
+    QCOMPARE(copy.startupScriptTrigger(), StartupScriptTrigger::FirstScreen);
+    QCOMPARE(copy.startupScriptOnReconnect(), false);
+
+    // Unknown trigger values fall back to the default
+    json["startupScriptTrigger"] = "sometime";
+    SessionConfig unknown;
+    QVERIFY(unknown.fromJson(json));
+    QCOMPARE(unknown.startupScriptTrigger(), StartupScriptTrigger::AfterConnect);
+}
 
 QTEST_MAIN(TestSessionConfig)
 #include "test_session_config.moc"
