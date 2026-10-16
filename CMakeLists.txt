@@ -279,6 +279,10 @@ set(UI_SOURCES
     # dialogs
     src/ui/dialogs/log_viewer.cpp
     src/ui/dialogs/log_viewer.h
+    src/ui/dialogs/script_editor_window.cpp
+    src/ui/dialogs/script_editor_window.h
+    src/ui/dialogs/script_editor_dialog.cpp
+    src/ui/dialogs/script_editor_dialog.h
     src/ui/dialogs/mcp_log_viewer.h
     src/ui/dialogs/mcp_log_viewer.cpp
     src/ui/dialogs/connect_dialog.cpp
@@ -324,6 +328,7 @@ set(UI_SOURCES
     src/ui/actions/onReconnect.cpp
     src/ui/actions/onDuplicateSession.cpp
     src/ui/actions/onSaveSession.cpp
+    src/ui/actions/onScriptEditor.cpp
     src/ui/actions/onCopySessionGuid.cpp
     src/ui/actions/onToggleFullscreen.cpp
     src/ui/actions/onEditActions.cpp
@@ -516,6 +521,16 @@ if(BUILD_TESTS)
     target_link_libraries(test_command_handler_soh PRIVATE
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_command_handler_soh COMMAND test_command_handler_soh)
+
+    # Script editor window (application target, uses QtUiStyle)
+    add_executable(test_script_editor_window
+        tests/unit/test_script_editor_window.cpp
+        src/ui/dialogs/script_editor_window.cpp
+        src/ui/dialogs/script_editor_dialog.cpp
+    )
+    target_link_libraries(test_script_editor_window PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_script_editor_window COMMAND test_script_editor_window)
 
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),

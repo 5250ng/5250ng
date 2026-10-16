@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "settings_dialog.h"
+#include "script_editor_window.h"
 #include "agent/config.h"
 #include "agent/tool_definitions.h"
 #include "core/macro_config.h"
@@ -590,6 +591,22 @@ QWidget *SettingsDialog::buildScriptsGeneralPage() {
     dirLayout->addWidget(openDirBtn);
     layout->addWidget(dirGroup);
 
+    // Editor used by Scripts > Edit, New Script and the Connect dialog
+    QGroupBox *editorGroup = new QGroupBox("Editor", page);
+    QFormLayout *editorLayout = new QFormLayout(editorGroup);
+    m_scriptEditorCombo = new QComboBox(editorGroup);
+    m_scriptEditorCombo->addItem("Built-in script editor",
+                                 static_cast<int>(ScriptEditorWindow::EditorPreference::BuiltIn));
+    m_scriptEditorCombo->addItem("System default application",
+                                 static_cast<int>(ScriptEditorWindow::EditorPreference::External));
+    m_scriptEditorCombo->setCurrentIndex(m_scriptEditorCombo->findData(
+        static_cast<int>(ScriptEditorWindow::editorPreference())));
+    m_scriptEditorCombo->setToolTip(
+        "The built-in editor colours 5250script, completes keywords, labels and "
+        "variables, and lists problems as you type.");
+    editorLayout->addRow("Edit scripts with:", m_scriptEditorCombo);
+    layout->addWidget(editorGroup);
+
     // Default execution settings
     QGroupBox *execGroup = new QGroupBox("Default Execution Settings", page);
     QFormLayout *execLayout = new QFormLayout(execGroup);
@@ -684,6 +701,12 @@ QWidget *SettingsDialog::buildMacrosPage() {
     layout->addStretch();
 
     return page;
+}
+
+void SettingsDialog::onScriptsSaveClicked() {
+    ScriptEditorWindow::setEditorPreference(static_cast<ScriptEditorWindow::EditorPreference>(
+        m_scriptEditorCombo->currentData().toInt()));
+    qt_ui_style::StyledMessageBox::information(this, "Scripts Settings", "Settings saved.");
 }
 
 void SettingsDialog::onMacrosSaveClicked() {
@@ -1052,6 +1075,8 @@ void SettingsDialog::onSaveClicked() {
         m_terminalThemePage->onApplyToAll();
     } else if (currentPage == m_macrosPage) {
         onMacrosSaveClicked();
+    } else if (currentPage == m_scriptsGeneralPage) {
+        onScriptsSaveClicked();
     } else if (currentPage == m_mcpPage) {
         onMcpSaveClicked();
     } else if (currentPage == m_agentPage) {

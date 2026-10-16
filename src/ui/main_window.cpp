@@ -252,6 +252,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     setupMenuBar();
     setupStatusBar();
+    setupScriptEditor();
 
     // Custom tab bar style for MCP-controlled tabs (orange background)
     m_tabWidget->tabBar()->setStyle(new McpTabStyle(m_tabWidget->tabBar()->style()));
