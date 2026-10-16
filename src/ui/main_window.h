@@ -94,6 +94,7 @@ class MainWindow : public MainWindowBase {
 
   protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
@@ -134,6 +135,8 @@ class MainWindow : public MainWindowBase {
     void onNewScript();
     void onImportScript();
     void onOpenScriptsFolder();
+    void onOpenScriptEditor();
+    void setupScriptEditor();
     void onToggleSessionLogging();
     void onHistoryBack();
     void onHistoryForward();

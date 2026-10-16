@@ -78,6 +78,7 @@ class SettingsDialog : public qt_ui_style::BaseFramelessDialog {
     void onOAuthSignOutClicked();
     void updateOAuthStatus();
     void onMacrosSaveClicked();
+    void onScriptsSaveClicked();
     void onMcpSaveClicked();
 
     QSplitter *m_splitter;
@@ -102,6 +103,7 @@ class SettingsDialog : public qt_ui_style::BaseFramelessDialog {
     QSpinBox *m_defaultJitterMinSpin;
     QSpinBox *m_defaultJitterMaxSpin;
     QCheckBox *m_confirmDeleteCheck;
+    QComboBox *m_scriptEditorCombo;
 
     // Scripts Recording page widgets (formerly Macros)
     QWidget *m_macrosPage;

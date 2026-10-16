@@ -45,6 +45,8 @@ QScriptEditorWidget::QScriptEditorWidget(QWidget *parent) : QWidget(parent) {
     m_problems->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_problems->header()->setStretchLastSection(true);
     m_problems->setUniformRowHeights(true);
+    // Room for the header and about four problems before scrolling
+    m_problems->setMinimumHeight(m_problems->fontMetrics().height() * 7);
     problemsLayout->addWidget(m_problemsHeader);
     problemsLayout->addWidget(m_problems);
 

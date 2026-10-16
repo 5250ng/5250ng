@@ -144,6 +144,7 @@ void MainWindow::setupMenuBar() {
     m_scriptsSubmenu = scriptsMenu->addMenu("S&cripts");
     connect(m_scriptsSubmenu, &QMenu::aboutToShow, this, &MainWindow::rebuildScriptsSubmenu);
     scriptsMenu->addSeparator();
+    scriptsMenu->addAction("Script &Editor", this, &MainWindow::onOpenScriptEditor);
     scriptsMenu->addAction("&New Script...", this, &MainWindow::onNewScript);
     scriptsMenu->addAction("&Import Script...", this, &MainWindow::onImportScript);
     scriptsMenu->addAction("&Open Scripts Folder", this, &MainWindow::onOpenScriptsFolder);

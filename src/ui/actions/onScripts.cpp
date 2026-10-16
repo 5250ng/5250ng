@@ -18,6 +18,7 @@
 #include "core/aid_key_map.h"
 #include "core/macro_to_script.h"
 #include "core/script_library.h"
+#include "ui/dialogs/script_editor_window.h"
 #include <5250script/script_compiler.h>
 #include <5250script/script_executor.h>
 #include <5250script/script_parser.h>
@@ -476,7 +477,8 @@ void MainWindow::onRunScript(const QString &path) {
 // ---------------------------------------------------------------------------
 
 void MainWindow::onEditScript(const QString &path) {
-    QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    // Built-in editor or the system's default application (Settings > Scripts)
+    ScriptEditorWindow::editScript(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -531,7 +533,7 @@ void MainWindow::onNewScript() {
 
     QString path = core::createScriptFromTemplate(name);
     if (path.isEmpty()) return;
-    QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    onEditScript(path);
 }
 
 // ---------------------------------------------------------------------------

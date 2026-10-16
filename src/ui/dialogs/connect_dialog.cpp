@@ -19,6 +19,8 @@
 #include "5250script/script_utils.h"
 #include "core/codepage.h"
 #include "core/script_library.h"
+#include "script_editor_dialog.h"
+#include "script_editor_window.h"
 #include "session/manager.h"
 #include "ui/themes/terminal_theme_manager.h"
 #include <QDesktopServices>
@@ -28,6 +30,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFrame>
+#include <QSaveFile>
 #include <QSignalBlocker>
 #include <QGroupBox>
 #include <QSplitter>
@@ -371,7 +374,7 @@ void ConnectDialog::setupUI() {
     m_newScriptButton = new QPushButton("New...", this);
     m_newScriptButton->setToolTip("Create a script in the library, attach it and open it for editing");
     m_editScriptButton = new QPushButton("Edit...", this);
-    m_editScriptButton->setToolTip("Open the attached script file in the default editor");
+    m_editScriptButton->setToolTip("Edit the attached script (Settings > Scripts chooses the editor)");
     m_reloadScriptButton = new QPushButton("Reload", this);
     m_reloadScriptButton->setToolTip("Re-read the attached script file into this session");
     scriptButtonsLayout->addWidget(m_browseScriptButton);
@@ -972,7 +975,8 @@ void ConnectDialog::updateScriptControls() {
     const QString path = m_currentConfig.startupScriptPath();
     const bool hasFile = attached && !path.isEmpty() && QFileInfo::exists(path);
 
-    m_editScriptButton->setEnabled(hasFile);
+    // A script attached as a saved copy (no file) can still be edited
+    m_editScriptButton->setEnabled(attached);
     m_reloadScriptButton->setEnabled(hasFile);
     m_scriptLinkedCheck->setEnabled(attached && !path.isEmpty());
     m_scriptTriggerCombo->setEnabled(attached);
@@ -1024,18 +1028,65 @@ void ConnectDialog::onNewScriptClicked() {
         qt_ui_style::StyledMessageBox::warning(this, "New Script", "Failed to create the script file.");
         return;
     }
-    if (attachScriptFromFile(path, /*quiet*/ false)) {
+    const bool attached = attachScriptFromFile(path, /*quiet*/ false);
+    if (attached) {
         // The user is about to edit the file, so pick up those edits on connect
         m_scriptLinkedCheck->setChecked(true);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
     }
     populateScriptCombo();
+    if (attached)
+        onEditScriptClicked();
 }
 
 void ConnectDialog::onEditScriptClicked() {
+    if (m_currentConfig.startupScriptSource().isEmpty())
+        return;
     const QString path = m_currentConfig.startupScriptPath();
-    if (!path.isEmpty())
+    const bool hasFile = !path.isEmpty() && QFileInfo::exists(path);
+    if (hasFile && ScriptEditorWindow::editorPreference() == ScriptEditorWindow::EditorPreference::External) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        return;
+    }
+
+    // Edit in a modal dialog: a separate editor window would be blocked by
+    // this modal dialog until it closes
+    QString text = m_currentConfig.startupScriptSource();
+    if (hasFile) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text))
+            text = QString::fromUtf8(file.readAll());
+    }
+    const QString title = hasFile ? QString("Edit %1").arg(QFileInfo(path).fileName())
+                                  : QString("Edit Startup Script (saved copy)");
+    if (!ScriptEditorDialog::edit(this, title, text))
+        return;
+
+    if (hasFile) {
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)
+            || file.write(text.toUtf8()) < 0 || !file.commit()) {
+            qt_ui_style::StyledMessageBox::warning(this, "Edit Script",
+                QString("Failed to save %1:\n%2").arg(path, file.errorString()));
+            return;
+        }
+        // Re-attach so the saved copy, preview and variables follow the file
+        attachScriptFromFile(path, /*quiet*/ false);
+        return;
+    }
+
+    core::scripting::ScriptParser parser;
+    const auto result = parser.parse(text);
+    if (result.hasErrors()) {
+        QStringList msgs;
+        for (const auto &err : result.errors)
+            msgs << QString("Line %1: %2").arg(err.line).arg(err.message);
+        qt_ui_style::StyledMessageBox::warning(this, "Script Error",
+            QString("The script was not updated because it contains errors:\n\n%1").arg(msgs.join("\n")));
+        return;
+    }
+    m_currentConfig.setStartupScriptSource(text);
+    rebuildScriptVariableFields();
+    updateScriptControls();
 }
 
 void ConnectDialog::onReloadScriptClicked() {
