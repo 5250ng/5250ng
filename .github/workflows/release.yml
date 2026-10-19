@@ -199,6 +199,13 @@ jobs:
           cp build/bin/5250ng release/
           cd release && tar czf ../5250ng-linux-${{ matrix.arch }}.tar.gz *
 
+      - name: Install dmgbuild (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install -r resources/macos/dmg/requirements.txt
+          echo "DMGBUILD_PYTHON=$RUNNER_TEMP/dmgbuild/bin/python" >> "$GITHUB_ENV"
+
       - name: Package (macOS)
         if: matrix.os == 'macos'
         env:

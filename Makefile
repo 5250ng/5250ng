@@ -73,7 +73,12 @@ endif
 package-macos: build
 ifeq ($(UNAME_S),Darwin)
 	@mkdir -p dist
-	@./scripts/package_macos.sh ./build/bin/5250ng.app ./dist/5250ng-macos-$$(uname -m).dmg
+	@if [ ! -x build/dmgbuild-venv/bin/python ]; then \
+		python3 -m venv build/dmgbuild-venv && \
+		build/dmgbuild-venv/bin/pip install -q -r resources/macos/dmg/requirements.txt; \
+	fi
+	@DMGBUILD_PYTHON=build/dmgbuild-venv/bin/python \
+		./scripts/package_macos.sh ./build/bin/5250ng.app ./dist/5250ng-macos-$$(uname -m).dmg
 else
 	@echo "package-macos must be run on macOS"
 	@exit 1

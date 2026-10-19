@@ -1,0 +1,2 @@
+# Disk image tooling used by scripts/package_macos.sh.
+dmgbuild==1.6.7

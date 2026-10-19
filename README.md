@@ -85,8 +85,13 @@ open dist/5250ng-macos-$(uname -m).dmg
 
 The packaging step bundles Qt frameworks and plugins, verifies that no
 Homebrew or build-machine library paths remain, signs the app ad hoc for local
-use, and creates a compressed DMG. Public releases can be Developer ID signed
-and notarized by configuring the repository secrets documented below.
+use, and creates a compressed DMG. The DMG opens on a drag-to-Applications
+window built with [dmgbuild](https://pypi.org/project/dmgbuild/), which
+`make package-macos` installs into a virtual environment under `build/`; the
+window layout lives in `resources/macos/dmg/` and the background artwork is
+regenerated with `scripts/generate_dmg_background.py`. Public releases can be
+Developer ID signed and notarized by configuring the repository secrets
+documented below.
 
 ### Windows
 

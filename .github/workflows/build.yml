@@ -75,6 +75,12 @@ jobs:
       - name: Run tests
         run: cd build && ctest --output-on-failure
 
+      - name: Install dmgbuild
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install -r resources/macos/dmg/requirements.txt
+          echo "DMGBUILD_PYTHON=$RUNNER_TEMP/dmgbuild/bin/python" >> "$GITHUB_ENV"
+
       - name: Verify deployable macOS app and DMG
         env:
           MACOS_EXPECTED_MIN_VERSION: '13.0'
