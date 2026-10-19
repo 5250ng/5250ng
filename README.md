@@ -66,6 +66,18 @@ from the [latest release](https://github.com/5250ng/5250ng/releases). Open it,
 then drag **5250ng** to **Applications**. The supported deployment baseline is
 macOS 13 Ventura or newer.
 
+Current releases are not yet notarized by Apple, so the first launch shows
+*"5250ng" Not Opened — Apple could not verify "5250ng" is free of malware*.
+To open it anyway, either:
+
+- Try to open 5250ng once, then go to **System Settings → Privacy & Security**,
+  scroll to the message about "5250ng", click **Open Anyway** and confirm; or
+- Remove the download quarantine flag from Terminal:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/5250ng.app
+  ```
+
 To build from source:
 
 ```bash
