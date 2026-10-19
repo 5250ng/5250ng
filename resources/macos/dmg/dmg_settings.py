@@ -23,7 +23,9 @@ filesystem = "HFS+"
 
 files = [application]
 symlinks = {"Applications": "/Applications"}
-hide_extensions = [app_name]
+# No hide_extensions: SetFile writes a com.apple.FinderInfo xattr onto the
+# signed bundle, which fails `codesign --verify --strict`. Finder already
+# hides the .app extension of application bundles by default.
 
 # Volume icon shown on the desktop and in the Finder sidebar.
 icon = defines.get("icon") or None  # noqa: F821
