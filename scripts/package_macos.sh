@@ -12,6 +12,7 @@ usage() {
     echo "  MACOS_NOTARY_ISSUER_ID  App Store Connect issuer ID" >&2
     echo "  MACOS_EXPECTED_ARCH     Required executable arch (arm64 or x86_64)" >&2
     echo "  MACOS_EXPECTED_MIN_VERSION  Required deployment target (for example 13.0)" >&2
+    echo "  DMGBUILD_PYTHON         Python interpreter with dmgbuild installed (default: python3)" >&2
 }
 
 if [[ $# -ne 2 ]]; then
@@ -27,9 +28,18 @@ fi
 app_path="$1"
 output_dmg="$2"
 app_name="$(basename "$app_path")"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+dmg_resources="$repo_root/resources/macos/dmg"
+dmgbuild_python="${DMGBUILD_PYTHON:-python3}"
 
 if [[ ! -d "$app_path" || ! -x "$app_path/Contents/MacOS/5250ng" ]]; then
     echo "error: $app_path is not a built 5250ng application bundle" >&2
+    exit 1
+fi
+
+if ! "$dmgbuild_python" -c 'import dmgbuild, ds_store' >/dev/null 2>&1; then
+    echo "error: dmgbuild is not installed for $dmgbuild_python" >&2
+    echo "       install it with: $dmgbuild_python -m pip install dmgbuild" >&2
     exit 1
 fi
 
@@ -110,28 +120,34 @@ if [[ "$version_output" != *"5250ng"* ]]; then
     exit 1
 fi
 
-staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/5250ng-dmg.XXXXXX")"
 mount_dir="$(mktemp -d "${TMPDIR:-/tmp}/5250ng-dmg-mount.XXXXXX")"
 dmg_mounted=false
 cleanup() {
     if [[ "$dmg_mounted" == true ]]; then
         hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
     fi
-    rm -rf -- "${staging_dir:?}"
     rm -rf -- "${mount_dir:?}"
 }
 trap cleanup EXIT
 
-ditto "$app_path" "$staging_dir/$app_name"
-ln -s /Applications "$staging_dir/Applications"
+# dmgbuild writes the drag-to-Applications Finder layout (background, icon
+# positions and size) directly into .DS_Store, so it works without a
+# logged-in Finder session on CI runners.
+volume_icon="$app_path/Contents/Resources/5250ng.icns"
+dmgbuild_args=(
+    -s "$dmg_resources/dmg_settings.py"
+    -D "app=$app_path"
+    -D "background=$dmg_resources/background.png"
+)
+if [[ -f "$volume_icon" ]]; then
+    dmgbuild_args+=(-D "icon=$volume_icon")
+else
+    echo "warning: $volume_icon not found; using the default volume icon" >&2
+fi
 
 echo "Creating $output_dmg"
-hdiutil create \
-    -volname "5250ng" \
-    -srcfolder "$staging_dir" \
-    -format UDZO \
-    -ov \
-    "$output_dmg"
+rm -f -- "$output_dmg"
+"$dmgbuild_python" -m dmgbuild "${dmgbuild_args[@]}" "5250ng" "$output_dmg"
 hdiutil verify "$output_dmg"
 
 echo "Verifying the application inside the final disk image"
@@ -139,6 +155,8 @@ hdiutil attach -nobrowse -readonly -mountpoint "$mount_dir" "$output_dmg" >/dev/
 dmg_mounted=true
 packaged_app="$mount_dir/$app_name"
 test -L "$mount_dir/Applications"
+"$dmgbuild_python" "$repo_root/scripts/verify_dmg_layout.py" \
+    "$dmg_resources/dmg_settings.py" "$mount_dir" "$app_name"
 test -L "$packaged_app/Contents/Frameworks/QtCore.framework/Versions/Current"
 if [[ -n "${MACOS_EXPECTED_ARCH:-}" ]]; then
     lipo "$packaged_app/Contents/MacOS/5250ng" \
