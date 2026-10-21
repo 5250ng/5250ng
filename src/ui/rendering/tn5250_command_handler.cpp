@@ -329,7 +329,11 @@ void TN5250CommandHandler::onClearScreenRequested() {
     if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
         return;
     }
-    m_displayWidget->screenBuffer()->clear();
+    // Clear Unit (0x40) also selects the 24x80 format (tn5250j
+    // CMD_CLEAR_UNIT semantics): the host uses it to leave 132-column
+    // mode, so the buffer geometry must follow or the session stays
+    // stuck at 27x132 (issue #213).
+    m_displayWidget->setScreenSize(24, 80);
     m_displayWidget->screenBuffer()->notifyCursor();
     m_displayWidget->setCursorBlinkRate(0);
 }
