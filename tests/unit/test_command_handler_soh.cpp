@@ -51,6 +51,12 @@ class TestCommandHandlerSoh : public QObject {
     void testGddmScreenCopyEmitsRequestAndWritesNothing();
     void testCompositeExportContainsBothPlanes();
 
+    // Issue #213: 80/132 column switching driven by Clear Unit /
+    // Clear Unit Alternate control characters.
+    void testClearUnitAlternateSwitchesTo27x132();
+    void testClearUnitSwitchesBackTo24x80();
+    void testClearUnitFrom27x132ReturnsTo24x80();
+
   private:
     Q5250ScreenWidget *m_widget = nullptr;
     TN5250CommandHandler *m_handler = nullptr;
@@ -341,6 +347,38 @@ void TestCommandHandlerSoh::testCompositeExportContainsBothPlanes() {
     QVERIFY(sawGraphics);
     QVERIFY(sawGlyph);
     QFile::remove(path);
+}
+
+// Issue #213: the host switches a 3477-FC class display between 24x80 and
+// 27x132 by sending Clear Unit (0x40) and Clear Unit Alternate (0x20) control
+// characters. Both must drive the screen buffer geometry, not just clear it.
+
+void TestCommandHandlerSoh::testClearUnitAlternateSwitchesTo27x132() {
+    // Session starts 24x80; the host enters 132-column mode.
+    m_widget->setScreenSize(24, 80);
+    m_handler->onClearScreenAlternateRequested();
+    QCOMPARE(m_widget->screenBuffer()->rows(), 27);
+    QCOMPARE(m_widget->screenBuffer()->cols(), 132);
+}
+
+void TestCommandHandlerSoh::testClearUnitSwitchesBackTo24x80() {
+    // After a 132-column screen, Clear Unit must return to 24x80
+    // (tn5250j CMD_CLEAR_UNIT semantics; previously stayed at 27x132).
+    m_widget->setScreenSize(27, 132);
+    m_handler->onClearScreenRequested();
+    QCOMPARE(m_widget->screenBuffer()->rows(), 24);
+    QCOMPARE(m_widget->screenBuffer()->cols(), 80);
+}
+
+void TestCommandHandlerSoh::testClearUnitFrom27x132ReturnsTo24x80() {
+    // Same round-trip as the issue reports: alternate (132) then clear (80).
+    m_widget->setScreenSize(24, 80);
+    m_handler->onClearScreenAlternateRequested();
+    QCOMPARE(m_widget->screenBuffer()->rows(), 27);
+    QCOMPARE(m_widget->screenBuffer()->cols(), 132);
+    m_handler->onClearScreenRequested();
+    QCOMPARE(m_widget->screenBuffer()->rows(), 24);
+    QCOMPARE(m_widget->screenBuffer()->cols(), 80);
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)
