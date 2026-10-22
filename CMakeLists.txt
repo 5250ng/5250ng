@@ -1,5 +1,33 @@
 cmake_minimum_required(VERSION 3.16)
-project(5250ng VERSION 0.5.0 LANGUAGES CXX)
+# Version resolution.  The version is derived from the newest reachable git
+# tag (vX.Y.Z convention) via `git describe`, so a tagged checkout reports its
+# real version (Pomoc -> About, --version, Windows resources, macOS bundle)
+# without editing this file.  Falls back to 0.5.0 when git or tags are
+# unavailable (tarballs, forks).
+set(PROJECT_GIT_FALLBACK_VERSION "0.5.0")
+find_package(Git QUIET)
+set(APP_DISPLAY_VERSION "${PROJECT_GIT_FALLBACK_VERSION}")
+if(Git_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --match "v[0-9]*"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_DESCRIBE_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_DESCRIBE_RESULT
+    )
+    if(GIT_DESCRIBE_RESULT EQUAL 0)
+        # Strip the leading "v" and any commit/dirty suffix so that
+        # project(VERSION ...) receives a plain X.Y.Z.
+        string(REGEX REPLACE "^v" "" APP_DISPLAY_VERSION "${GIT_DESCRIBE_VERSION}")
+        string(REGEX REPLACE "[-+].*$" "" APP_DISPLAY_VERSION "${APP_DISPLAY_VERSION}")
+    else()
+        message(STATUS "Version: no git tags found, falling back to ${APP_DISPLAY_VERSION}")
+    endif()
+endif()
+message(STATUS "Version: ${APP_DISPLAY_VERSION}")
+
+project(5250ng VERSION ${APP_DISPLAY_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
