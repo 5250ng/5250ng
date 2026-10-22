@@ -39,6 +39,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           submodules: recursive
 
       # ── Linux ──
@@ -235,8 +236,10 @@ jobs:
           # Create portable ZIP
           Compress-Archive -Path deploy\5250ng\* -DestinationPath 5250ng-windows-${{ matrix.arch }}.zip
 
-          # Build installer with Inno Setup
-          $version = (Select-String -Path CMakeLists.txt -Pattern 'VERSION\s+(\d+\.\d+\.\d+)').Matches.Groups[1].Value
+          # Build installer with Inno Setup.  Read the version from the CMake
+          # configure log instead of CMakeLists.txt: the project version now
+          # comes from git tags (APP_DISPLAY_VERSION), not a literal.
+          $version = (Select-String -Path build\CMakeCache.txt -Pattern '^CMAKE_PROJECT_VERSION:STATIC=(.+)$').Matches[0].Groups[1].Value.Trim()
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version installer\5250ng.iss
           copy installer\Output\5250ng-setup-x64.exe 5250ng-windows-${{ matrix.arch }}-setup.exe
 
