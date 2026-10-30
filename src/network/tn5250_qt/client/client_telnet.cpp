@@ -34,6 +34,22 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
     QByteArray processed;
     int i = 0;
 
+    // Once EOR is negotiated, application bytes are collected per record and
+    // handed over at IAC EOR (RFC 1205), so a record whose GDS length is
+    // wrong cannot swallow the records that follow it.
+    auto framing = [this]() { return m_handshakeComplete && m_eorNegotiated; };
+    auto appendData = [&](uint8_t b) {
+        if (framing()) {
+            if (!processed.isEmpty()) {
+                m_recordBuffer.append(processed);
+                processed.clear();
+            }
+            m_recordBuffer.append(static_cast<char>(b));
+        } else {
+            processed.append(static_cast<char>(b));
+        }
+    };
+
     while (i < m_receiveBuffer.size()) {
         uint8_t byte = static_cast<uint8_t>(m_receiveBuffer[i]);
 
@@ -56,9 +72,29 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
                     m_subnegotiationBuffer.append(
                         static_cast<uint8_t>(TelnetCommand::IAC));
                 } else {
-                    processed.append(static_cast<uint8_t>(TelnetCommand::IAC));
+                    appendData(static_cast<uint8_t>(TelnetCommand::IAC));
                 }
                 i += 2;
+                continue;
+            }
+
+            // Unescaped 0xFF in the data stream. Host Integration Server 2000
+            // before the KB Q327297 hotfix forwards X'FF' bytes from the host's
+            // GDS data without doubling them. Telnet commands are 0xEF (EOR)
+            // and up, so any lower byte after IAC means the IAC was data.
+            // Inside a record nothing but IAC IAC and IAC EOR is expected, so
+            // there any other pair is data as well (e.g. 0xFF 0xF1).
+            const bool midRecord = framing() && !m_recordBuffer.isEmpty();
+            if (!m_inSubnegotiation &&
+                (next < static_cast<uint8_t>(TelnetCommand::EOR) ||
+                 (midRecord && next != static_cast<uint8_t>(TelnetCommand::EOR)))) {
+                logger::Logger::instance()->warning(
+                    QString("[TN5250->Client]: Unescaped 0xFF followed by 0x%1 in data "
+                            "stream, treating it as data")
+                        .arg(next, 2, 16, QChar('0'))
+                );
+                appendData(static_cast<uint8_t>(TelnetCommand::IAC));
+                i += 1;
                 continue;
             }
 
@@ -87,6 +123,13 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
                     logger::Logger::instance()->debug(
                         "[TN5250->Client]: Received IAC EOR (end of GDS record)"
                     );
+                    if (framing()) {
+                        if (!processed.isEmpty()) {
+                            m_recordBuffer.prepend(processed);
+                            processed.clear();
+                        }
+                        flushRecord();
+                    }
                 } else {
                     // Other standalone commands - just skip for now
                     logger::Logger::instance()->warning(
@@ -114,7 +157,7 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
             m_subnegotiationBuffer.append(byte);
             i++;
         } else {
-            processed.append(byte);
+            appendData(byte);
             i++;
         }
     }
@@ -145,6 +188,59 @@ void TN5250Client::processTelnetData(const QByteArray &data) {
             processHandshakeData(processed);
         }
     }
+}
+
+void TN5250Client::flushRecord() {
+    if (m_recordBuffer.isEmpty()) {
+        return;
+    }
+    QByteArray record = repairGdsRecordLength(m_recordBuffer);
+    m_recordBuffer.clear();
+    logger::Logger::instance()->debug(
+        QString("[TN5250->Client]: Received %1 bytes of application data, first "
+                "bytes hex=%2")
+            .arg(record.size())
+            .arg(QString::fromLatin1(record.left(32).toHex()))
+    );
+    emit dataReceived(record);
+}
+
+QByteArray TN5250Client::repairGdsRecordLength(const QByteArray &record) {
+    using namespace tn5250::protocol;
+    auto byteAt = [&](int pos) { return static_cast<uint8_t>(record[pos]); };
+
+    // Walk the chain of GDS length fields; a well-formed record (or several
+    // back-to-back records) ends exactly at the EOR.
+    int pos = 0;
+    while (pos + 2 <= record.size()) {
+        const int len = (byteAt(pos) << 8) | byteAt(pos + 1);
+        if (len < GDS_MIN_RECORD_LEN || pos + len > record.size()) {
+            break;
+        }
+        pos += len;
+    }
+    if (pos == record.size()) {
+        return record;
+    }
+
+    // The length disagrees with the EOR boundary (bytes lost or added in
+    // transit). Trust the EOR so the decoder neither waits for bytes that
+    // will never come nor reads into the next record.
+    const int remaining = record.size() - pos;
+    if (remaining < GDS_HEADER_SIZE || remaining > GDS_MAX_RECORD_LEN ||
+        byteAt(pos + 2) != GDS_RECORD_TYPE_HI || byteAt(pos + 3) != GDS_RECORD_TYPE_LO) {
+        return record;
+    }
+    logger::Logger::instance()->warning(
+        QString("[TN5250->Client]: GDS record length %1 does not match the %2 bytes "
+                "before IAC EOR, using the EOR boundary")
+            .arg((byteAt(pos) << 8) | byteAt(pos + 1))
+            .arg(remaining)
+    );
+    QByteArray repaired = record;
+    repaired[pos] = static_cast<char>((remaining >> 8) & 0xFF);
+    repaired[pos + 1] = static_cast<char>(remaining & 0xFF);
+    return repaired;
 }
 
 void TN5250Client::sendTelnetCommand(TelnetCommand cmd, TelnetOption opt) {
