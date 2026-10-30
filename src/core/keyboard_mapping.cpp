@@ -135,6 +135,10 @@ void KeyboardMapping::resetToDefaults() {
     m_chordToAction.insert({Qt::Key_F1, Qt::ControlModifier}, MappedAction::Help);
     m_chordToAction.insert({Qt::Key_Print, Qt::NoModifier}, MappedAction::Print);
     m_chordToAction.insert({Qt::Key_Pause, Qt::ControlModifier}, MappedAction::Clear);
+    // Local editing keys. Script/MCP PRESS of a local key (TAB, FIELDEXIT,
+    // ERASEEOF, DUP, ...) replays these chords from 5250script's
+    // ScriptExecutor, so they must stay in sync with its LocalKey table
+    // (guarded by tests/unit/test_script_local_keys.cpp).
     m_chordToAction.insert({Qt::Key_Tab, Qt::NoModifier}, MappedAction::Tab);
     m_chordToAction.insert({Qt::Key_Backtab, Qt::NoModifier}, MappedAction::BackTab);
     m_chordToAction.insert({Qt::Key_Tab, Qt::ShiftModifier}, MappedAction::BackTab);
