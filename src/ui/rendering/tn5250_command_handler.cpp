@@ -329,6 +329,11 @@ void TN5250CommandHandler::onClearScreenRequested() {
     if (!m_displayWidget || !m_displayWidget->screenBuffer()) {
         return;
     }
+    // Clear Unit starts a new presentation space.  An Insert Cursor address
+    // from the previous screen must not be reused when the new screen omits
+    // an IC order (QSH does this); cursor selection then falls back to the
+    // first eligible input field.
+    m_displayWidget->clearICAddress();
     m_displayWidget->screenBuffer()->clear();
     m_displayWidget->screenBuffer()->notifyCursor();
     m_displayWidget->setCursorBlinkRate(0);
@@ -470,9 +475,13 @@ void TN5250CommandHandler::processDeferredCC2(uint8_t cc2) {
         int icCol = m_displayWidget->icCol();
         // Move cursor to IC address unless CC2 bit 6 (0x40) says leave it
         if (!(cc2 & 0x40)) {
-            screen->setCursorPosition(icRow, icCol);
-            auto field = screen->getField(icRow, icCol);
-            if (field.length <= 0 || field.protected_field || field.bypass) {
+            bool cursorPlaced = false;
+            if (m_displayWidget->hasICAddress()) {
+                screen->setCursorPosition(icRow, icCol);
+                auto field = screen->getField(icRow, icCol);
+                cursorPlaced = field.length > 0 && !field.protected_field && !field.bypass;
+            }
+            if (!cursorPlaced) {
                 const auto &fields = screen->fields();
                 for (const auto &f : fields) {
                     if (f.length > 0 && !f.protected_field && !f.bypass) {
@@ -706,6 +715,7 @@ void TN5250CommandHandler::onClearScreenAlternateRequested() {
     if (!m_displayWidget) {
         return;
     }
+    m_displayWidget->clearICAddress();
     m_displayWidget->setScreenSize(27, 132);
     if (m_displayWidget->screenBuffer()) {
         m_displayWidget->screenBuffer()->clear();

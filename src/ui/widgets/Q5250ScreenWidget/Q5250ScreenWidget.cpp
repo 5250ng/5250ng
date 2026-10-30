@@ -93,6 +93,7 @@ Q5250ScreenWidget::Q5250ScreenWidget(QWidget *parent)
     m_messageWaiting = false;
     m_icRow = 0;
     m_icCol = 0;
+    m_hasICAddress = false;
     m_errorLineRow = -1; // Default: last row
     m_cmdKeyMask[0] = m_cmdKeyMask[1] = m_cmdKeyMask[2] = 0;
 

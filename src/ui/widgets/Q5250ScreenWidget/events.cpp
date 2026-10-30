@@ -939,8 +939,19 @@ void Q5250ScreenWidget::handleEraseInput() {
         }
     }
 
-    // Move cursor to IC address
-    m_screenBuffer->setCursorPosition(m_icRow, m_icCol);
+    // Move to the host's IC address when the current presentation space has
+    // one.  Otherwise use the first eligible field; Clear Unit invalidates
+    // the prior screen's IC address.
+    if (m_hasICAddress) {
+        m_screenBuffer->setCursorPosition(m_icRow, m_icCol);
+    } else {
+        for (const auto &field : fields) {
+            if (field.length > 0 && !field.protected_field && !field.bypass) {
+                m_screenBuffer->setCursorPosition(field.startRow, field.startCol);
+                break;
+            }
+        }
+    }
     update();
 }
 
