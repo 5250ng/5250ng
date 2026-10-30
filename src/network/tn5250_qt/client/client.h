@@ -144,6 +144,10 @@ class TN5250Client : public QObject {
 
     // Telnet negotiation
     void processTelnetData(const QByteArray &data);
+    void flushRecord();
+    // Make the GDS length fields of one EOR-delimited record agree with the
+    // record's actual size. Returns the record unchanged when they already do.
+    static QByteArray repairGdsRecordLength(const QByteArray &record);
     void sendTelnetCommand(telnet::TelnetCommand cmd, telnet::TelnetOption opt);
     void handleTelnetCommand(uint8_t cmd, uint8_t opt);
     void handleSubnegotiation(telnet::TelnetOption opt, const QByteArray &data);
@@ -192,6 +196,9 @@ class TN5250Client : public QObject {
     QByteArray m_serverSeed;  // 8-byte seed from server's NEW_ENVIRON SEND
 
     QByteArray m_receiveBuffer;
+    // Application bytes of the current record, held until IAC EOR once EOR
+    // is negotiated so each record reaches the decoder whole.
+    QByteArray m_recordBuffer;
     bool m_inSubnegotiation;
     telnet::TelnetOption m_currentSubnegotiation;
     QByteArray m_subnegotiationBuffer;
