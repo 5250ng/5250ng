@@ -157,7 +157,13 @@ class Q5250ScreenWidget : public QWidget {
     void setMessageWaiting(bool on) { m_messageWaiting = on; emit terminalStateChanged(); }
     int icRow() const { return m_icRow; }
     int icCol() const { return m_icCol; }
-    void setICAddress(int row, int col) { m_icRow = row; m_icCol = col; }
+    bool hasICAddress() const { return m_hasICAddress; }
+    void setICAddress(int row, int col) {
+        m_icRow = row;
+        m_icCol = col;
+        m_hasICAddress = true;
+    }
+    void clearICAddress() { m_hasICAddress = false; }
     int errorLineRow() const { return m_errorLineRow; }
     void setErrorLineRow(int row) { m_errorLineRow = row; }
     const uint8_t *cmdKeyMask() const { return m_cmdKeyMask; }
@@ -338,6 +344,7 @@ class Q5250ScreenWidget : public QWidget {
     bool m_messageWaiting;
     int m_icRow;
     int m_icCol;
+    bool m_hasICAddress;
     int m_errorLineRow;                // Error line row from SOH (default: last row)
     uint8_t m_cmdKeyMask[3];           // SOH command key masks
     QVector<ScreenCell> m_savedErrorLine; // Saved error line contents for Error Reset

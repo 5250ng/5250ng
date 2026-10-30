@@ -39,6 +39,8 @@ class TestCommandHandlerSoh : public QObject {
     void testSohErrorRowClampedToScreen();
     void testWriteErrorCodeWithHostileErrorRow();
     void testSohValidErrorRowKept();
+    void testClearUnitDoesNotReuseStaleInsertCursor();
+    void testInsertCursorKeptWithoutInputFields();
     void testGddmBlockBypassesAlphanumericRendererAndPaces();
     void testGddmSuppressPacingOrder();
     void testGddmReadStatusWithAlphanumericPrefix();
@@ -101,6 +103,35 @@ void TestCommandHandlerSoh::testSohValidErrorRowKept() {
     QCOMPARE(m_widget->errorLineRow(), 23);
     m_handler->onSohReceived(1, 0, 0, 0);
     QCOMPARE(m_widget->errorLineRow(), 0);
+}
+
+void TestCommandHandlerSoh::testClearUnitDoesNotReuseStaleInsertCursor() {
+    // The menu screen leaves its IC address on QSH's third input row. QSH
+    // clears the unit and defines one wrapping field without sending a new IC
+    // order, so unlock must choose that field's first position.
+    m_widget->setICAddress(19, 6);
+    m_handler->onClearScreenRequested();
+
+    auto *screen = m_widget->screenBuffer();
+    screen->setField(17, 6, 313, false);
+    screen->setFieldFFW(17, 6, 0x48, 0x00);
+    m_handler->processDeferredCC2(0x08);
+
+    QCOMPARE(screen->cursorPosition(), QPoint(6, 17));
+
+    // A real IC order on the new presentation space must still be honoured.
+    m_widget->setICAddress(19, 6);
+    m_handler->processDeferredCC2(0x08);
+    QCOMPARE(screen->cursorPosition(), QPoint(6, 19));
+}
+
+void TestCommandHandlerSoh::testInsertCursorKeptWithoutInputFields() {
+    // A screen with an IC order but no input field: unlock leaves the cursor
+    // on the IC address, as it did before Clear Unit tracking existed.
+    m_handler->onClearScreenRequested();
+    m_widget->setICAddress(5, 10);
+    m_handler->processDeferredCC2(0x08);
+    QCOMPARE(m_widget->screenBuffer()->cursorPosition(), QPoint(10, 5));
 }
 
 void TestCommandHandlerSoh::testGddmBlockBypassesAlphanumericRendererAndPaces() {
