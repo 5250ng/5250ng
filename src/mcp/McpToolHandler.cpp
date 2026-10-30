@@ -774,10 +774,13 @@ QJsonObject McpToolHandler::handleSendKeys(const QJsonObject &args) {
     static const QSet<QString> arrowKeys = {"UP", "DOWN", "LEFT", "RIGHT"};
 
     QStringList scriptLines;
+    QString firstKey;
     QRegularExpression tokenRe("\"([^\"]*)\"|\\S+");
     auto it = tokenRe.globalMatch(keys);
     while (it.hasNext()) {
         auto match = it.next();
+        if (scriptLines.isEmpty() && match.captured(1).isNull())
+            firstKey = match.captured(0).toUpper();
         if (!match.captured(1).isNull()) {
             QString text = escapeScriptString(match.captured(1));
             scriptLines << QString("TYPE \"%1\"").arg(text);
@@ -789,6 +792,10 @@ QJsonObject McpToolHandler::handleSendKeys(const QJsonObject &args) {
                 scriptLines << QString("PRESS %1").arg(key);
         }
     }
+
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), firstKey);
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
 
     // Build args with session_id preserved
     QJsonObject scriptArgs;
@@ -841,6 +848,10 @@ QJsonObject McpToolHandler::handlePressKey(const QJsonObject &args) {
         return makeResult("Unknown key: " + key + ". Valid keys: " +
                           QStringList(validKeyNames().values()).join(", "), true);
 
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), key);
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
+
     QJsonObject scriptArgs;
     scriptArgs["script"] = keyToScriptLine(key);
     scriptArgs["session_id"] = args.value("session_id");
@@ -867,6 +878,11 @@ QJsonObject McpToolHandler::handlePressKeys(const QJsonObject &args) {
         scriptLines << keyToScriptLine(key);
     }
 
+    QString lockErr = lockedKeyboardError(widget->keyboardState(),
+                                          keysArray.first().toString().trimmed().toUpper());
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
+
     QJsonObject scriptArgs;
     scriptArgs["script"] = scriptLines.join('\n');
     scriptArgs["session_id"] = args.value("session_id");
@@ -881,6 +897,10 @@ QJsonObject McpToolHandler::handleTypeText(const QJsonObject &args) {
     QString text = args.value("text").toString();
     if (text.isEmpty())
         return makeResult("Missing required parameter: text", true);
+
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), QString());
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
 
     // Escape for the 5250script TYPE command (quotes, backslashes, newlines)
     QString safeText = escapeScriptString(text);
@@ -978,6 +998,10 @@ QJsonObject McpToolHandler::handleClearInputs(const QJsonObject &args) {
     QJsonObject err;
     auto *widget = resolveSession(args, err);
     if (!widget) return err;
+
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), "ERASEINPUT");
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
 
     QJsonObject scriptArgs;
     scriptArgs["script"] = QStringLiteral("PRESS ERASEINPUT");
