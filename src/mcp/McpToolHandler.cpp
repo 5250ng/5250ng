@@ -18,6 +18,7 @@
 #include "McpSessionRegistry.h"
 #include "mcp_validation.h"
 #include "script_escape.h"
+#include "session/manager.h"
 #include "agent/agent_script_runner.h"
 #include "agent/tool_definitions.h"
 #include "core/ebcdic.h"
@@ -44,7 +45,30 @@ namespace mcp {
 #define MCP_ERROR(msg) logger::Logger::instance()->error_with_prefix("[MCP]", msg)
 
 McpToolHandler::McpToolHandler(McpSessionRegistry *registry, QObject *parent)
-    : QObject(parent), m_registry(registry) {}
+    : QObject(parent), m_registry(registry) {
+    connect(m_registry, &McpSessionRegistry::sessionRemoved, this,
+            [this](const QString &sessionId) { m_savedCredentials.remove(sessionId); });
+}
+
+QList<session::SessionConfig> McpToolHandler::mcpAllowedSavedSessions() const {
+    QList<session::SessionConfig> all;
+    if (m_savedSessionsProvider) {
+        all = m_savedSessionsProvider();
+    } else {
+        session::SessionManager manager;
+        for (const QString &name : manager.listSessions()) {
+            session::SessionConfig config;
+            if (manager.loadSession(name, config))
+                all.append(config);
+        }
+    }
+    QList<session::SessionConfig> allowed;
+    for (const auto &config : all) {
+        if (config.mcpAllowed())
+            allowed.append(config);
+    }
+    return allowed;
+}
 
 void McpToolHandler::onSessionCreated(const QString &sessionId,
                                       ui::widgets::Q5250ScreenWidget *widget) {
@@ -125,6 +149,7 @@ QJsonArray McpToolHandler::listTools() const {
     const ToolDef mcpTools[] = {
         {agent::kToolCreateSession, agent::kToolCreateSessionDescription, agent::toolCreateSessionSchema},
         {agent::kToolCloseSession, agent::kToolCloseSessionDescription, agent::toolCloseSessionSchema},
+        {agent::kToolListSavedSessions, agent::kToolListSavedSessionsDescription, agent::toolListSavedSessionsSchema},
         {agent::kToolListSessions, agent::kToolListSessionsDescription, agent::toolListSessionsSchema},
         {agent::kToolScreenshot, agent::kToolScreenshotDescription, agent::toolScreenshotSchema},
         {agent::kToolSetDebugLogging, agent::kToolSetDebugLoggingDescription, agent::toolSetDebugLoggingSchema},
@@ -190,6 +215,7 @@ QJsonObject McpToolHandler::callTool(const QString &name, const QJsonObject &arg
     // Session lifecycle
     if (name == agent::kToolCreateSession)    return handleCreateSession(arguments);
     if (name == agent::kToolCloseSession)     return handleCloseSession(arguments);
+    if (name == agent::kToolListSavedSessions) return handleListSavedSessions();
     if (name == agent::kToolListSessions)     return handleListSessions();
     if (name == agent::kToolScreenshot)       return handleScreenshot(arguments);
 
@@ -260,17 +286,42 @@ ui::widgets::Q5250ScreenWidget *McpToolHandler::resolveSession(
 
 QJsonObject McpToolHandler::handleCreateSession(const QJsonObject &args) {
     QString hostname = args.value("hostname").toString();
-    if (hostname.isEmpty())
+    QString profile = args.value("profile").toString();
+    if (!hostname.isEmpty() && !profile.isEmpty())
+        return makeResult("Pass either hostname or profile, not both.", true);
+    if (hostname.isEmpty() && profile.isEmpty())
         return makeResult("No hostname provided.", true);
 
-    quint16 port = 0;
-    if (!parseTcpPort(args.value("port"), &port)) {
-        return makeResult("Port must be an integer between 1 and 65535.", true);
+    session::SessionConfig config;
+    if (!profile.isEmpty()) {
+        bool found = false;
+        for (const auto &saved : mcpAllowedSavedSessions()) {
+            if (saved.name() == profile) {
+                config = saved;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            return makeResult(QString("No saved session named '%1' is available to MCP "
+                                      "clients. Use list_saved_sessions.").arg(profile), true);
+        hostname = config.hostname();
+    } else {
+        quint16 port = 0;
+        if (!parseTcpPort(args.value("port"), &port)) {
+            return makeResult("Port must be an integer between 1 and 65535.", true);
+        }
+        QString deviceType = args.value("deviceType").toString("IBM-3179-2").trimmed();
+        if (deviceType.isEmpty())
+            return makeResult("Device type must not be empty.", true);
+        config.setHostname(hostname);
+        config.setPort(port);
+        config.setUseTLS(args.value("useTLS").toBool(false));
+        config.setDeviceType(deviceType);
     }
-    bool useTLS = args.value("useTLS").toBool(false);
-    QString deviceType = args.value("deviceType").toString("IBM-3179-2").trimmed();
-    if (deviceType.isEmpty())
-        return makeResult("Device type must not be empty.", true);
+    quint16 port = config.port();
+    bool useTLS = config.useTLS();
+    QString deviceType = config.deviceType();
 
     MCP_LOG(QString("Creating session to %1:%2 (TLS=%3, device=%4)")
                 .arg(hostname).arg(port).arg(useTLS).arg(deviceType));
@@ -295,9 +346,13 @@ QJsonObject McpToolHandler::handleCreateSession(const QJsonObject &args) {
     QEventLoop loop;
     QTimer::singleShot(15000, &loop, [&]() { loop.quit(); });
 
+    // Keep a saved session's credentials for login; they stay in-process.
+    if (!profile.isEmpty() && !config.password().isEmpty())
+        m_savedCredentials.insert(sessionId, {config.username(), config.password()});
+
     // Emit the request — MainWindow creates the tab synchronously on the
     // same thread, which calls onSessionCreated() before we reach loop.exec()
-    emit createSessionRequested(sessionId, hostname, port, useTLS, deviceType);
+    emit createSessionRequested(sessionId, config);
 
     if (!m_sessionCreated)
         loop.exec();
@@ -347,6 +402,24 @@ QJsonObject McpToolHandler::handleCloseSession(const QJsonObject &args) {
     emit closeSessionRequested(sessionId);
 
     return makeResult("Session closed: " + sessionId);
+}
+
+QJsonObject McpToolHandler::handleListSavedSessions() {
+    const auto sessions = mcpAllowedSavedSessions();
+    if (sessions.isEmpty())
+        return makeResult("No saved sessions are available to MCP clients. Enable "
+                          "\"Allow MCP clients to open this session\" in a saved "
+                          "session's settings.");
+
+    QStringList lines;
+    for (const auto &s : sessions) {
+        lines << QString("profile: %1  host: %2:%3  tls: %4  saved credentials: %5")
+                     .arg(s.name(), s.hostname())
+                     .arg(s.port())
+                     .arg(s.useTLS() ? "yes" : "no")
+                     .arg(s.password().isEmpty() ? "no" : "yes");
+    }
+    return makeResult(lines.join('\n'));
 }
 
 QJsonObject McpToolHandler::handleListSessions() {
@@ -1065,14 +1138,23 @@ QJsonObject McpToolHandler::handleLogin(const QJsonObject &args) {
     auto *widget = resolveSession(args, err);
     if (!widget) return err;
 
+    // A session opened from a saved session signs on with its saved
+    // credentials when the client names no other user and no password.
     QString username = args.value("username").toString();
+    auto saved = m_savedCredentials.constFind(args.value("session_id").toString());
+    bool useSaved = saved != m_savedCredentials.constEnd() && !args.contains("password")
+        && (username.isEmpty() || username.compare(saved->username, Qt::CaseInsensitive) == 0);
+    if (useSaved)
+        username = saved->username;
     if (username.isEmpty())
         return makeResult("No username provided.", true);
 
     // Without a password argument, ask the user in the GUI so the password
     // never passes through the MCP client.
     QString password;
-    if (args.contains("password")) {
+    if (useSaved) {
+        password = saved->password;
+    } else if (args.contains("password")) {
         password = args.value("password").toString();
     } else {
         if (!m_passwordPrompt)

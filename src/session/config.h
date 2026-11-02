@@ -130,6 +130,12 @@ class SessionConfig : public QObject {
     QString password() const { return m_password; }
     void setPassword(const QString &password) { m_password = password; }
 
+    // Whether MCP clients may list and open this saved session and sign on
+    // with its saved credentials (never returned to the client). Off unless
+    // the user opts in.
+    bool mcpAllowed() const { return m_mcpAllowed; }
+    void setMcpAllowed(bool allowed) { m_mcpAllowed = allowed; }
+
     // STRPCCMD policy. Default is Deny because this is the mechanism behind
     // CVE-2005-0868. See the PcCommandPolicy enum for the four states.
     PcCommandPolicy pcCommandPolicy() const { return m_pcCommandPolicy; }
@@ -219,6 +225,7 @@ class SessionConfig : public QObject {
     QHash<QString, QString> m_sessionVariables;
     QString m_username;
     QString m_password;
+    bool m_mcpAllowed = false;
     PcCommandPolicy m_pcCommandPolicy = PcCommandPolicy::DenyAndAlert;
     int m_connectTimeoutSeconds = kDefaultConnectTimeoutSeconds;
     int m_keepaliveIntervalSeconds = kDefaultKeepaliveIntervalSeconds;

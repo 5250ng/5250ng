@@ -319,12 +319,17 @@ inline const QString kToolLoginDescription = QStringLiteral(
     "Waits for the sign-on screen, types the credentials, and presses Enter. "
     "Omit password to have 5250ng ask the user for it in a masked dialog and "
     "type it itself; the password is then never sent to or returned by this "
-    "tool. Requires an active terminal connection (use the connect tool first).");
+    "tool. On a session opened from a saved session (create_session with "
+    "profile), omit username and password to sign on with its saved "
+    "credentials. Requires an active terminal connection (use the connect "
+    "tool first).");
 
 inline QJsonObject toolLoginSchema() {
     QJsonObject userProp;
     userProp["type"] = "string";
-    userProp["description"] = "AS/400 user profile name";
+    userProp["description"] =
+        "AS/400 user profile name. Optional on a session opened from a saved "
+        "session with saved credentials.";
 
     QJsonObject passProp;
     passProp["type"] = "string";
@@ -339,7 +344,7 @@ inline QJsonObject toolLoginSchema() {
     QJsonObject schema;
     schema["type"] = "object";
     schema["properties"] = properties;
-    schema["required"] = QJsonArray{"username"};
+    schema["required"] = QJsonArray();
     return schema;
 }
 
@@ -353,7 +358,11 @@ inline const QString kToolCreateSession = QStringLiteral("create_session");
 inline const QString kToolCreateSessionDescription = QStringLiteral(
     "Create a new TN5250 terminal session and connect to an AS/400 host. "
     "Returns a session_id that must be used in subsequent tool calls to "
-    "target this session. The session appears as a read-only tab in the UI.");
+    "target this session. The session appears as a read-only tab in the UI. "
+    "Pass either hostname, or profile with the name of a saved session from "
+    "list_saved_sessions: the saved session's settings are used and its "
+    "saved credentials sign the session on (encrypted sign-on, or login "
+    "without username and password) without being returned to the caller.");
 
 inline QJsonObject toolCreateSessionSchema() {
     QJsonObject hostProp;
@@ -376,8 +385,16 @@ inline QJsonObject toolCreateSessionSchema() {
         "TN5250 terminal type (default IBM-3179-2; use IBM-5292-2 for GDDM graphics)";
     deviceTypeProp["default"] = "IBM-3179-2";
 
+    QJsonObject profileProp;
+    profileProp["type"] = "string";
+    profileProp["description"] =
+        "Name of a saved session to open instead of hostname (see "
+        "list_saved_sessions). Its connection settings and saved credentials "
+        "are used; port, useTLS and deviceType are ignored.";
+
     QJsonObject properties;
     properties["hostname"] = hostProp;
+    properties["profile"] = profileProp;
     properties["port"] = portProp;
     properties["useTLS"] = tlsProp;
     properties["deviceType"] = deviceTypeProp;
@@ -385,7 +402,6 @@ inline QJsonObject toolCreateSessionSchema() {
     QJsonObject schema;
     schema["type"] = "object";
     schema["properties"] = properties;
-    schema["required"] = QJsonArray{"hostname"};
     return schema;
 }
 
@@ -419,6 +435,22 @@ inline const QString kToolListSessionsDescription = QStringLiteral(
     "hostnames, ports, and connection status.");
 
 inline QJsonObject toolListSessionsSchema() {
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = QJsonObject();
+    return schema;
+}
+
+// list_saved_sessions — saved sessions the user allowed MCP clients to open
+inline const QString kToolListSavedSessions = QStringLiteral("list_saved_sessions");
+
+inline const QString kToolListSavedSessionsDescription = QStringLiteral(
+    "List the saved 5250ng sessions the user allowed MCP clients to open, "
+    "with their host, port, TLS setting and whether saved credentials are "
+    "available. Credentials themselves are never returned. Open one with "
+    "create_session and its name as profile.");
+
+inline QJsonObject toolListSavedSessionsSchema() {
     QJsonObject schema;
     schema["type"] = "object";
     schema["properties"] = QJsonObject();

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "session/config.h"
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
@@ -55,9 +57,15 @@ class McpToolHandler : public QObject {
                                               QString *password)>;
     void setPasswordPrompt(PasswordPrompt prompt) { m_passwordPrompt = std::move(prompt); }
 
+    /// Returns the user's saved sessions. Defaults to session::SessionManager;
+    /// tests replace it. Only sessions with mcpAllowed() are ever exposed.
+    using SavedSessionsProvider = std::function<QList<session::SessionConfig>()>;
+    void setSavedSessionsProvider(SavedSessionsProvider provider) {
+        m_savedSessionsProvider = std::move(provider);
+    }
+
   signals:
-    void createSessionRequested(const QString &sessionId, const QString &hostname,
-                                quint16 port, bool useTLS, const QString &deviceType);
+    void createSessionRequested(const QString &sessionId, const session::SessionConfig &config);
     void closeSessionRequested(const QString &sessionId);
 
   private:
@@ -69,6 +77,10 @@ class McpToolHandler : public QObject {
     QJsonObject handleCreateSession(const QJsonObject &args);
     QJsonObject handleCloseSession(const QJsonObject &args);
     QJsonObject handleListSessions();
+    QJsonObject handleListSavedSessions();
+
+    /// Saved sessions the user allowed MCP clients to open.
+    QList<session::SessionConfig> mcpAllowedSavedSessions() const;
 
     // Screen tools (session-aware)
     QJsonObject handleReadScreen(const QJsonObject &args);
@@ -106,6 +118,15 @@ class McpToolHandler : public QObject {
 
     McpSessionRegistry *m_registry;
     PasswordPrompt m_passwordPrompt;
+    SavedSessionsProvider m_savedSessionsProvider;
+
+    // Saved credentials of sessions opened with create_session profile,
+    // keyed by session ID. Used by login; never returned to the client.
+    struct SavedCredentials {
+        QString username;
+        QString password;
+    };
+    QHash<QString, SavedCredentials> m_savedCredentials;
 
     // Pending create_session state
     QString m_pendingSessionId;

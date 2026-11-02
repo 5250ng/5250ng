@@ -130,6 +130,13 @@ void ConnectDialog::setupUI() {
     m_passwordEdit->setEchoMode(QLineEdit::Password);
     formLayout->addRow("Password:", m_passwordEdit);
 
+    m_mcpAllowedCheck = new QCheckBox("Allow MCP clients to open this session", this);
+    m_mcpAllowedCheck->setToolTip(
+        "When enabled, MCP clients can list this saved session, open it with "
+        "create_session and sign on with the username and password above. "
+        "The credentials are never sent to the MCP client.");
+    formLayout->addRow("", m_mcpAllowedCheck);
+
     // Emulated device dropdown
     m_deviceCombo = new QComboBox(this);
     // Populate supported devices
@@ -545,6 +552,7 @@ void ConnectDialog::updateUI() {
     m_tlsClientCertEdit->setText(m_currentConfig.tlsClientCertificateFile());
     m_tlsClientKeyEdit->setText(m_currentConfig.tlsClientKeyFile());
     m_passwordEdit->setText(m_currentConfig.password());
+    m_mcpAllowedCheck->setChecked(m_currentConfig.mcpAllowed());
     // Select device type in combo if supported
     int idx = m_deviceCombo->findText(m_currentConfig.deviceType());
     if (idx >= 0) {
@@ -640,6 +648,7 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setScreenCols(m_colsSpin->value());
     config.setUsername(m_usernameEdit->text());
     config.setPassword(m_passwordEdit->text());
+    config.setMcpAllowed(m_mcpAllowedCheck->isChecked());
     config.setCodePage(static_cast<core::CodePage::ID>(
         m_codePageCombo->currentData().toInt()));
     config.setTerminalThemeId(m_themeCombo->currentData().toString());

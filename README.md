@@ -258,6 +258,8 @@ Automatically detects clickable elements on screen - function key labels (F3=Exi
 
 To sign an MCP session on without handing the IBM i password to the agent, call `login` with only `username`: 5250ng asks you for the password in a masked dialog and types it into the sign-on screen itself, so the password never appears in the MCP client's tool calls or results.
 
+For unattended use, tick **Allow MCP clients to open this session** on a saved session that stores a username and password. MCP clients can then find it with `list_saved_sessions` and open it with `create_session` and `profile`; its saved credentials are used for encrypted sign-on, or by `login` without a username and password, and are never returned to the client.
+
 The integrated AI assistant supports OpenAI and Anthropic providers with API key or OAuth 2.0 authentication. It can generate 5250script from natural language descriptions and execute it on the terminal.
 
 </details>
