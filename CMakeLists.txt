@@ -329,6 +329,8 @@ set(UI_SOURCES
     src/ui/dialogs/keyboard_remap_dialog.h
     src/ui/dialogs/pc_command_confirm_dialog.cpp
     src/ui/dialogs/pc_command_confirm_dialog.h
+    src/ui/dialogs/script_input_dialog.cpp
+    src/ui/dialogs/script_input_dialog.h
     src/ui/dialogs/mcp_password_prompt_dialog.cpp
     src/ui/dialogs/mcp_password_prompt_dialog.h
     # themes
@@ -569,6 +571,15 @@ if(BUILD_TESTS)
     target_link_libraries(test_mcp_login PRIVATE
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_login COMMAND test_mcp_login)
+
+    # Script INPUT dialog (application target, uses QtUiStyle)
+    add_executable(test_script_input_dialog
+        tests/unit/test_script_input_dialog.cpp
+        src/ui/dialogs/script_input_dialog.cpp
+    )
+    target_link_libraries(test_script_input_dialog PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_script_input_dialog COMMAND test_script_input_dialog)
 
     # Script editor window (application target, uses QtUiStyle)
     add_executable(test_script_editor_window

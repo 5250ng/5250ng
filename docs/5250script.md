@@ -9,11 +9,12 @@
 
 ```
 # Login to AS/400
+INPUT PASSWORD "Password:" $PASS   # masked prompt, never logged
 EXPECT TEXT "Sign On" AT 1 23
 MOVE CURSOR AT INPUTFIELD 1
 TYPE "QSECOFR"
 MOVE CURSOR AT INPUTFIELD 2
-TYPE "mypassword"
+TYPE "$PASS"
 PRESS ENTER
 
 EXPECT TEXT "MAIN MENU"
@@ -396,24 +397,32 @@ ABORT "Login failed"       # Stop with an error message (shown in dialog)
 
 ```
 INPUT "Username:" $USER
-INPUT "Password:" $PASS
+INPUT "Library:" $LIB
 ```
+
+Plain `INPUT` fields show what the user types. For passwords and other secrets use `INPUT PASSWORD`:
+
+```
+INPUT PASSWORD "Password:" $PASS
+```
+
+The field is masked while the user types. The value is used as-is by `TYPE`, `SET`, conditions and function calls, but `LOG` and `ABORT` messages show `********` in its place. Variables that receive a value built from the secret, through `SET` or as a function parameter, are masked the same way until they are set to a plain value again.
 
 When multiple `INPUT` commands appear on consecutive lines, they are batched into a **single dialog** with all fields:
 
 ```
 INPUT "Username:" $USER
-INPUT "Password:" $PASS
+INPUT PASSWORD "Password:" $PASS
 INPUT "Library:" $LIB
 ```
 
-This shows one popup with three rows:
+This shows one popup with three rows, the password row masked:
 
-| Label     | Field |
-|-----------|-------|
-| Username: | _____ |
-| Password: | _____ |
-| Library:  | _____ |
+| Label     | Field    |
+|-----------|----------|
+| Username: | _____    |
+| Password: | ●●●●●●●● |
+| Library:  | _____    |
 
 Clicking **OK** sets all variables and continues. Clicking **Cancel** stops the script.
 
@@ -434,13 +443,14 @@ PAUSE                      # Show dialog and wait for user to click OK
 # AS/400 Login
 GLOBAL EXPECT_TIMEOUT 15000
 SET $RETRIES 0
+INPUT PASSWORD "Password:" $PASS
 
 LABEL login
 EXPECT TEXT "Sign On" AT 1 23
 MOVE CURSOR AT (6,53)
 TYPE "QSECOFR"
 MOVE CURSOR AT (7,53)
-TYPE "mypassword"
+TYPE "$PASS"
 PRESS ENTER
 
 EXPECT TEXT "MAIN MENU" AT 1 30
