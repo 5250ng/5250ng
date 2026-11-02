@@ -17,10 +17,13 @@
 #include "core/ebcdic.h"
 #include "mcp/McpSessionRegistry.h"
 #include "mcp/McpToolHandler.h"
+#include "session/manager.h"
 #include "ui/dialogs/mcp_password_prompt_dialog.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
 #include <QApplication>
+#include <QRegularExpression>
+#include <QStandardPaths>
 #include <QLineEdit>
 #include <QTimer>
 #include <QtTest/QtTest>
@@ -32,6 +35,7 @@ class TestMcpLogin : public QObject {
     Q_OBJECT
 
   private slots:
+    void initTestCase();
     void init();
     void cleanup();
     void testMissingPasswordWithoutPromptFails();
@@ -40,6 +44,13 @@ class TestMcpLogin : public QObject {
     void testExplicitPasswordSkipsPrompt();
     void testPromptDialogMasksAndReturnsPassword();
     void testPromptDialogTimesOut();
+    void testListSavedSessionsShowsOnlyMcpAllowed();
+    void testCreateSessionRejectsUnavailableProfile_data();
+    void testCreateSessionRejectsUnavailableProfile();
+    void testCreateSessionFromProfileUsesSavedSettings();
+    void testLoginUsesSavedCredentials();
+    void testLoginAsOtherUserPrompts();
+    void testDefaultProviderReadsSavedSessions();
 
   private:
     // Minimal IBM i sign-on screen: "Sign On" on row 1, a user field and a
@@ -48,6 +59,15 @@ class TestMcpLogin : public QObject {
     QString fieldText(int row, int col) const;
     QJsonObject login(const QJsonObject &extra);
     static QString resultText(const QJsonObject &result);
+    // Saved sessions: PROD is allowed for MCP and has credentials, DEV is not
+    // allowed.
+    void installSavedSessions();
+    // Runs create_session with the given arguments, standing in for
+    // MainWindow by attaching m_widget to the new session.
+    QJsonObject createSession(const QJsonObject &args, QString *sessionId = nullptr);
+
+    session::SessionConfig m_requestedConfig;
+    int m_createRequests = 0;
 
     Q5250ScreenWidget *m_widget = nullptr;
     mcp::McpSessionRegistry *m_registry = nullptr;
@@ -56,6 +76,11 @@ class TestMcpLogin : public QObject {
 };
 
 static const QString kSessionId = QStringLiteral("test-session");
+
+void TestMcpLogin::initTestCase() {
+    // Keep SessionManager away from the user's real saved sessions.
+    QStandardPaths::setTestModeEnabled(true);
+}
 
 void TestMcpLogin::init() {
     m_widget = new Q5250ScreenWidget();
@@ -199,6 +224,151 @@ void TestMcpLogin::testPromptDialogTimesOut() {
     QVERIFY(!ui::dialogs::McpPasswordPromptDialog::ask(
         "ibmi.example", "QSECOFR", &password, nullptr, 50));
     QCOMPARE(password, QStringLiteral("unchanged"));
+}
+
+void TestMcpLogin::installSavedSessions() {
+    m_handler->setSavedSessionsProvider([]() {
+        session::SessionConfig prod;
+        prod.setName("PROD");
+        prod.setHostname("prod.example");
+        prod.setPort(992);
+        prod.setUseTLS(true);
+        prod.setDeviceType("IBM-3477-FC");
+        prod.setUsername("AGENTUSR");
+        prod.setPassword("SAVEDPW1");
+        prod.setMcpAllowed(true);
+
+        session::SessionConfig dev;
+        dev.setName("DEV");
+        dev.setHostname("dev.example");
+        dev.setUsername("DEVUSR");
+        dev.setPassword("DEVPW");
+        return QList<session::SessionConfig>{prod, dev};
+    });
+}
+
+QJsonObject TestMcpLogin::createSession(const QJsonObject &args, QString *sessionId) {
+    m_createRequests = 0;
+    auto conn = connect(m_handler, &mcp::McpToolHandler::createSessionRequested, this,
+                        [this](const QString &id, const session::SessionConfig &config) {
+        ++m_createRequests;
+        m_requestedConfig = config;
+        m_handler->onSessionCreated(id, m_widget);
+    });
+    QJsonObject result = m_handler->callTool(QStringLiteral("create_session"), args);
+    disconnect(conn);
+    if (sessionId) {
+        static const QRegularExpression idRe(QStringLiteral("session_id: (\\S+)"));
+        *sessionId = idRe.match(resultText(result)).captured(1);
+    }
+    return result;
+}
+
+void TestMcpLogin::testListSavedSessionsShowsOnlyMcpAllowed() {
+    installSavedSessions();
+    QJsonObject result = m_handler->callTool(QStringLiteral("list_saved_sessions"), {});
+    const QString text = resultText(result);
+    QVERIFY(!result.value("isError").toBool());
+    QVERIFY(text.contains("profile: PROD  host: prod.example:992  tls: yes  saved credentials: yes"));
+    QVERIFY(!text.contains("DEV"));
+    QVERIFY(!text.contains("SAVEDPW1"));
+    QVERIFY(!text.contains("AGENTUSR"));
+}
+
+void TestMcpLogin::testCreateSessionRejectsUnavailableProfile_data() {
+    QTest::addColumn<QJsonObject>("args");
+    QTest::newRow("not allowed") << QJsonObject{{"profile", "DEV"}};
+    QTest::newRow("unknown") << QJsonObject{{"profile", "NOPE"}};
+    QTest::newRow("hostname and profile")
+        << QJsonObject{{"profile", "PROD"}, {"hostname", "other.example"}};
+}
+
+void TestMcpLogin::testCreateSessionRejectsUnavailableProfile() {
+    QFETCH(QJsonObject, args);
+    installSavedSessions();
+    QJsonObject result = createSession(args);
+    QVERIFY(result.value("isError").toBool());
+    QCOMPARE(m_createRequests, 0);
+}
+
+// The tab is opened with the saved session's settings, credentials
+// included (for encrypted sign-on), but none of them are returned.
+void TestMcpLogin::testCreateSessionFromProfileUsesSavedSettings() {
+    installSavedSessions();
+    QJsonObject result = createSession({{"profile", "PROD"}, {"port", 23}});
+    QVERIFY2(!result.value("isError").toBool(), qPrintable(resultText(result)));
+    QCOMPARE(m_createRequests, 1);
+    QCOMPARE(m_requestedConfig.name(), QStringLiteral("PROD"));
+    QCOMPARE(m_requestedConfig.hostname(), QStringLiteral("prod.example"));
+    QCOMPARE(m_requestedConfig.port(), quint16(992));
+    QVERIFY(m_requestedConfig.useTLS());
+    QCOMPARE(m_requestedConfig.deviceType(), QStringLiteral("IBM-3477-FC"));
+    QCOMPARE(m_requestedConfig.username(), QStringLiteral("AGENTUSR"));
+    QCOMPARE(m_requestedConfig.password(), QStringLiteral("SAVEDPW1"));
+    QVERIFY(!QJsonDocument(result).toJson().contains("SAVEDPW1"));
+}
+
+void TestMcpLogin::testLoginUsesSavedCredentials() {
+    installSavedSessions();
+    QString sessionId;
+    QVERIFY(!createSession({{"profile", "PROD"}}, &sessionId).value("isError").toBool());
+    int prompts = 0;
+    m_handler->setPasswordPrompt([&](const QString &, const QString &, const QString &,
+                                     QString *) {
+        ++prompts;
+        return false;
+    });
+    showSignOnScreen();
+
+    QJsonObject result = m_handler->callTool(QStringLiteral("login"),
+                                             {{"session_id", sessionId}});
+    QVERIFY2(!result.value("isError").toBool(), qPrintable(resultText(result)));
+    QCOMPARE(prompts, 0);
+    QVERIFY(m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("AGENTUSR")));
+    QVERIFY(m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("SAVEDPW1")));
+    QVERIFY(!QJsonDocument(result).toJson().contains("SAVEDPW1"));
+}
+
+// Another user profile never gets the saved password.
+void TestMcpLogin::testLoginAsOtherUserPrompts() {
+    installSavedSessions();
+    QString sessionId;
+    QVERIFY(!createSession({{"profile", "PROD"}}, &sessionId).value("isError").toBool());
+    QString promptedUser;
+    m_handler->setPasswordPrompt([&](const QString &, const QString &,
+                                     const QString &username, QString *) {
+        promptedUser = username;
+        return false;
+    });
+    showSignOnScreen();
+
+    QJsonObject result = m_handler->callTool(QStringLiteral("login"),
+                                             {{"session_id", sessionId}, {"username", "OTHER"}});
+    QVERIFY(result.value("isError").toBool());
+    QCOMPARE(promptedUser, QStringLiteral("OTHER"));
+    QVERIFY(!m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("SAVEDPW1")));
+}
+
+// Without an injected provider, saved sessions come from SessionManager.
+void TestMcpLogin::testDefaultProviderReadsSavedSessions() {
+    session::SessionManager manager;
+    session::SessionConfig allowed;
+    allowed.setName("MCP default provider allowed");
+    allowed.setHostname("allowed.example");
+    allowed.setMcpAllowed(true);
+    session::SessionConfig hidden;
+    hidden.setName("MCP default provider hidden");
+    hidden.setHostname("hidden.example");
+    QVERIFY(manager.saveSession(allowed));
+    QVERIFY(manager.saveSession(hidden));
+
+    const QString text = resultText(
+        m_handler->callTool(QStringLiteral("list_saved_sessions"), {}));
+    manager.deleteSession(allowed.name());
+    manager.deleteSession(hidden.name());
+    QVERIFY2(text.contains("profile: MCP default provider allowed  host: allowed.example:23"),
+             qPrintable(text));
+    QVERIFY(!text.contains("hidden.example"));
 }
 
 QTEST_MAIN(TestMcpLogin)

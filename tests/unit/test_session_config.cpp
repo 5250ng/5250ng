@@ -42,6 +42,8 @@ class TestSessionConfig : public QObject {
     void testDeserializationRejectsOutOfRange();
     void testAllowInvalidCertificatesDefaultsOff();
     void testAllowInvalidCertificatesRoundTrip();
+    void testMcpAllowedDefaultsOff();
+    void testMcpAllowedRoundTrip();
     void testPcCommandPolicyDefaults();
     void testPcCommandPolicyRoundTrip();
     void testPcCommandPolicyLegacyConfigCompat();
@@ -296,6 +298,45 @@ void TestSessionConfig::testAllowInvalidCertificatesRoundTrip() {
     second.setAllowInvalidCertificates(true);
     QVERIFY(second.fromJson(reset));
     QVERIFY(!second.allowInvalidCertificates());
+}
+
+void TestSessionConfig::testMcpAllowedDefaultsOff() {
+    SessionConfig fresh;
+    fresh.setHostname("ibmi.example.com");
+    QVERIFY(!fresh.mcpAllowed());
+    QVERIFY(!fresh.toJson().contains("mcpAllowed"));
+
+    // A non-boolean value is ignored rather than failing the load.
+    QJsonObject json = fresh.toJson();
+    json["mcpAllowed"] = "yes";
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QVERIFY(!loaded.mcpAllowed());
+}
+
+void TestSessionConfig::testMcpAllowedRoundTrip() {
+    m_config->setName("Agent host");
+    m_config->setHostname("ibmi.example.com");
+    m_config->setMcpAllowed(true);
+
+    QJsonObject json = m_config->toJson();
+    QCOMPARE(json.value("mcpAllowed").toBool(), true);
+
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QVERIFY(loaded.mcpAllowed());
+
+    SessionConfig copied(loaded);
+    QVERIFY(copied.mcpAllowed());
+    SessionConfig assigned;
+    assigned = loaded;
+    QVERIFY(assigned.mcpAllowed());
+
+    // Loading a file without the key resets a previously set value.
+    QJsonObject without = json;
+    without.remove("mcpAllowed");
+    QVERIFY(assigned.fromJson(without));
+    QVERIFY(!assigned.mcpAllowed());
 }
 
 void TestSessionConfig::testPcCommandPolicyDefaults() {
