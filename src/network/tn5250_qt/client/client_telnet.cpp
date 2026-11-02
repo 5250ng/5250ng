@@ -521,10 +521,9 @@ void TN5250Client::sendData(const QByteArray &data) {
         );
         return;
     }
+    // Outbound payload carries field data (passwords included): size only.
     logger::Logger::instance()->debug(
-        QString("[TN5250->Client]: sendData: %1 bytes payload, hex=%2")
-            .arg(data.size())
-            .arg(QString::fromLatin1(data.left(64).toHex())));
+        QString("[TN5250->Client]: sendData: %1 bytes payload").arg(data.size()));
 
     // Wrap payload in a GDS record per RFC 1205 / SA21-9247-6:
     // [recLen(2)] [0x12A0(2)] [0x0000(2)] [varLen=0x04(1)] [flagsHi(1)] [flagsLo(1)] [opcode(1)] [payload]

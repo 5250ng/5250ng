@@ -301,8 +301,6 @@ void SignonClient::sendSignonInfo() {
                   .arg(authScheme, 2, 16, QLatin1Char('0'))
                   .arg(encryptedPw.size())
                   .arg(m_serverLevel));
-    LOG_DEBUG(QString("[SignonClient]: Packet hex: %1")
-                  .arg(QString::fromLatin1(packet.toHex(' '))));
 }
 
 void SignonClient::handleSignonReply(const QByteArray &packet) {
