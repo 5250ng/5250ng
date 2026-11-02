@@ -334,7 +334,11 @@ void TN5250CommandHandler::onClearScreenRequested() {
     // an IC order (QSH does this); cursor selection then falls back to the
     // first eligible input field.
     m_displayWidget->clearICAddress();
-    m_displayWidget->screenBuffer()->clear();
+    // Clear Unit (0x40) also selects the 24x80 format (tn5250j
+    // CMD_CLEAR_UNIT semantics): the host uses it to leave 132-column
+    // mode, so the buffer geometry must follow or the session stays
+    // stuck at 27x132 (issue #213).  setScreenSize() clears the buffer.
+    m_displayWidget->setScreenSize(24, 80);
     m_displayWidget->screenBuffer()->notifyCursor();
     m_displayWidget->setCursorBlinkRate(0);
 }
