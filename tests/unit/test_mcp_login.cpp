@@ -50,6 +50,7 @@ class TestMcpLogin : public QObject {
     void testCreateSessionFromProfileUsesSavedSettings();
     void testLoginUsesSavedCredentials();
     void testLoginAsOtherUserPrompts();
+    void testExplicitCredentialsOverrideSavedOnes();
     void testDefaultProviderReadsSavedSessions();
 
   private:
@@ -346,6 +347,30 @@ void TestMcpLogin::testLoginAsOtherUserPrompts() {
                                              {{"session_id", sessionId}, {"username", "OTHER"}});
     QVERIFY(result.value("isError").toBool());
     QCOMPARE(promptedUser, QStringLiteral("OTHER"));
+    QVERIFY(!m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("SAVEDPW1")));
+}
+
+// Credentials passed to login are still used as given, even on a session
+// opened from a saved session.
+void TestMcpLogin::testExplicitCredentialsOverrideSavedOnes() {
+    installSavedSessions();
+    QString sessionId;
+    QVERIFY(!createSession({{"profile", "PROD"}}, &sessionId).value("isError").toBool());
+    int prompts = 0;
+    m_handler->setPasswordPrompt([&](const QString &, const QString &, const QString &,
+                                     QString *) {
+        ++prompts;
+        return false;
+    });
+    showSignOnScreen();
+
+    QJsonObject result = m_handler->callTool(
+        QStringLiteral("login"),
+        {{"session_id", sessionId}, {"username", "EXPLUSR"}, {"password", "EXPLPW"}});
+    QVERIFY2(!result.value("isError").toBool(), qPrintable(resultText(result)));
+    QCOMPARE(prompts, 0);
+    QVERIFY(m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("EXPLUSR")));
+    QVERIFY(m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("EXPLPW")));
     QVERIFY(!m_sentToHost.contains(core::EBCDIC::stringToEBCDIC("SAVEDPW1")));
 }
 
