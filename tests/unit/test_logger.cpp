@@ -16,6 +16,9 @@
 
 #include "logger/logger.h"
 
+#include <QFile>
+#include <QSignalSpy>
+#include <QStandardPaths>
 #include <QtTest/QtTest>
 #include <atomic>
 #include <thread>
@@ -32,6 +35,8 @@ class TestLogger : public QObject {
         // Suppress console output during the storm; otherwise the suite
         // floods stderr with thousands of messages.
         Logger::instance()->enableConsoleOutput(false);
+        // Keep the debug log file out of the real AppDataLocation.
+        QStandardPaths::setTestModeEnabled(true);
     }
 
     // Smoke test for the std::atomic<LogLevel> conversion of m_logLevel.
@@ -83,6 +88,66 @@ class TestLogger : public QObject {
         // else would indicate a torn read.
         const LogLevel finalLevel = log->logLevel();
         QVERIFY(finalLevel == LogLevel::Debug || finalLevel == LogLevel::Error);
+    }
+
+    // setDebugLogging() must raise the level to Debug and open the default
+    // log file, lower it back to Info and close the file when turned off,
+    // and signal only actual state changes (the Help menu check mark and the
+    // saved setting follow that signal).
+    void testSetDebugLoggingTogglesLevelFileAndSignal() {
+        auto *log = Logger::instance();
+        log->setLogLevel(LogLevel::Info);
+        log->closeLogFile();
+        QFile::remove(Logger::defaultLogFilePath());
+
+        QSignalSpy spy(log, &Logger::debugLoggingChanged);
+
+        log->setDebugLogging(true);
+        QVERIFY(log->isDebugLogging());
+        QCOMPARE(log->logFilePath(), Logger::defaultLogFilePath());
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+
+        log->debug(QStringLiteral("debug-on probe"));
+        QVERIFY(log->recentLogs().last().endsWith(QStringLiteral("debug-on probe")));
+
+        // Turning it on again is a no-op: no second signal, same file.
+        log->setDebugLogging(true);
+        QCOMPARE(spy.count(), 1);
+
+        log->setDebugLogging(false);
+        QVERIFY(!log->isDebugLogging());
+        QCOMPARE(log->logLevel(), LogLevel::Info);
+        QVERIFY(log->logFilePath().isEmpty());
+        QCOMPARE(spy.count(), 2);
+        QCOMPARE(spy.at(1).at(0).toBool(), false);
+
+        log->debug(QStringLiteral("debug-off probe"));
+        QVERIFY(!log->recentLogs().last().endsWith(QStringLiteral("debug-off probe")));
+
+        // The file kept what was logged while debug logging was on.
+        QFile file(Logger::defaultLogFilePath());
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString contents = QString::fromUtf8(file.readAll());
+        QVERIFY(contents.contains(QStringLiteral("debug-on probe")));
+        QVERIFY(!contents.contains(QStringLiteral("debug-off probe")));
+    }
+
+    // The diagnostic report saved from Help > Save Diagnostic Log must carry
+    // the environment header followed by the buffered lines.
+    void testDiagnosticReportHasHeaderAndBufferedLines() {
+        auto *log = Logger::instance();
+        log->setLogLevel(LogLevel::Info);
+        log->info(QStringLiteral("report probe"));
+
+        const QString report = log->diagnosticReport();
+        QVERIFY(report.startsWith(log->diagnosticHeader().section('\n', 0, 0)));
+        QVERIFY(report.contains(QStringLiteral("\nVersion: ")));
+        QVERIFY(report.contains(QStringLiteral("\nOS: ")));
+        QVERIFY(report.contains(QStringLiteral("\nQt: ")));
+        QVERIFY(report.contains(QStringLiteral("\nDebug logging: off")));
+        QVERIFY(report.indexOf(QStringLiteral("report probe"))
+                > report.indexOf(QStringLiteral("\nQt: ")));
     }
 
     void cleanupTestCase() {

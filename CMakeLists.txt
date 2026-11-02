@@ -337,6 +337,7 @@ set(UI_SOURCES
     src/ui/actions/onHotspots.cpp
     src/ui/actions/onScripts.cpp
     src/ui/actions/onSessionLogging.cpp
+    src/ui/actions/onDiagnostics.cpp
     src/ui/actions/onScreenHistory.cpp
     src/ui/actions/onToggleAgentPanel.cpp
     src/ui/actions/onMatchReplace.cpp

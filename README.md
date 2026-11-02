@@ -174,6 +174,16 @@ Options:
     ./build/bin/5250ng --replay-pcap session-capture.pcapng
     ```
 
+### Collecting logs for a bug report
+
+No command line needed:
+
+1. **Help → Enable Debug Logging**. The setting is remembered across launches.
+2. Reproduce the problem.
+3. **Help → Save Diagnostic Log...** and attach the saved file (on the Desktop by default) to your report.
+
+**Help → Show Log Folder** opens the folder holding `tn5250.log`, which is written while debug logging is on (`~/Library/Application Support/5250ng/5250ng/` on macOS). Starting 5250ng with `--debug` has the same effect as the menu option. Over MCP, the `set_debug_logging` and `get_logs` tools do the same.
+
  + Start with the MCP server enabled:
 
     ```

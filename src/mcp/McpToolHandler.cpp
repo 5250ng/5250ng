@@ -25,6 +25,8 @@
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
 #include <QDir>
+#include <climits>
+#include <cmath>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -125,6 +127,8 @@ QJsonArray McpToolHandler::listTools() const {
         {agent::kToolCloseSession, agent::kToolCloseSessionDescription, agent::toolCloseSessionSchema},
         {agent::kToolListSessions, agent::kToolListSessionsDescription, agent::toolListSessionsSchema},
         {agent::kToolScreenshot, agent::kToolScreenshotDescription, agent::toolScreenshotSchema},
+        {agent::kToolSetDebugLogging, agent::kToolSetDebugLoggingDescription, agent::toolSetDebugLoggingSchema},
+        {agent::kToolGetLogs, agent::kToolGetLogsDescription, agent::toolGetLogsSchema},
     };
 
     // Build session_id property once
@@ -214,6 +218,8 @@ QJsonObject McpToolHandler::callTool(const QString &name, const QJsonObject &arg
     if (name == agent::kToolListFiles)        return handleListFiles(arguments);
     if (name == agent::kToolReadFile)         return handleReadFile(arguments);
     if (name == agent::kToolWriteFile)        return handleWriteFile(arguments);
+    if (name == agent::kToolSetDebugLogging)  return handleSetDebugLogging(arguments);
+    if (name == agent::kToolGetLogs)          return handleGetLogs(arguments);
 
     // Deprecated / unavailable
     if (name == agent::kToolConnect)
@@ -620,6 +626,50 @@ QJsonObject McpToolHandler::handleReadFile(const QJsonObject &args) {
     QString content = QString::fromUtf8(file.readAll());
     file.close();
     return makeResult(content);
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics tools
+// ---------------------------------------------------------------------------
+
+QJsonObject McpToolHandler::handleSetDebugLogging(const QJsonObject &args) {
+    const QJsonValue enabled = args.value("enabled");
+    if (!enabled.isBool())
+        return makeResult("Missing or invalid parameter: enabled (expected true or false)", true);
+
+    auto *log = logger::Logger::instance();
+    log->setDebugLogging(enabled.toBool());
+    if (!log->isDebugLogging())
+        return makeResult("Debug logging disabled.");
+    const QString path = log->logFilePath();
+    return makeResult(QString("Debug logging enabled. Log file: %1")
+                          .arg(path.isEmpty() ? QStringLiteral("none (could not be opened)") : path));
+}
+
+QJsonObject McpToolHandler::handleGetLogs(const QJsonObject &args) {
+    const QJsonValue maxLinesValue = args.value("max_lines");
+    int maxLines = 1000;
+    if (!maxLinesValue.isUndefined()) {
+        const double number = maxLinesValue.toDouble(-1);
+        if (!maxLinesValue.isDouble() || std::trunc(number) != number || number < 0)
+            return makeResult("Invalid parameter: max_lines (expected a non-negative integer)", true);
+        maxLines = number > INT_MAX ? INT_MAX : static_cast<int>(number);
+    }
+    const QString filter = args.value("filter").toString();
+
+    auto *log = logger::Logger::instance();
+    QStringList lines = log->recentLogs();
+    if (!filter.isEmpty())
+        lines = lines.filter(filter, Qt::CaseInsensitive);
+    if (maxLines > 0 && lines.size() > maxLines)
+        lines = lines.mid(lines.size() - maxLines);
+
+    QString text = log->diagnosticHeader();
+    if (lines.isEmpty())
+        text += filter.isEmpty() ? "(no log lines)" : "(no log lines match the filter)";
+    else
+        text += lines.join('\n');
+    return makeResult(text);
 }
 
 QJsonObject McpToolHandler::handleWriteFile(const QJsonObject &args) {

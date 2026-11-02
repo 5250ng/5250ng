@@ -168,6 +168,25 @@ class Client5250:
         return self._call_tool("list_sessions")
 
     # ------------------------------------------------------------------
+    # Diagnostics tools (session-independent)
+    # ------------------------------------------------------------------
+
+    def set_debug_logging(self, enabled: bool) -> str:
+        """Turn 5250ng debug logging on or off."""
+        return self._call_tool("set_debug_logging", {"enabled": enabled})
+
+    def get_logs(self, max_lines: int = 1000, filter: str | None = None) -> str:
+        """Return the application log with its environment header.
+
+        ``max_lines`` limits the result to the most recent lines (0 for all);
+        ``filter`` keeps only lines containing that text (case-insensitive).
+        """
+        args: dict[str, Any] = {"max_lines": max_lines}
+        if filter:
+            args["filter"] = filter
+        return self._call_tool("get_logs", args)
+
+    # ------------------------------------------------------------------
     # Screen tools (require session_id)
     # ------------------------------------------------------------------
 

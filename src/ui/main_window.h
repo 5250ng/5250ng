@@ -151,6 +151,9 @@ class MainWindow : public MainWindowBase {
     void onMcpToggleEnabled();
     void onMcpShowLogs();
     void onViewSessionLogs();
+    void onToggleDebugLogging();
+    void onSaveDiagnosticLog();
+    void onShowLogFolder();
     void onCopySessionGuid();
     void onToggleMatchReplace();
     void onEditMatchReplacePatterns();
@@ -242,6 +245,7 @@ class MainWindow : public MainWindowBase {
     QAction *m_saveSessionAsAction;
     QAction *m_copyGuidAction;
     QAction *m_sessionLogsAction;
+    QAction *m_debugLoggingAction;
     QAction *m_fullscreenAction;
     QAction *m_hotspotsAction;
     QAction *m_scriptRecordAction;

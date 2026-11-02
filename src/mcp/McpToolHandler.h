@@ -87,6 +87,10 @@ class McpToolHandler : public QObject {
     QJsonObject handleReadFile(const QJsonObject &args);
     QJsonObject handleWriteFile(const QJsonObject &args);
 
+    // Diagnostics tools (session-independent)
+    QJsonObject handleSetDebugLogging(const QJsonObject &args);
+    QJsonObject handleGetLogs(const QJsonObject &args);
+
     /// Read screen text from a specific widget (thread-safe).
     QString readScreenText(ui::widgets::Q5250ScreenWidget *widget);
 
