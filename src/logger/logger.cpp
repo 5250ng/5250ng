@@ -15,10 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "logger.h"
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QSysInfo>
 
 namespace logger {
 
@@ -84,6 +86,89 @@ void Logger::setLogFile(const QString &filePath) {
         delete m_logFile;
         m_logFile = nullptr;
     }
+}
+
+QString Logger::logFilePath() const {
+    QMutexLocker locker(&m_mutex);
+    return m_logFile ? m_logFile->fileName() : QString();
+}
+
+void Logger::closeLogFile() {
+    QMutexLocker locker(&m_mutex);
+    if (m_logStream) {
+        m_logStream->flush();
+        delete m_logStream;
+        m_logStream = nullptr;
+    }
+    if (m_logFile) {
+        m_logFile->close();
+        delete m_logFile;
+        m_logFile = nullptr;
+    }
+}
+
+QString Logger::logDirectory() {
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+}
+
+QString Logger::defaultLogFilePath() {
+    return logDirectory() + "/tn5250.log";
+}
+
+/**
+ * Turn debug logging on or off. The enable path opens the log file before
+ * lowering the level so the first debug lines reach the file; the disable
+ * path logs its notice while the file is still open.
+ */
+void Logger::setDebugLogging(bool enabled) {
+    const bool wasEnabled = isDebugLogging();
+    if (enabled) {
+        if (logFilePath().isEmpty()) {
+            QDir().mkpath(logDirectory());
+            setLogFile(defaultLogFilePath());
+        }
+        setLogLevel(LogLevel::Debug);
+        if (!wasEnabled) {
+            const QString path = logFilePath();
+            info(QString("Debug logging enabled (log file: %1)")
+                     .arg(path.isEmpty() ? QStringLiteral("none") : path));
+        }
+    } else {
+        if (wasEnabled) {
+            info("Debug logging disabled");
+        }
+        setLogLevel(LogLevel::Info);
+        closeLogFile();
+    }
+    if (wasEnabled != enabled) {
+        emit debugLoggingChanged(enabled);
+    }
+}
+
+QString Logger::diagnosticHeader() const {
+    const QString path = logFilePath();
+    QStringList lines;
+    lines << QString("%1 diagnostic log").arg(QCoreApplication::applicationName())
+          << QString("Version: %1").arg(QCoreApplication::applicationVersion())
+          << QString("Generated: %1").arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+          << QString("OS: %1 (%2 %3, %4)")
+                 .arg(QSysInfo::prettyProductName(), QSysInfo::kernelType(),
+                      QSysInfo::kernelVersion(), QSysInfo::currentCpuArchitecture())
+          << QString("Qt: %1").arg(qVersion())
+          << QString("Debug logging: %1").arg(isDebugLogging() ? "on" : "off")
+          << QString("Log file: %1").arg(path.isEmpty() ? QStringLiteral("none") : path)
+          << QString(60, '-');
+    return lines.join('\n') + '\n';
+}
+
+QString Logger::diagnosticReport() const {
+    const QStringList logs = recentLogs();
+    QString report = diagnosticHeader();
+    for (const QString &line : logs) {
+        report += line;
+        report += '\n';
+    }
+    return report;
 }
 
 /**

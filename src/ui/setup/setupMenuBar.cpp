@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
+#include "logger/logger.h"
 #include <QComboBox>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -213,6 +214,13 @@ void MainWindow::setupMenuBar() {
 
     // Help menu
     QMenu *helpMenu = bar->addMenu("&Help");
+    m_debugLoggingAction =
+        helpMenu->addAction("Enable &Debug Logging", this, &MainWindow::onToggleDebugLogging);
+    m_debugLoggingAction->setCheckable(true);
+    m_debugLoggingAction->setChecked(logger::Logger::instance()->isDebugLogging());
+    helpMenu->addAction("View &Logs...", this, &MainWindow::onViewSessionLogs);
+    helpMenu->addAction("&Save Diagnostic Log...", this, &MainWindow::onSaveDiagnosticLog);
+    helpMenu->addAction("Show Log &Folder", this, &MainWindow::onShowLogFolder);
     helpMenu->addSeparator();
     QAction *aboutAction =
         helpMenu->addAction("&About", this, &MainWindow::onAbout);
