@@ -114,8 +114,7 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
     QByteArray pwSub = ciphertext.right(8);
 
     logger::Logger::instance()->debug(
-        QString("[IBMRSEED]: Encrypted password (PW_SUB hex): %1")
-            .arg(QString::fromLatin1(pwSub.toHex())));
+        QString("[IBMRSEED]: Encrypted password (PW_SUB, %1 bytes)").arg(pwSub.size()));
 
     return pwSub;
 }

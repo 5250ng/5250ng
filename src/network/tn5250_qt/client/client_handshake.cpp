@@ -130,11 +130,10 @@ void TN5250Client::sendNewEnviron() {
             negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
             negotiation.append(IBMRSeed::escapeNewEnviron(pwSub));
 
+            // The seed and password substitute are not logged: with the
+            // server seed they allow an offline attack on the password.
             logger::Logger::instance()->debug(
-                QString("[TN5250->Client]: IBMRSEED encrypted password prepared"
-                        " (clientSeed=%1, pwSub=%2)")
-                    .arg(QString::fromLatin1(clientSeed.toHex()))
-                    .arg(QString::fromLatin1(pwSub.toHex())));
+                "[TN5250->Client]: IBMRSEED encrypted password prepared");
         }
     }
     if (!encrypted) {

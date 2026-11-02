@@ -185,10 +185,9 @@ void Worker::sendInput(const QByteArray &data) {
         logger::Logger::instance()->warning("[Worker] sendInput: no client, dropping data");
         return;
     }
+    // Outbound input carries field data (passwords included): size only.
     logger::Logger::instance()->debug(
-        QString("[Worker] sendInput: %1 bytes, hex=%2")
-            .arg(data.size())
-            .arg(QString::fromLatin1(data.left(64).toHex())));
+        QString("[Worker] sendInput: %1 bytes").arg(data.size()));
     m_client->sendData(data);
 }
 
