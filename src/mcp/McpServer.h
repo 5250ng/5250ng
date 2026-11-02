@@ -47,6 +47,9 @@ class McpServer : public QObject {
     /// Called by MainWindow when an MCP session's connection state changes.
     void updateSessionStatus(const QString &sessionId, bool connected);
 
+    /// Installs the GUI prompt login uses when the client omits the password.
+    void setPasswordPrompt(McpToolHandler::PasswordPrompt prompt);
+
   signals:
     void started(quint16 port);
     void stopped();

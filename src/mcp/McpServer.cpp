@@ -85,6 +85,10 @@ void McpServer::updateSessionStatus(const QString &sessionId, bool connected) {
     m_registry->setConnected(sessionId, connected);
 }
 
+void McpServer::setPasswordPrompt(McpToolHandler::PasswordPrompt prompt) {
+    m_toolHandler->setPasswordPrompt(std::move(prompt));
+}
+
 bool McpServer::start(quint16 port) {
     if (m_server->isListening()) return true;
 

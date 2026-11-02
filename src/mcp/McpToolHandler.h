@@ -20,6 +20,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QSet>
+#include <functional>
 
 namespace ui::widgets { class Q5250ScreenWidget; }
 
@@ -44,6 +45,15 @@ class McpToolHandler : public QObject {
     /// Called by McpServer when MainWindow has created the session tab.
     void onSessionCreated(const QString &sessionId,
                           ui::widgets::Q5250ScreenWidget *widget);
+
+    /// Asks the user for the password used by login when the MCP client
+    /// omits it. Returns false if the user cancelled or did not answer in
+    /// time; the password itself never leaves the GUI process.
+    using PasswordPrompt = std::function<bool(const QString &sessionId,
+                                              const QString &hostname,
+                                              const QString &username,
+                                              QString *password)>;
+    void setPasswordPrompt(PasswordPrompt prompt) { m_passwordPrompt = std::move(prompt); }
 
   signals:
     void createSessionRequested(const QString &sessionId, const QString &hostname,
@@ -95,6 +105,7 @@ class McpToolHandler : public QObject {
     QString readScreenText(ui::widgets::Q5250ScreenWidget *widget);
 
     McpSessionRegistry *m_registry;
+    PasswordPrompt m_passwordPrompt;
 
     // Pending create_session state
     QString m_pendingSessionId;

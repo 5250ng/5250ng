@@ -317,7 +317,9 @@ inline const QString kToolLogin = QStringLiteral("login");
 inline const QString kToolLoginDescription = QStringLiteral(
     "Log in to the AS/400 system using a username and password. "
     "Waits for the sign-on screen, types the credentials, and presses Enter. "
-    "Requires an active terminal connection (use the connect tool first).");
+    "Omit password to have 5250ng ask the user for it in a masked dialog and "
+    "type it itself; the password is then never sent to or returned by this "
+    "tool. Requires an active terminal connection (use the connect tool first).");
 
 inline QJsonObject toolLoginSchema() {
     QJsonObject userProp;
@@ -326,7 +328,9 @@ inline QJsonObject toolLoginSchema() {
 
     QJsonObject passProp;
     passProp["type"] = "string";
-    passProp["description"] = "Password for the user profile";
+    passProp["description"] =
+        "Password for the user profile. Omit it to have 5250ng prompt the user "
+        "for the password instead of passing it through this call.";
 
     QJsonObject properties;
     properties["username"] = userProp;
@@ -335,7 +339,7 @@ inline QJsonObject toolLoginSchema() {
     QJsonObject schema;
     schema["type"] = "object";
     schema["properties"] = properties;
-    schema["required"] = QJsonArray{"username", "password"};
+    schema["required"] = QJsonArray{"username"};
     return schema;
 }
 
