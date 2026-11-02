@@ -256,6 +256,8 @@ Automatically detects clickable elements on screen - function key labels (F3=Exi
 
 5250ng includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that exposes terminal tools over JSON-RPC 2.0, enabling AI agents to interact with AS/400 sessions programmatically. Tools include screen reading, keystroke sending, session management, screenshot capture, and 5250script execution.
 
+To sign an MCP session on without handing the IBM i password to the agent, call `login` with only `username`: 5250ng asks you for the password in a masked dialog and types it into the sign-on screen itself, so the password never appears in the MCP client's tool calls or results.
+
 The integrated AI assistant supports OpenAI and Anthropic providers with API key or OAuth 2.0 authentication. It can generate 5250script from natural language descriptions and execute it on the terminal.
 
 </details>

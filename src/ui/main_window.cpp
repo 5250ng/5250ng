@@ -17,6 +17,7 @@
 #include "main_window.h"
 #include "agent/config.h"
 #include "ui/dialogs/mcp_log_viewer.h"
+#include "ui/dialogs/mcp_password_prompt_dialog.h"
 #include "agent/auth/api_key_auth.h"
 #include "agent/auth/oauth_auth.h"
 #include "agent/providers/anthropic_provider.h"
@@ -289,6 +290,24 @@ MainWindow::MainWindow(QWidget *parent)
         cfg.setName(QString("MCP: %1").arg(hostname));
         connectToServer(cfg, sessionId);
     });
+    // login without a password: ask the user here so the password never
+    // goes through the MCP client. Show the session's tab first so the user
+    // can see which sign-on screen the request is for.
+    m_mcpServer->setPasswordPrompt(
+        [this](const QString &sessionId, const QString &hostname,
+               const QString &username, QString *password) {
+            for (int i = 0; i < m_sessions.size(); ++i) {
+                if (m_sessions[i]->mcpSessionId == sessionId) {
+                    m_tabWidget->setCurrentIndex(i);
+                    break;
+                }
+            }
+            raise();
+            activateWindow();
+            constexpr int kPromptTimeoutMs = 3 * 60 * 1000;
+            return ui::dialogs::McpPasswordPromptDialog::ask(
+                hostname, username, password, this, kPromptTimeoutMs);
+        });
     connect(m_mcpServer, &mcp::McpServer::closeSessionRequested, this,
             [this](const QString &sessionId) {
         for (int i = 0; i < m_sessions.size(); ++i) {

@@ -1066,9 +1066,30 @@ QJsonObject McpToolHandler::handleLogin(const QJsonObject &args) {
     if (!widget) return err;
 
     QString username = args.value("username").toString();
-    QString password = args.value("password").toString();
     if (username.isEmpty())
         return makeResult("No username provided.", true);
+
+    // Without a password argument, ask the user in the GUI so the password
+    // never passes through the MCP client.
+    QString password;
+    if (args.contains("password")) {
+        password = args.value("password").toString();
+    } else {
+        if (!m_passwordPrompt)
+            return makeResult("No password provided and no password prompt is available.", true);
+        QString sessionId = args.value("session_id").toString();
+        QPointer<ui::widgets::Q5250ScreenWidget> widgetGuard = widget;
+        // The prompt runs a nested event loop: reject other calls to this
+        // session until the user answers.
+        m_busySessions.insert(sessionId);
+        bool answered = m_passwordPrompt(sessionId, m_registry->session(sessionId).hostname,
+                                         username, &password);
+        m_busySessions.remove(sessionId);
+        if (widgetGuard.isNull())
+            return makeResult("Terminal session was closed while waiting for the password.", true);
+        if (!answered)
+            return makeResult("Sign-on cancelled: the user did not enter a password.", true);
+    }
 
     // Escape credentials for 5250script to prevent script injection
     // (quotes, backslashes, and newlines — a newline would otherwise inject
