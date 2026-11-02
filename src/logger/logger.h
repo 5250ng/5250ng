@@ -26,6 +26,9 @@
 
 namespace logger {
 
+// QSettings key remembering Help > Enable Debug Logging across launches
+inline constexpr const char *kDebugLoggingSettingKey = "Diagnostics/debugLogging";
+
 // Log levels
 /**
  * Describes the severity of a log entry.
@@ -155,7 +158,46 @@ class Logger : public QObject {
     /**
      * Return the current log file path, or empty if no file is configured.
      */
-    QString logFilePath() const { return m_logFile ? m_logFile->fileName() : QString(); }
+    QString logFilePath() const;
+
+    /**
+     * Close the log file, if one is open. Logging continues to the console
+     * and the in-memory buffer.
+     */
+    void closeLogFile();
+
+    /**
+     * Directory holding the application log file (platform AppDataLocation,
+     * e.g. ~/Library/Application Support/5250ng/5250ng on macOS).
+     */
+    static QString logDirectory();
+    /**
+     * Path of the application log file used by debug logging.
+     */
+    static QString defaultLogFilePath();
+
+    /**
+     * Turn debug logging on or off.
+     * On: Debug level and file output to defaultLogFilePath() (unless a log
+     * file is already open). Off: Info level and the log file is closed.
+     * Emits debugLoggingChanged() when the state changes.
+     */
+    void setDebugLogging(bool enabled);
+    /**
+     * True when the minimum log level is Debug.
+     */
+    bool isDebugLogging() const { return logLevel() == LogLevel::Debug; }
+
+    /**
+     * Environment summary (application version, OS, Qt version, debug
+     * logging state, log file) placed at the top of a diagnostic log.
+     */
+    QString diagnosticHeader() const;
+    /**
+     * diagnosticHeader() followed by the buffered log lines, ready to be
+     * saved and sent with a bug report.
+     */
+    QString diagnosticReport() const;
 
     /**
      * Return a copy of the in-memory log buffer (most recent MAX_BUFFER lines).
@@ -171,6 +213,12 @@ class Logger : public QObject {
      * @param message Logged message (already formatted with timestamp/level in writeLog()).
      */
     void logMessage(LogLevel level, const QString &message);
+
+    /**
+     * Emitted by setDebugLogging() when debug logging is turned on or off.
+     * May be emitted from any thread.
+     */
+    void debugLoggingChanged(bool enabled);
 
   private:
     /**

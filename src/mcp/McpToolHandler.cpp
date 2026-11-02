@@ -25,6 +25,8 @@
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/screen_buffer.h"
 #include <QDir>
+#include <climits>
+#include <cmath>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -125,6 +127,8 @@ QJsonArray McpToolHandler::listTools() const {
         {agent::kToolCloseSession, agent::kToolCloseSessionDescription, agent::toolCloseSessionSchema},
         {agent::kToolListSessions, agent::kToolListSessionsDescription, agent::toolListSessionsSchema},
         {agent::kToolScreenshot, agent::kToolScreenshotDescription, agent::toolScreenshotSchema},
+        {agent::kToolSetDebugLogging, agent::kToolSetDebugLoggingDescription, agent::toolSetDebugLoggingSchema},
+        {agent::kToolGetLogs, agent::kToolGetLogsDescription, agent::toolGetLogsSchema},
     };
 
     // Build session_id property once
@@ -214,6 +218,8 @@ QJsonObject McpToolHandler::callTool(const QString &name, const QJsonObject &arg
     if (name == agent::kToolListFiles)        return handleListFiles(arguments);
     if (name == agent::kToolReadFile)         return handleReadFile(arguments);
     if (name == agent::kToolWriteFile)        return handleWriteFile(arguments);
+    if (name == agent::kToolSetDebugLogging)  return handleSetDebugLogging(arguments);
+    if (name == agent::kToolGetLogs)          return handleGetLogs(arguments);
 
     // Deprecated / unavailable
     if (name == agent::kToolConnect)
@@ -622,6 +628,50 @@ QJsonObject McpToolHandler::handleReadFile(const QJsonObject &args) {
     return makeResult(content);
 }
 
+// ---------------------------------------------------------------------------
+// Diagnostics tools
+// ---------------------------------------------------------------------------
+
+QJsonObject McpToolHandler::handleSetDebugLogging(const QJsonObject &args) {
+    const QJsonValue enabled = args.value("enabled");
+    if (!enabled.isBool())
+        return makeResult("Missing or invalid parameter: enabled (expected true or false)", true);
+
+    auto *log = logger::Logger::instance();
+    log->setDebugLogging(enabled.toBool());
+    if (!log->isDebugLogging())
+        return makeResult("Debug logging disabled.");
+    const QString path = log->logFilePath();
+    return makeResult(QString("Debug logging enabled. Log file: %1")
+                          .arg(path.isEmpty() ? QStringLiteral("none (could not be opened)") : path));
+}
+
+QJsonObject McpToolHandler::handleGetLogs(const QJsonObject &args) {
+    const QJsonValue maxLinesValue = args.value("max_lines");
+    int maxLines = 1000;
+    if (!maxLinesValue.isUndefined()) {
+        const double number = maxLinesValue.toDouble(-1);
+        if (!maxLinesValue.isDouble() || std::trunc(number) != number || number < 0)
+            return makeResult("Invalid parameter: max_lines (expected a non-negative integer)", true);
+        maxLines = number > INT_MAX ? INT_MAX : static_cast<int>(number);
+    }
+    const QString filter = args.value("filter").toString();
+
+    auto *log = logger::Logger::instance();
+    QStringList lines = log->recentLogs();
+    if (!filter.isEmpty())
+        lines = lines.filter(filter, Qt::CaseInsensitive);
+    if (maxLines > 0 && lines.size() > maxLines)
+        lines = lines.mid(lines.size() - maxLines);
+
+    QString text = log->diagnosticHeader();
+    if (lines.isEmpty())
+        text += filter.isEmpty() ? "(no log lines)" : "(no log lines match the filter)";
+    else
+        text += lines.join('\n');
+    return makeResult(text);
+}
+
 QJsonObject McpToolHandler::handleWriteFile(const QJsonObject &args) {
     QString path = args.value("path").toString();
     QString content = args.value("content").toString();
@@ -774,10 +824,13 @@ QJsonObject McpToolHandler::handleSendKeys(const QJsonObject &args) {
     static const QSet<QString> arrowKeys = {"UP", "DOWN", "LEFT", "RIGHT"};
 
     QStringList scriptLines;
+    QString firstKey;
     QRegularExpression tokenRe("\"([^\"]*)\"|\\S+");
     auto it = tokenRe.globalMatch(keys);
     while (it.hasNext()) {
         auto match = it.next();
+        if (scriptLines.isEmpty() && match.captured(1).isNull())
+            firstKey = match.captured(0).toUpper();
         if (!match.captured(1).isNull()) {
             QString text = escapeScriptString(match.captured(1));
             scriptLines << QString("TYPE \"%1\"").arg(text);
@@ -789,6 +842,10 @@ QJsonObject McpToolHandler::handleSendKeys(const QJsonObject &args) {
                 scriptLines << QString("PRESS %1").arg(key);
         }
     }
+
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), firstKey);
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
 
     // Build args with session_id preserved
     QJsonObject scriptArgs;
@@ -841,6 +898,10 @@ QJsonObject McpToolHandler::handlePressKey(const QJsonObject &args) {
         return makeResult("Unknown key: " + key + ". Valid keys: " +
                           QStringList(validKeyNames().values()).join(", "), true);
 
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), key);
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
+
     QJsonObject scriptArgs;
     scriptArgs["script"] = keyToScriptLine(key);
     scriptArgs["session_id"] = args.value("session_id");
@@ -867,6 +928,11 @@ QJsonObject McpToolHandler::handlePressKeys(const QJsonObject &args) {
         scriptLines << keyToScriptLine(key);
     }
 
+    QString lockErr = lockedKeyboardError(widget->keyboardState(),
+                                          keysArray.first().toString().trimmed().toUpper());
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
+
     QJsonObject scriptArgs;
     scriptArgs["script"] = scriptLines.join('\n');
     scriptArgs["session_id"] = args.value("session_id");
@@ -881,6 +947,10 @@ QJsonObject McpToolHandler::handleTypeText(const QJsonObject &args) {
     QString text = args.value("text").toString();
     if (text.isEmpty())
         return makeResult("Missing required parameter: text", true);
+
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), QString());
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
 
     // Escape for the 5250script TYPE command (quotes, backslashes, newlines)
     QString safeText = escapeScriptString(text);
@@ -978,6 +1048,10 @@ QJsonObject McpToolHandler::handleClearInputs(const QJsonObject &args) {
     QJsonObject err;
     auto *widget = resolveSession(args, err);
     if (!widget) return err;
+
+    QString lockErr = lockedKeyboardError(widget->keyboardState(), "ERASEINPUT");
+    if (!lockErr.isEmpty())
+        return makeResult(lockErr, true);
 
     QJsonObject scriptArgs;
     scriptArgs["script"] = QStringLiteral("PRESS ERASEINPUT");

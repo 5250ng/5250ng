@@ -34,6 +34,11 @@ class TestTelnetSubnegotiation : public QObject {
     void testEscapedIacOutsideSubnegotiationFlowsAsAppData();
     void testIbmrseedSeedWithEscapedControlBytes();
     void testIbmrseedPlainSeedStillParsed();
+    void testUnescapedIacBeforeDataByteIsData();
+    void testUnescapedIacInsideRecordIsData();
+    void testRecordsDeliveredAtEor();
+    void testGdsLengthRepairedAtEor();
+    void testNopBetweenRecordsIsCommand();
 
   private:
     static QByteArray makeFrame(std::initializer_list<uint8_t> bytes) {
@@ -156,6 +161,86 @@ void TestTelnetSubnegotiation::testIbmrseedPlainSeedStillParsed() {
 
     QCOMPARE(client.m_serverSeed,
              QByteArray(reinterpret_cast<const char *>(seed), 8));
+}
+
+// Host Integration Server 2000 (KB Q327297) sends X'FF' from the host's
+// GDS data without doubling it. IAC followed by a byte below EOR cannot be a
+// telnet command, so both bytes must reach the application.
+void TestTelnetSubnegotiation::testUnescapedIacBeforeDataByteIsData() {
+    TN5250Client client;
+    client.m_handshakeComplete = true;
+
+    QSignalSpy spy(&client, &TN5250Client::dataReceived);
+    client.processTelnetData(QByteArray::fromHex("58FF4059"));
+
+    QByteArray received;
+    for (const auto &args : spy) {
+        received.append(args.at(0).toByteArray());
+    }
+    QCOMPARE(received, QByteArray::fromHex("58FF4059"));
+}
+
+// Inside an EOR-framed record an unescaped 0xFF followed by a byte in the
+// telnet command range (here 0xF1, EBCDIC '1' and also NOP) is still data.
+void TestTelnetSubnegotiation::testUnescapedIacInsideRecordIsData() {
+    TN5250Client client;
+    client.m_handshakeComplete = true;
+    client.m_eorNegotiated = true;
+
+    QSignalSpy spy(&client, &TN5250Client::dataReceived);
+    // 12-byte GDS record: header + payload FF F1, sent unescaped, then EOR.
+    client.processTelnetData(QByteArray::fromHex("000C12A0000004000003FFF1FFEF"));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toByteArray(), QByteArray::fromHex("000C12A0000004000003FFF1"));
+}
+
+// Records are handed over whole at IAC EOR, even across reads.
+void TestTelnetSubnegotiation::testRecordsDeliveredAtEor() {
+    TN5250Client client;
+    client.m_handshakeComplete = true;
+    client.m_eorNegotiated = true;
+
+    QSignalSpy spy(&client, &TN5250Client::dataReceived);
+    client.processTelnetData(QByteArray::fromHex("000B12A0"));
+    QCOMPARE(spy.count(), 0);
+    client.processTelnetData(QByteArray::fromHex("00000400000340FFEF000A12A000000400000AFFEF"));
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(spy.at(0).at(0).toByteArray(), QByteArray::fromHex("000B12A000000400000340"));
+    QCOMPARE(spy.at(1).at(0).toByteArray(), QByteArray::fromHex("000A12A000000400000A"));
+}
+
+// A GDS length that disagrees with the EOR boundary must not stall the
+// decoder: the length is rewritten to the record's actual size.
+void TestTelnetSubnegotiation::testGdsLengthRepairedAtEor() {
+    TN5250Client client;
+    client.m_handshakeComplete = true;
+    client.m_eorNegotiated = true;
+
+    QSignalSpy spy(&client, &TN5250Client::dataReceived);
+    // Header claims 14 bytes, only 12 arrive before EOR.
+    client.processTelnetData(QByteArray::fromHex("000E12A00000040000034142FFEF"));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toByteArray(), QByteArray::fromHex("000C12A0000004000003" "4142"));
+
+    // Well-formed back-to-back records in one EOR are left alone.
+    const QByteArray chained = QByteArray::fromHex("000A12A000000400000A" "000A12A000000400000A");
+    QCOMPARE(TN5250Client::repairGdsRecordLength(chained), chained);
+}
+
+// Between records, telnet commands such as the NOP keep-alive still work.
+void TestTelnetSubnegotiation::testNopBetweenRecordsIsCommand() {
+    TN5250Client client;
+    client.m_handshakeComplete = true;
+    client.m_eorNegotiated = true;
+
+    QSignalSpy spy(&client, &TN5250Client::dataReceived);
+    client.processTelnetData(QByteArray::fromHex("FFF1000A12A000000400000AFFEF"));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toByteArray(), QByteArray::fromHex("000A12A000000400000A"));
 }
 
 QTEST_MAIN(TestTelnetSubnegotiation)

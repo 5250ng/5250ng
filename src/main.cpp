@@ -32,6 +32,7 @@
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QStyleFactory>
 #include <QTimer>
@@ -111,15 +112,14 @@ int main(int argc, char *argv[]) {
 
     parser.process(app);
 
-    // Set debug level if requested
+    // Set debug level if requested on the command line or turned on from
+    // Help > Enable Debug Logging in a previous run
     if (parser.isSet(debugOption)) {
         attachWindowsConsole();
-        logger::Logger::instance()->setLogLevel(logger::LogLevel::Debug);
-        // Enable file logging in debug mode
-        QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-        QDir().mkpath(appDataDir);
-        logger::Logger::instance()->setLogFile(appDataDir + "/tn5250.log");
-        logger::Logger::instance()->debug("Debug mode enabled");
+    }
+    if (parser.isSet(debugOption)
+        || QSettings().value(logger::kDebugLoggingSettingKey, false).toBool()) {
+        logger::Logger::instance()->setDebugLogging(true);
     }
 
     // Create session config from command line options

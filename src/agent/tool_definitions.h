@@ -449,6 +449,60 @@ inline QJsonObject toolScreenshotSchema() {
     return schema;
 }
 
+// set_debug_logging — turn application debug logging on or off
+inline const QString kToolSetDebugLogging = QStringLiteral("set_debug_logging");
+
+inline const QString kToolSetDebugLoggingDescription = QStringLiteral(
+    "Turn 5250ng debug logging on or off, like Help > Enable Debug Logging. "
+    "When on, debug-level messages (telnet negotiation, data stream "
+    "decoding, ...) are recorded and also written to the log file. "
+    "The setting is remembered for the next launch.");
+
+inline QJsonObject toolSetDebugLoggingSchema() {
+    QJsonObject enabledProp;
+    enabledProp["type"] = "boolean";
+    enabledProp["description"] = "true to turn debug logging on, false to turn it off";
+
+    QJsonObject properties;
+    properties["enabled"] = enabledProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    schema["required"] = QJsonArray{"enabled"};
+    return schema;
+}
+
+// get_logs — return the buffered application log
+inline const QString kToolGetLogs = QStringLiteral("get_logs");
+
+inline const QString kToolGetLogsDescription = QStringLiteral(
+    "Return the 5250ng application log: an environment header (version, OS, "
+    "Qt, debug logging state, log file path) followed by the most recent "
+    "buffered log lines, oldest first. Debug-level lines are only present "
+    "while debug logging is on (see set_debug_logging).");
+
+inline QJsonObject toolGetLogsSchema() {
+    QJsonObject maxLinesProp;
+    maxLinesProp["type"] = "integer";
+    maxLinesProp["description"] =
+        "Maximum number of most recent lines to return (default 1000, 0 for all buffered lines)";
+
+    QJsonObject filterProp;
+    filterProp["type"] = "string";
+    filterProp["description"] =
+        "Only return lines containing this text (case-insensitive)";
+
+    QJsonObject properties;
+    properties["max_lines"] = maxLinesProp;
+    properties["filter"] = filterProp;
+
+    QJsonObject schema;
+    schema["type"] = "object";
+    schema["properties"] = properties;
+    return schema;
+}
+
 // ---------------------------------------------------------------------------
 // press_key — press a single key on the terminal
 // ---------------------------------------------------------------------------

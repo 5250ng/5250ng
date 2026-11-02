@@ -49,6 +49,49 @@ class TestMcpValidation : public QObject {
         QCOMPARE(deviceType.value("type").toString(), QString("string"));
         QCOMPARE(deviceType.value("default").toString(), QString("IBM-3179-2"));
     }
+
+    // Mirrors Q5250ScreenWidget::keyPressEvent: an unlocked keyboard takes
+    // any input, so nothing is rejected.
+    void unlockedKeyboardAcceptsInput() {
+        using ui::widgets::KeyboardState;
+        for (KeyboardState state : {KeyboardState::Unlocked, KeyboardState::SystemRequest}) {
+            QVERIFY(mcp::lockedKeyboardError(state, QString()).isEmpty());
+            QVERIFY(mcp::lockedKeyboardError(state, "ERASEEOF").isEmpty());
+            QVERIFY(mcp::lockedKeyboardError(state, "ENTER").isEmpty());
+        }
+    }
+
+    // Locked (waiting for the host): only Attn and SysReq reach the widget.
+    void lockedKeyboardRejectsInput() {
+        using ui::widgets::KeyboardState;
+        const KeyboardState s = KeyboardState::Locked;
+        QVERIFY(!mcp::lockedKeyboardError(s, QString()).isEmpty()); // typed text
+        QVERIFY(!mcp::lockedKeyboardError(s, "ENTER").isEmpty());
+        QVERIFY(!mcp::lockedKeyboardError(s, "ERASEINPUT").isEmpty());
+        QVERIFY(!mcp::lockedKeyboardError(s, "ESC").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "ATTN").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "SYSREQ").isEmpty());
+        // Arrow keys move the cursor directly, not through keyPressEvent.
+        QVERIFY(mcp::lockedKeyboardError(s, "UP").isEmpty());
+    }
+
+    // Error-locked: only Error Reset (ESC), Attn and Help reach the widget,
+    // and the message tells the client how to recover.
+    void errorLockedKeyboardRejectsInput() {
+        using ui::widgets::KeyboardState;
+        const KeyboardState s = KeyboardState::ErrorLocked;
+        const QString err = mcp::lockedKeyboardError(s, QString());
+        QVERIFY(!err.isEmpty());
+        QVERIFY(err.contains("ESC"));
+        QVERIFY(!mcp::lockedKeyboardError(s, "ERASEEOF").isEmpty());
+        QVERIFY(!mcp::lockedKeyboardError(s, "ENTER").isEmpty());
+        QVERIFY(!mcp::lockedKeyboardError(s, "SYSREQ").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "ESC").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "ESCAPE").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "ATTN").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "HELP").isEmpty());
+        QVERIFY(mcp::lockedKeyboardError(s, "LEFT").isEmpty());
+    }
 };
 
 QTEST_MAIN(TestMcpValidation)

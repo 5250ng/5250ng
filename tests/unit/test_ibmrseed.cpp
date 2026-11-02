@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "network/tn5250_qt/client/ibmrseed.h"
+#include "logger/logger.h"
 #include <QByteArray>
 #include <QTest>
 
@@ -27,6 +28,7 @@ class TestIBMRSeed : public QObject {
     void testRFC4777Vector();
     void testEscapeNewEnviron();
     void testGenerateClientSeed();
+    void testEncryptPasswordDoesNotLogPasswordSubstitute();
 };
 
 void TestIBMRSeed::testRFC4777Vector() {
@@ -76,6 +78,27 @@ void TestIBMRSeed::testGenerateClientSeed() {
     QCOMPARE(seed2.size(), 8);
     // Seeds should (almost certainly) be different
     QVERIFY(seed1 != seed2);
+}
+
+// The password substitute and the seeds are enough for an offline attack on
+// the password, so debug logging (which can be saved and sent with a bug
+// report, or read over MCP) must not contain it.
+void TestIBMRSeed::testEncryptPasswordDoesNotLogPasswordSubstitute() {
+    auto *log = logger::Logger::instance();
+    log->enableConsoleOutput(false);
+    log->setLogLevel(logger::LogLevel::Debug);
+
+    QByteArray pwSub = IBMRSeed::encryptPassword(
+        "USER123", "ABCDEFG", QByteArray::fromHex("7D4C2319F28004B2"),
+        QByteArray::fromHex("08BEF662D851F4B1"));
+    QCOMPARE(pwSub.size(), 8);
+
+    const QString needle = QString::fromLatin1(pwSub.toHex());
+    for (const QString &line : log->recentLogs())
+        QVERIFY2(!line.contains(needle, Qt::CaseInsensitive), qPrintable(line));
+
+    log->setLogLevel(logger::LogLevel::Info);
+    log->enableConsoleOutput(true);
 }
 
 QTEST_MAIN(TestIBMRSeed)

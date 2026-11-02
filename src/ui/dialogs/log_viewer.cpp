@@ -16,7 +16,13 @@
 
 #include "log_viewer.h"
 #include "logger/logger.h"
+#include <QtUiStyle/StyledMessageBox.h>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
 #include <QKeySequence>
+#include <QStandardPaths>
 
 LogViewerDialog::LogViewerDialog(QWidget *parent)
     : qt_ui_style::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)) {
@@ -44,6 +50,13 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     m_text->setStyleSheet("QPlainTextEdit { background-color: #000000; color: #ffffff; }");
     content->addWidget(m_text, 1);
 
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->addStretch(1);
+    m_saveBtn = new QPushButton("Save Diagnostic Log...", this);
+    buttonLayout->addWidget(m_saveBtn, 0);
+    content->addLayout(buttonLayout, 0);
+    connect(m_saveBtn, &QPushButton::clicked, this, [this]() { saveDiagnosticLog(this); });
+
     // Shortcuts and find connections
     m_shortcutFind = new QShortcut(QKeySequence::Find, this);
     connect(m_shortcutFind, &QShortcut::activated, this, &LogViewerDialog::onFindToggle);
@@ -61,6 +74,32 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     // Subscribe to live updates
     connect(logger::Logger::instance(), &logger::Logger::logMessage,
             this, &LogViewerDialog::onLogMessage);
+}
+
+void LogViewerDialog::saveDiagnosticLog(QWidget *parent) {
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    if (dir.isEmpty()) {
+        dir = QDir::homePath();
+    }
+    const QString defaultPath = dir + QString("/5250ng-log-%1.txt")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+    const QString fileName = QFileDialog::getSaveFileName(
+        parent, "Save Diagnostic Log", defaultPath, "Text Files (*.txt *.log);;All Files (*)");
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)
+        || file.write(logger::Logger::instance()->diagnosticReport().toUtf8()) < 0
+        || !file.flush()) {
+        qt_ui_style::StyledMessageBox::warning(parent, "Save Diagnostic Log",
+            QString("Failed to save the log:\n%1").arg(file.errorString()));
+        return;
+    }
+    file.close();
+    qt_ui_style::StyledMessageBox::information(parent, "Save Diagnostic Log",
+        QString("Log saved to:\n%1\n\nAttach this file to your bug report.").arg(fileName));
 }
 
 void LogViewerDialog::onLogMessage(logger::LogLevel /*level*/, const QString &message) {

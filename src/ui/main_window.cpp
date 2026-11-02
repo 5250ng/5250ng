@@ -268,6 +268,13 @@ MainWindow::MainWindow(QWidget *parent)
     // Initialize logger
     logger::Logger::instance()->debug("5250ng started");
     connect(logger::Logger::instance(), &logger::Logger::logMessage, this, &MainWindow::onLogMessage);
+    // Debug logging can be toggled from the Help menu or over MCP: keep the
+    // menu check mark in sync and remember the choice for the next launch.
+    connect(logger::Logger::instance(), &logger::Logger::debugLoggingChanged, this,
+            [this](bool enabled) {
+                m_debugLoggingAction->setChecked(enabled);
+                QSettings().setValue(logger::kDebugLoggingSettingKey, enabled);
+            });
 
     // MCP server
     m_mcpServer = new mcp::McpServer(this);

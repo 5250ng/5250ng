@@ -50,6 +50,7 @@ void TN5250Client::connectToHost(const QString &hostname, quint16 port, bool use
     m_terminalTypeSent = false;
     m_deviceNameSent = false;
     m_receiveBuffer.clear();
+    m_recordBuffer.clear();
     m_handshakeBuffer.clear();
     m_inSubnegotiation = false;
 

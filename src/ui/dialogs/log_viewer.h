@@ -31,6 +31,12 @@ class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     explicit LogViewerDialog(QWidget *parent = nullptr);
     ~LogViewerDialog() override = default;
 
+    /**
+     * Ask for a destination (Desktop by default) and write
+     * Logger::diagnosticReport() to it. Reports failures in a message box.
+     */
+    static void saveDiagnosticLog(QWidget *parent);
+
   private slots:
     void onLogMessage(logger::LogLevel level, const QString &message);
     void onFindToggle();
@@ -44,5 +50,6 @@ class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     QPushButton *m_nextBtn;
     QPushButton *m_prevBtn;
     QShortcut *m_shortcutFind;
+    QPushButton *m_saveBtn;
     QPlainTextEdit *m_text;
 };

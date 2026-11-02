@@ -437,9 +437,10 @@ void Q5250ScreenWidget::processKeyEvent(QKeyEvent *event) {
         m_encoder->encodeKeyEvent(event, shiftPressed, ctrlPressed, altPressed);
 
     if (!encoded.isEmpty()) {
-        LOG_DEBUG(QString("[Q5250Widget] processKeyEvent: encoded=%1 bytes, isAID=%2, hex=%3")
-            .arg(encoded.size()).arg(isAID)
-            .arg(QString::fromLatin1(encoded.toHex())));
+        // Byte values are not logged: they are the typed characters,
+        // including those entered in non-display (password) fields.
+        LOG_DEBUG(QString("[Q5250Widget] processKeyEvent: encoded=%1 bytes, isAID=%2")
+            .arg(encoded.size()).arg(isAID));
         processEncodedInput(encoded, isAID);
     }
 }
@@ -477,10 +478,11 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
 
         // AID key: build field response and send to host
         QByteArray aidResponse = buildAIDResponse(firstByte);
-        LOG_DEBUG(QString("[Q5250Widget] AID key pressed: aid=0x%1 cursor=(%2,%3) response=%4 bytes, hex=%5")
+        // The response carries modified field data (sign-on password
+        // included), so only its size is logged.
+        LOG_DEBUG(QString("[Q5250Widget] AID key pressed: aid=0x%1 cursor=(%2,%3) response=%4 bytes")
             .arg(firstByte, 2, 16, QChar('0')).arg(cursor.y() + 1).arg(cursor.x() + 1)
-            .arg(aidResponse.size())
-            .arg(QString::fromLatin1(aidResponse.left(64).toHex())));
+            .arg(aidResponse.size()));
         emit inputReady(aidResponse);
         emit aidKeyRecorded(firstByte);
         // Lock keyboard after sending AID - host must unlock via CC bytes
@@ -939,8 +941,19 @@ void Q5250ScreenWidget::handleEraseInput() {
         }
     }
 
-    // Move cursor to IC address
-    m_screenBuffer->setCursorPosition(m_icRow, m_icCol);
+    // Move to the host's IC address when the current presentation space has
+    // one.  Otherwise use the first eligible field; Clear Unit invalidates
+    // the prior screen's IC address.
+    if (m_hasICAddress) {
+        m_screenBuffer->setCursorPosition(m_icRow, m_icCol);
+    } else {
+        for (const auto &field : fields) {
+            if (field.length > 0 && !field.protected_field && !field.bypass) {
+                m_screenBuffer->setCursorPosition(field.startRow, field.startCol);
+                break;
+            }
+        }
+    }
     update();
 }
 
