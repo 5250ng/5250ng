@@ -45,8 +45,8 @@ class IBMRSeed {
     static QByteArray generateClientSeed();
 
     // Escape binary data for RFC 1572 NEW_ENVIRON subnegotiation
-    // Bytes 0x00 (VAR), 0x01 (VALUE), 0x02 (ESC), 0x03 (USERVAR),
-    // and 0xFF (IAC) must be prefixed with ESC (0x02)
+    // Bytes 0x00 (VAR), 0x01 (VALUE), 0x02 (ESC) and 0x03 (USERVAR) are
+    // prefixed with ESC (0x02); 0xFF (IAC) is doubled (RFC 855)
     static QByteArray escapeNewEnviron(const QByteArray &data);
 
   private:

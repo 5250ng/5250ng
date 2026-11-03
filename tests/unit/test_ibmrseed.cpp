@@ -57,17 +57,22 @@ void TestIBMRSeed::testEscapeNewEnviron() {
 
     QByteArray escaped = IBMRSeed::escapeNewEnviron(input);
 
-    // Each of bytes 0x00-0x03 and 0xFF should be prefixed with 0x02
-    // 0x04 should remain as-is
+    // Each of bytes 0x00-0x03 should be prefixed with 0x02, 0xFF (IAC)
+    // doubled (RFC 855), and 0x04 should remain as-is
     QByteArray expected;
     expected.append(static_cast<char>(0x02)); expected.append(static_cast<char>(0x00));
     expected.append(static_cast<char>(0x02)); expected.append(static_cast<char>(0x01));
     expected.append(static_cast<char>(0x02)); expected.append(static_cast<char>(0x02));
     expected.append(static_cast<char>(0x02)); expected.append(static_cast<char>(0x03));
     expected.append(static_cast<char>(0x04));
-    expected.append(static_cast<char>(0x02)); expected.append(static_cast<char>(0xFF));
+    expected.append(static_cast<char>(0xFF)); expected.append(static_cast<char>(0xFF));
 
     QCOMPARE(escaped.toHex(), expected.toHex());
+
+    // Consecutive IACs, as in a binary seed: every one is doubled and none
+    // is preceded by ESC.
+    QCOMPARE(IBMRSeed::escapeNewEnviron(QByteArray::fromHex("11ffff35")).toHex(),
+             QByteArray("11ffffffff35"));
 }
 
 void TestIBMRSeed::testGenerateClientSeed() {

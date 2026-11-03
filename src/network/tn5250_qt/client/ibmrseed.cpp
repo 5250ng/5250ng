@@ -133,10 +133,14 @@ QByteArray IBMRSeed::escapeNewEnviron(const QByteArray &data) {
     escaped.reserve(data.size() * 2);
     for (int i = 0; i < data.size(); ++i) {
         uint8_t b = static_cast<uint8_t>(data[i]);
-        // RFC 1572: escape VAR(0x00), VALUE(0x01), ESC(0x02),
-        // USERVAR(0x03) and IAC(0xFF) by prefixing with ESC(0x02)
-        if (b <= 0x03 || b == 0xFF) {
+        // RFC 1572: escape VAR(0x00), VALUE(0x01), ESC(0x02) and
+        // USERVAR(0x03) by prefixing with ESC(0x02). A data IAC(0xFF) inside
+        // the subnegotiation is doubled instead (RFC 855); behind ESC it is
+        // still a bare IAC, and IBM i then falls back to a VT100 session.
+        if (b <= 0x03) {
             escaped.append(static_cast<char>(0x02)); // ESC
+        } else if (b == 0xFF) {
+            escaped.append(static_cast<char>(0xFF)); // IAC
         }
         escaped.append(data[i]);
     }
