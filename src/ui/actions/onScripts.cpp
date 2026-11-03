@@ -616,10 +616,14 @@ void MainWindow::scheduleStartupScript(Session *s) {
 void MainWindow::runStartupScript(Session *s) {
     if (!s || !s->displayWidget) return;
 
-    // Make sure this session is active so the UI indicators work
-    int idx = m_sessions.indexOf(s);
-    if (idx >= 0 && idx != m_activeIndex)
-        setActiveSession(idx);
+    // The script runs on this session whichever tab is shown. It must not
+    // make itself the active session: the menus (Edit, Disconnect, Save,
+    // Theme, ...) would then act on a tab the user cannot see. Its footer
+    // shows SCRIPT, and switching to the tab enables Stop.
+    auto isActive = [this, s]() {
+        const int idx = m_sessions.indexOf(s);
+        return idx >= 0 && idx == m_activeIndex;
+    };
 
     // Set initial variables from session variables (parsed from script).
     // A blank value stays undefined so ISSET fallbacks run; profiles saved
@@ -762,7 +766,7 @@ void MainWindow::runStartupScript(Session *s) {
             QObject::disconnect(*connInput);
             delete startupScreenAdapter;
             if (!macroLabelGuard.isNull()) macroLabelGuard->setText("");
-            if (!stopActionGuard.isNull()) stopActionGuard->setEnabled(false);
+            if (!stopActionGuard.isNull() && isActive()) stopActionGuard->setEnabled(false);
         });
 
     *connError = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::executionError, this,
@@ -771,13 +775,12 @@ void MainWindow::runStartupScript(Session *s) {
                 QString("Line %1: %2").arg(line).arg(msg));
         });
 
+    // LOG lines go to this session's log, not to whichever tab is shown
+    QPointer<core::SessionLogger> loggerGuard = s->sessionLogger;
     *connLog = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::logMessage, this,
-        [this](const QString &msg) {
-            if (m_activeIndex >= 0 && m_activeIndex < m_sessions.size()) {
-                auto *s = m_sessions[m_activeIndex];
-                if (s->sessionLogger)
-                    s->sessionLogger->logEvent(QString("[SCRIPT] %1").arg(msg));
-            }
+        [loggerGuard](const QString &msg) {
+            if (!loggerGuard.isNull())
+                loggerGuard->logEvent(QString("[SCRIPT] %1").arg(msg));
         });
 
     *connPause = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::pauseRequested, this,
@@ -804,7 +807,8 @@ void MainWindow::runStartupScript(Session *s) {
         s->macroLabel->setStyleSheet(
             "color: #00ccff; background-color: black; padding: 0px 4px; font-weight: bold;");
     }
-    m_scriptStopAction->setEnabled(true);
+    if (isActive())
+        m_scriptStopAction->setEnabled(true);
 
     // Settings > Scripts defaults; the script's GLOBAL commands override them
     s->scriptExecutor->setDefaults(core::ScriptConfig::instance().executionDefaults());
