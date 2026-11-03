@@ -37,10 +37,8 @@ void MainWindow::onToggleSessionLogging() {
         QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
                       + "/logs";
         QDir().mkpath(dir);
-        QString filename = QString("session_%1_%2.log")
-            .arg(s->config.hostname().replace('.', '_'))
-            .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
-        QString path = dir + "/" + filename;
+        const QString path = core::SessionLogger::logFilePath(
+            dir, s->config.hostname(), QDateTime::currentDateTime());
 
         if (s->sessionLogger->start(path)) {
             m_sessionLoggingAction->setChecked(true);

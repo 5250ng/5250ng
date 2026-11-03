@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <QDateTime>
+
 #include <QFile>
 #include <QMutex>
 #include <QObject>
@@ -32,6 +34,11 @@ class SessionLogger : public QObject {
 
     explicit SessionLogger(QObject *parent = nullptr);
     ~SessionLogger();
+
+    // A new log file path in `dir` for a session with `host`, named after
+    // the host (reduced to characters valid in a file name everywhere) and
+    // `when`, and not naming an existing file
+    static QString logFilePath(const QString &dir, const QString &host, const QDateTime &when);
 
     bool start(const QString &filePath, Verbosity verbosity = ScreensAndKeys);
     void stop();

@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "session_logger.h"
+
+#include <QFileInfo>
 #include <QDateTime>
 
 namespace core {
@@ -23,6 +25,25 @@ SessionLogger::SessionLogger(QObject *parent) : QObject(parent) {}
 
 SessionLogger::~SessionLogger() {
     stop();
+}
+
+QString SessionLogger::logFilePath(const QString &dir, const QString &host,
+                                   const QDateTime &when) {
+    QString safeHost = host;
+    for (QChar &c : safeHost) {
+        if (!(c.isLetterOrNumber() && c.unicode() < 0x80) && c != '-')
+            c = '_';
+    }
+    if (safeHost.isEmpty())
+        safeHost = QStringLiteral("session");
+    // File systems cap a name at 255 characters; a DNS name may be 253
+    safeHost.truncate(64);
+    const QString base = QStringLiteral("%1/session_%2_%3")
+                             .arg(dir, safeHost, when.toString(QStringLiteral("yyyyMMdd_HHmmss_zzz")));
+    QString path = base + QStringLiteral(".log");
+    for (int n = 1; QFileInfo::exists(path); ++n)
+        path = QStringLiteral("%1_%2.log").arg(base).arg(n);
+    return path;
 }
 
 bool SessionLogger::start(const QString &filePath, Verbosity verbosity) {
