@@ -636,6 +636,13 @@ if(BUILD_TESTS)
     add_tn5250_test(test_script_escape tests/unit/test_script_escape.cpp)
     add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
 
+    # OAuth redirect listener (AgentSources live in the application target)
+    add_executable(test_oauth_callback
+        tests/unit/test_oauth_callback.cpp
+        src/agent/auth/oauth_flow.cpp)
+    target_link_libraries(test_oauth_callback PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_oauth_callback COMMAND test_oauth_callback)
+
     # Integration tests
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
     add_tn5250_test(test_tn5250_tls_connection tests/integration/test_tn5250_tls_connection.cpp)

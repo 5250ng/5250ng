@@ -18,6 +18,8 @@
 
 #include "oauth_config.h"
 #include <QNetworkAccessManager>
+#include <QUrl>
+#include <functional>
 #include <QObject>
 #include <QTcpServer>
 
@@ -44,6 +46,11 @@ class OAuthFlow : public QObject {
     /// Abort the flow if still in progress.
     void abort();
 
+    /// Opens the authorization URL. Defaults to QDesktopServices::openUrl;
+    /// tests replace it to drive the callback without a browser.
+    using UrlOpener = std::function<bool(const QUrl &)>;
+    void setUrlOpener(UrlOpener opener) { m_openUrl = std::move(opener); }
+
   signals:
     void flowCompleted(const QString &accessToken, const QString &refreshToken, int expiresIn);
     void flowFailed(const QString &error);
@@ -66,6 +73,8 @@ class OAuthFlow : public QObject {
     // callback server may already be closed by then, so it is kept here.
     QString m_redirectUri;
     bool m_completed = false;
+    bool m_callbackHandled = false; // the redirect with our state arrived
+    UrlOpener m_openUrl;
 };
 
 } // namespace agent
