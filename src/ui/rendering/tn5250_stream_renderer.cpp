@@ -158,6 +158,18 @@ void TN5250StreamRenderer::render(const QByteArray &data) {
             screen->setField(fieldStartRow, fieldStartCol, fieldLen, isProtected);
             screen->setFieldFFW(fieldStartRow, fieldStartCol, ffw1, ffw2);
 
+            // The field's non-display attribute covers all of its cells, not
+            // only the ones the host writes data into after the SF; otherwise
+            // characters typed into an empty password field are painted.
+            // setField() has just marked the cells protected or not, and a
+            // protected non-display cell reads as an attribute marker in the
+            // inheritance pass below, so a protected field's cells are cleared
+            // instead: they cannot be typed into, and a non-display flag left
+            // by an earlier field there would turn them into markers.
+            for (int a = nextAddr; a < nextAddr + fieldLen && a < totalCells; ++a)
+                screen->cell(a / screen->cols(), a % screen->cols()).attributes.nonDisplay =
+                    !isProtected && ae.nonDisplay;
+
             // Write an implicit field-end marker just past the last field
             // position.  This restores the pre-SF display attributes so the
             // inheritance pass does not bleed the field's attributes (e.g.

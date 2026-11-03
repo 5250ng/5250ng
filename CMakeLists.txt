@@ -574,6 +574,15 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_command_handler_soh COMMAND test_command_handler_soh)
 
+    # Stream renderer: non-display input fields (issue #360)
+    add_executable(test_stream_renderer_nondisplay
+        tests/unit/test_stream_renderer_nondisplay.cpp
+        src/ui/rendering/tn5250_stream_renderer.cpp
+    )
+    target_link_libraries(test_stream_renderer_nondisplay PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_stream_renderer_nondisplay COMMAND test_stream_renderer_nondisplay)
+
     # Theme import/export file paths (TerminalThemeManager lives in the
     # application target)
     add_executable(test_theme_import_paths
