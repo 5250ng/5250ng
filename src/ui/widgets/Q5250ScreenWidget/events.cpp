@@ -138,6 +138,18 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
     Qt::KeyboardModifiers mods = event->modifiers() &
         (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
     core::MappedAction mapped = core::KeyboardMapping::instance().lookup(event->key(), mods);
+    // A key the encoder turns into an AID (F-keys, Enter, Roll, ...) pressed
+    // with an unbound modifier combination follows the binding of its base
+    // key, as the encoder ignores those modifiers: Shift+Enter is Enter and
+    // Ctrl+F5 is whatever F5 is bound to. Once the base key is unbound in
+    // Remap Keyboard, the key does nothing (see below).
+    bool unboundAidKey = false;
+    if (mapped == core::MappedAction::None && isEncoderAidChord(event->key(), mods)) {
+        const core::KeyChord base = encoderBaseChord(event->key(), mods);
+        if (base.modifiers != mods)
+            mapped = core::KeyboardMapping::instance().lookup(base);
+        unboundAidKey = (mapped == core::MappedAction::None);
+    }
 
     // Keyboard lock enforcement: only Attn and SysReq are allowed through.
     if (m_keyboardState == KeyboardState::Locked) {
@@ -162,6 +174,18 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
             .arg(event->key(), 0, 16).arg(static_cast<int>(mods), 0, 16)
             .arg(core::KeyboardMapping::actionName(mapped)));
         dispatchMappedAction(mapped);
+        event->accept();
+        return;
+    }
+
+    // Unmapped chord typed by the user: only character input remains. The
+    // encoder still turns F-keys, Enter, Page Up/Down, Ctrl+Esc and SysReq
+    // into AIDs; for a chord the user unbound in Remap Keyboard that would
+    // bring the removed binding back. Synthetic events (scripts and MCP
+    // replaying PRESS F12, ...) keep the encoder's meaning.
+    if (event->spontaneous() && unboundAidKey) {
+        LOG_DEBUG(QString("[Q5250Widget] keyPressEvent: unbound chord key=0x%1 mods=0x%2 ignored")
+            .arg(event->key(), 0, 16).arg(static_cast<int>(mods), 0, 16));
         event->accept();
         return;
     }
@@ -418,6 +442,33 @@ void Q5250ScreenWidget::focusOutEvent(QFocusEvent *event) {
 }
 
 // Integrated input handling (moved from core::InputHandler)
+core::KeyChord Q5250ScreenWidget::encoderBaseChord(int key, Qt::KeyboardModifiers mods) {
+    // The encoder reads Shift+F1..F12 as PF13..PF24 and Ctrl+Esc as Attn;
+    // every other modifier is ignored.
+    if (key >= Qt::Key_F1 && key <= Qt::Key_F12 && (mods & Qt::ShiftModifier))
+        return {key, Qt::ShiftModifier};
+    if (key == Qt::Key_Escape)
+        return {key, Qt::ControlModifier};
+    return {key, Qt::NoModifier};
+}
+
+bool Q5250ScreenWidget::isEncoderAidChord(int key, Qt::KeyboardModifiers mods) const {
+    if (m_encoder && m_encoder->isPFKey(key))
+        return true;
+    switch (key) {
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+    case Qt::Key_PageUp:
+    case Qt::Key_PageDown:
+    case Qt::Key_SysReq:
+        return true;
+    case Qt::Key_Escape:
+        return (mods & Qt::ControlModifier) != 0;
+    default:
+        return false;
+    }
+}
+
 void Q5250ScreenWidget::processKeyEvent(QKeyEvent *event) {
     if (!m_screenBuffer || !m_encoder) {
         return;

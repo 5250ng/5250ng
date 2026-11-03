@@ -265,6 +265,10 @@ class Q5250ScreenWidget : public QWidget {
     ScreenBuffer::Field findPreviousField(int startRow, int startCol) const;
     bool isValidEditPosition(int row, int col) const;
     QByteArray buildAIDResponse(uint8_t aidByte);
+    // True for keys the encoder turns into an AID (F-keys, Enter, Roll, ...)
+    bool isEncoderAidChord(int key, Qt::KeyboardModifiers mods) const;
+    // The chord whose binding an unbound modifier variant of such a key follows
+    static core::KeyChord encoderBaseChord(int key, Qt::KeyboardModifiers mods);
     void sendAutoEnter();
     void handleBackspace();
     void handleDelete();
