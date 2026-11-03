@@ -62,6 +62,7 @@ class QVirtualKeyboardWidget : public QWidget {
                                 const QString &label, Qt::KeyboardModifier mod);
 
     QChar applyModifiers(QChar unshifted, QChar shifted) const;
+    void releaseModifiers();
 
     // Track action buttons so we can refresh their chord sub-label.
     struct ActionButton {

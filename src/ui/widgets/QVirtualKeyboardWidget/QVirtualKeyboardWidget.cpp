@@ -46,6 +46,8 @@ QPushButton *QVirtualKeyboardWidget::addActionKey(QGridLayout *grid, int row, in
     btn->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(btn, &QPushButton::clicked, this, [this, action]() {
         emit actionTriggered(action);
+        // A latched modifier applies to one key; it must not outlive this one
+        releaseModifiers();
     });
     connect(btn, &QPushButton::customContextMenuRequested, this, [this, btn, action](const QPoint &) {
         QMenu menu(btn);
@@ -66,6 +68,26 @@ QPushButton *QVirtualKeyboardWidget::addCharKey(QGridLayout *grid, int row, int 
     btn->setFocusPolicy(Qt::NoFocus);
     btn->setMinimumSize(32, 28);
     connect(btn, &QPushButton::clicked, this, [this, btn, unshifted, shifted]() {
+        if (m_ctrlHeld || m_altHeld) {
+            // A latched Ctrl or Alt makes this key a chord, resolved like the
+            // physical keyboard's (Alt+- is Field-, ...); an unbound chord
+            // types nothing
+            Qt::KeyboardModifiers mods;
+            if (m_ctrlHeld) mods |= Qt::ControlModifier;
+            if (m_altHeld) mods |= Qt::AltModifier;
+            if (m_shiftHeld) mods |= Qt::ShiftModifier;
+            // Qt::Key codes of printable Latin-1 keys are their upper-case
+            // code points (Key_A is 'A', Key_Minus is '-')
+            const QChar ch = (m_shiftHeld && shifted != QChar(0)) ? shifted : unshifted;
+            const int key = ch.toUpper().unicode();
+            const core::MappedAction action =
+                core::KeyboardMapping::instance().lookup(key, mods);
+            if (action != core::MappedAction::None)
+                emit actionTriggered(action);
+            releaseModifiers();
+            btn->clearFocus();
+            return;
+        }
         QChar ch = applyModifiers(unshifted, shifted);
         emit characterTriggered(ch);
         if (m_shiftHeld) {
@@ -93,6 +115,13 @@ QPushButton *QVirtualKeyboardWidget::addModifierKey(QGridLayout *grid, int row, 
     });
     grid->addWidget(btn, row, col, rowSpan, colSpan);
     return btn;
+}
+
+void QVirtualKeyboardWidget::releaseModifiers() {
+    for (QPushButton *btn : {m_shiftBtn, m_ctrlBtn, m_altBtn}) {
+        if (btn) btn->setChecked(false); // toggled() clears the held flag
+    }
+    m_shiftHeld = m_ctrlHeld = m_altHeld = false;
 }
 
 QChar QVirtualKeyboardWidget::applyModifiers(QChar unshifted, QChar shifted) const {

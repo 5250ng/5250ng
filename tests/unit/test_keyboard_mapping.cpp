@@ -44,6 +44,8 @@ class TestKeyboardMapping : public QObject {
     void testChordsForReturnsAllBoundChords();
     void testMultipleChordsCanBindSameAction();
     void testMultipleChordsPersistViaQSettings();
+    void testExplicitEmptyMappingPersists();
+    void testEmptyMappingSavedBeforeFixPersists();
 
   private:
     void resetMappingToDefaults() {
@@ -223,6 +225,41 @@ void TestKeyboardMapping::testMultipleChordsPersistViaQSettings() {
     QCOMPARE(m.lookup(a), MappedAction::Reset);
     QCOMPARE(m.lookup(b), MappedAction::Reset);
     QCOMPARE(m.chordsFor(MappedAction::Reset).size(), 2);
+}
+
+// Issue #299: a mapping the user emptied must not come back as the defaults
+void TestKeyboardMapping::testExplicitEmptyMappingPersists() {
+    auto &m = KeyboardMapping::instance();
+    m.replaceAllBindings({});
+    m.save();
+    m.resetToDefaults();
+    QVERIFY(!m.allBindings().isEmpty());
+    m.load();
+    QVERIFY(m.allBindings().isEmpty());
+}
+
+// A mapping emptied with an earlier version was saved as just the array size
+void TestKeyboardMapping::testEmptyMappingSavedBeforeFixPersists() {
+    {
+        QSettings settings;
+        settings.beginGroup("KeyboardMapping");
+        settings.remove("");
+        settings.setValue("entries/size", 0);
+        settings.endGroup();
+    }
+    auto &m = KeyboardMapping::instance();
+    m.resetToDefaults();
+    m.load();
+    QVERIFY(m.allBindings().isEmpty());
+
+    // Nothing saved at all still keeps the defaults
+    {
+        QSettings settings;
+        settings.remove("KeyboardMapping");
+    }
+    m.resetToDefaults();
+    m.load();
+    QVERIFY(!m.allBindings().isEmpty());
 }
 
 QTEST_MAIN(TestKeyboardMapping)

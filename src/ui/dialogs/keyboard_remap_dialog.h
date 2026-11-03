@@ -43,6 +43,8 @@ class KeyChordCaptureEdit : public QLineEdit {
 
   protected:
     void keyPressEvent(QKeyEvent *event) override;
+    // Tab and Shift+Tab are chords to capture, not focus moves
+    bool focusNextPrevChild(bool) override { return false; }
 
   private:
     core::KeyChord m_chord;
