@@ -38,7 +38,7 @@ class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     static void saveDiagnosticLog(QWidget *parent);
 
   private slots:
-    void onLogMessage(logger::LogLevel level, const QString &message);
+    void onLogLine(const QString &line);
     void onFindToggle();
     void onFindReturnPressed();
     void onFindNext();

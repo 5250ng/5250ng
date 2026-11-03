@@ -673,6 +673,14 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_script_input_dialog COMMAND test_script_input_dialog)
 
+    # Application log viewer (application target, uses QtUiStyle)
+    add_executable(test_log_viewer
+        tests/unit/test_log_viewer.cpp
+        src/ui/dialogs/log_viewer.cpp
+    )
+    target_link_libraries(test_log_viewer PRIVATE tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_log_viewer COMMAND test_log_viewer)
+
     # Script saves must not commit a truncated file
     add_executable(test_script_save_flush
         tests/unit/test_script_save_flush.cpp
