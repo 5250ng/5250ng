@@ -747,9 +747,13 @@ QJsonObject McpToolHandler::handleGetLogs(const QJsonObject &args) {
 
 QJsonObject McpToolHandler::handleWriteFile(const QJsonObject &args) {
     QString path = args.value("path").toString();
-    QString content = args.value("content").toString();
     if (path.isEmpty())
         return makeResult("No file path provided.", true);
+    // Check before opening: opening with Truncate would empty an existing
+    // file even though nothing is written to it.
+    if (!args.value("content").isString())
+        return makeResult("Missing required parameter: content", true);
+    const QString content = args.value("content").toString();
 
     QFileInfo fi(path);
     QDir().mkpath(fi.absolutePath());

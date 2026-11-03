@@ -572,6 +572,19 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_login COMMAND test_mcp_login)
 
+    # MCP write_file argument validation (McpToolHandler lives in the
+    # application target).
+    add_executable(test_mcp_write_file
+        tests/unit/test_mcp_write_file.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_write_file PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_write_file COMMAND test_mcp_write_file)
+
     # Script INPUT dialog (application target, uses QtUiStyle)
     add_executable(test_script_input_dialog
         tests/unit/test_script_input_dialog.cpp
