@@ -174,10 +174,15 @@ void Worker::stop() {
     if (!m_client) {
         return;
     }
+    // The client's own stateChanged/disconnected signals are cut off before
+    // it disconnects, so report the user-requested disconnect here; otherwise
+    // the tab keeps showing a connected session that drops all input.
     disconnect(m_client, nullptr, this, nullptr);
     m_client->disconnectFromHost();
     m_client->deleteLater();
     m_client = nullptr;
+    emit stateChanged(tn5250::client::TN5250Client::ConnectionState::Disconnected);
+    emit disconnected();
 }
 
 void Worker::sendInput(const QByteArray &data) {
