@@ -583,6 +583,17 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_stream_renderer_nondisplay COMMAND test_stream_renderer_nondisplay)
 
+    # STRPCCMD on unattended (read-only) sessions (issue #251)
+    add_executable(test_strpccmd_unattended
+        tests/unit/test_strpccmd_unattended.cpp
+        src/ui/rendering/tn5250_command_handler.cpp
+        src/ui/rendering/tn5250_stream_renderer.cpp
+        src/ui/dialogs/pc_command_confirm_dialog.cpp
+    )
+    target_link_libraries(test_strpccmd_unattended PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_strpccmd_unattended COMMAND test_strpccmd_unattended)
+
     # Theme import/export file paths (TerminalThemeManager lives in the
     # application target)
     add_executable(test_theme_import_paths
