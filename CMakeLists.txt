@@ -605,6 +605,19 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_script_editor_window COMMAND test_script_editor_window)
 
+    # Connect dialog session variables (application target, uses QtUiStyle)
+    add_executable(test_connect_dialog_session_variables
+        tests/unit/test_connect_dialog_session_variables.cpp
+        src/ui/dialogs/connect_dialog.cpp
+        src/ui/dialogs/script_editor_window.cpp
+        src/ui/dialogs/script_editor_dialog.cpp
+        src/ui/themes/terminal_theme_manager.cpp
+    )
+    target_link_libraries(test_connect_dialog_session_variables PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_connect_dialog_session_variables
+             COMMAND test_connect_dialog_session_variables)
+
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),
     # so compile it into the test binary directly.

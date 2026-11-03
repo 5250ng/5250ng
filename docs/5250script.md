@@ -337,7 +337,7 @@ ELSE
 ENDIF
 ```
 
-This is useful for checking whether session variables (like `$SESSION_USERNAME` and `$SESSION_PASSWORD`) were provided before using them.
+This is useful for checking whether session variables (like `$SESSION_USERNAME` and `$SESSION_PASSWORD`) were provided before using them. A session variable whose field was left blank in the session profile is not set; used anyway, it reads as empty text (other undefined variables read as `0`).
 
 #### WHILE / ENDWHILE
 

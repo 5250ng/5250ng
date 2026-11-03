@@ -659,9 +659,13 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setStartupScriptTrigger(static_cast<session::StartupScriptTrigger>(
         m_scriptTriggerCombo->currentData().toInt()));
     config.setStartupScriptOnReconnect(m_scriptOnReconnectCheck->isChecked());
+    // A blank field leaves the variable undefined, so the script's
+    // "IF NOT ISSET $SESSION_..." fallback (for example an INPUT prompt) runs.
     QHash<QString, QString> vars;
-    for (auto it = m_scriptVarEdits.constBegin(); it != m_scriptVarEdits.constEnd(); ++it)
-        vars[it.key()] = it.value()->text();
+    for (auto it = m_scriptVarEdits.constBegin(); it != m_scriptVarEdits.constEnd(); ++it) {
+        if (!it.value()->text().isEmpty())
+            vars[it.key()] = it.value()->text();
+    }
     config.setSessionVariables(vars);
     return config;
 }
