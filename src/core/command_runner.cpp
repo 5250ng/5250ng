@@ -45,19 +45,23 @@ static QStringList splitCommand(const QString &command) {
     QStringList tokens;
     QString current;
     bool inQuotes = false;
+    bool inToken = false; // a quoted "" is an argument even though it is empty
     for (QChar c : command) {
         if (c == '"') {
             inQuotes = !inQuotes;
+            inToken = true;
             continue;
         }
         if (!inQuotes && c.isSpace()) {
-            if (!current.isEmpty()) {
+            if (inToken) {
                 tokens.append(current);
                 current.clear();
+                inToken = false;
             }
             continue;
         }
         current.append(c);
+        inToken = true;
     }
     if (inQuotes) {
         logger::Logger::instance()->warning(
@@ -65,7 +69,7 @@ static QStringList splitCommand(const QString &command) {
                 .arg(command));
         return {};
     }
-    if (!current.isEmpty()) tokens.append(current);
+    if (inToken) tokens.append(current);
     return tokens;
 }
 
