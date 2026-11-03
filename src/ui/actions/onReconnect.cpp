@@ -23,6 +23,9 @@ void MainWindow::onReconnect() {
     // With the configured device name, so the reopened tab still knows it
     // (the de-duplication picks a free name again)
     session::SessionConfig config = savedConfig(s);
+    // The reopened tab holds the same copy, so it keeps the same snapshot:
+    // an edit to the profile made meanwhile is still noticed on Save
+    const QByteArray snapshot = s->profileSnapshot;
 
     // Close the old tab and open a new one with the same config. Closing the
     // tab stops the worker and its thread; doing that here first would let
@@ -31,5 +34,6 @@ void MainWindow::onReconnect() {
     int oldIndex = m_activeIndex;
     onCloseTabRequested(oldIndex);
     m_skipStartupScriptOnce = !config.startupScriptOnReconnect();
+    m_inheritProfileSnapshotOnce = snapshot;
     connectToServer(config);
 }

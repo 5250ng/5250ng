@@ -74,6 +74,13 @@ void MainWindow::onQuickThemeChosen(QAction *action) {
 
     applyThemeToSession(m_sessions[m_activeIndex], themeId);
     m_currentSession.setTerminalThemeId(themeId);
-    persistSessionTheme(m_sessions[m_activeIndex]->config);
+    Session *s = m_sessions[m_activeIndex];
+    // The theme write is this tab's own, so Save need not warn about it, but
+    // only if the profile had not been edited elsewhere before: that edit
+    // is still not in this tab's copy
+    const bool snapshotCurrent = savedProfileJson(s) == s->profileSnapshot;
+    persistSessionTheme(s->config);
+    if (snapshotCurrent)
+        s->profileSnapshot = savedProfileJson(s);
 }
 
