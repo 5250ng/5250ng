@@ -42,4 +42,14 @@ inline QString escapeScriptString(const QString &in) {
     return out;
 }
 
+// Escape a string for a double-quoted literal whose value the executor
+// interpolates (TYPE, CHAR, SET, function arguments, LOG/ABORT messages and
+// both sides of IF/WHILE comparisons): besides
+// escapeScriptString(), "$" is doubled so "$NAME" in the input is typed
+// literally instead of being replaced by a variable. Literals matched
+// verbatim (EXPECT TEXT) must use escapeScriptString() alone.
+inline QString escapeInterpolatedScriptString(const QString &in) {
+    return escapeScriptString(in).replace(QLatin1Char('$'), QStringLiteral("$$"));
+}
+
 } // namespace mcp

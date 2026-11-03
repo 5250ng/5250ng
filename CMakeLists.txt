@@ -590,6 +590,18 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_write_file COMMAND test_mcp_write_file)
 
+    # "$" escaping in MCP tool scripts and recorded macros
+    add_executable(test_script_dollar_escape
+        tests/unit/test_script_dollar_escape.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_script_dollar_escape PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_script_dollar_escape COMMAND test_script_dollar_escape)
+
     # Script INPUT dialog (application target, uses QtUiStyle)
     add_executable(test_script_input_dialog
         tests/unit/test_script_input_dialog.cpp
