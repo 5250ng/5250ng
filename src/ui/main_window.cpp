@@ -887,6 +887,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::hotspotActivated, this,
         [session](const core::Hotspot &hotspot) {
             if (!session->displayWidget) return;
+            // A hotspot sends an AID (or types an option and Enter): not in a
+            // read-only session or while the keyboard is locked
+            if (!session->displayWidget->acceptsInput(core::MappedAction::Enter)) return;
             if (hotspot.type == core::Hotspot::FunctionKey && hotspot.aidByte != 0) {
                 QByteArray aid;
                 aid.append(static_cast<char>(hotspot.aidByte));

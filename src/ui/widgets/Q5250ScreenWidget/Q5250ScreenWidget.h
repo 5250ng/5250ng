@@ -188,6 +188,12 @@ class Q5250ScreenWidget : public QWidget {
     // Execute a logical 5250 action resolved either from a host key chord
     // (via KeyboardMapping) or from a click on the on-screen virtual keyboard.
     void dispatchMappedAction(core::MappedAction action);
+    // Whether user input other than the physical keyboard (virtual keyboard,
+    // hotspots) may run `action` now, by the rules keyPressEvent() applies:
+    // nothing in read-only mode, only Attn/SysReq while the host has the
+    // keyboard locked, only Attn/Help/Reset after an operator error.
+    // MappedAction::None stands for character input.
+    bool acceptsInput(core::MappedAction action) const;
 
     // Inject a single character as if typed into the active field (used by
     // the virtual keyboard widget). Respects read-only/keyboard-lock state.
