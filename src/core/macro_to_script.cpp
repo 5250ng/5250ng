@@ -15,10 +15,42 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "macro_to_script.h"
+#include "core/keyboard_mapping.h"
 #include "core/macro_config.h"
 #include <5250script/script_compiler.h>
 
 namespace core {
+
+namespace {
+
+// The script statement that replays a local (non-AID) keyboard action, or an
+// empty string for AID actions and None.
+QString scriptLineForAction(MappedAction action) {
+    switch (action) {
+    case MappedAction::FieldExit:  return QStringLiteral("PRESS FIELDEXIT");
+    case MappedAction::FieldPlus:  return QStringLiteral("PRESS FIELDPLUS");
+    case MappedAction::FieldMinus: return QStringLiteral("PRESS FIELDMINUS");
+    case MappedAction::Tab:        return QStringLiteral("MOVE CURSOR AT NEXT INPUTFIELD");
+    case MappedAction::BackTab:    return QStringLiteral("MOVE CURSOR AT PREVIOUS INPUTFIELD");
+    case MappedAction::Home:       return QStringLiteral("PRESS HOME");
+    case MappedAction::End:        return QStringLiteral("PRESS END");
+    case MappedAction::ArrowUp:    return QStringLiteral("MOVE CURSOR UP 1");
+    case MappedAction::ArrowDown:  return QStringLiteral("MOVE CURSOR DOWN 1");
+    case MappedAction::ArrowLeft:  return QStringLiteral("MOVE CURSOR LEFT 1");
+    case MappedAction::ArrowRight: return QStringLiteral("MOVE CURSOR RIGHT 1");
+    case MappedAction::Backspace:  return QStringLiteral("PRESS BACKSPACE");
+    case MappedAction::Delete:     return QStringLiteral("PRESS DELETE");
+    case MappedAction::Insert:     return QStringLiteral("PRESS INSERT");
+    case MappedAction::EraseEOF:   return QStringLiteral("PRESS ERASEEOF");
+    case MappedAction::EraseField: return QStringLiteral("PRESS ERASEFIELD");
+    case MappedAction::EraseInput: return QStringLiteral("PRESS ERASEINPUT");
+    case MappedAction::Dup:        return QStringLiteral("PRESS DUP");
+    case MappedAction::Reset:      return QStringLiteral("PRESS ESC");
+    default:                       return QString();
+    }
+}
+
+} // namespace
 
 QString macroToScript(const Macro &macro) {
     QStringList lines;
@@ -51,44 +83,24 @@ QString macroToScript(const Macro &macro) {
     for (const auto &step : macro.steps) {
         switch (step.type) {
         case MacroStep::KeyPress: {
-            // Check for special keys first — these may have non-empty text
-            // (e.g. Tab produces "\t", Backspace produces "\b") but must be
-            // emitted as commands, not coalesced into TYPE strings.
-            bool handled = true;
-            switch (step.key) {
-            case Qt::Key_Tab:
+            // Resolve the chord as the terminal did when it was recorded:
+            // Ctrl+End is Field Exit, Shift+Insert is Dup, ... - not the bare
+            // key. Chords that sent an AID (Enter, PF keys, Roll, Attn,
+            // SysReq, ...) are written from the AID step that follows.
+            const Qt::KeyboardModifiers mods = step.mods
+                & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+            const MappedAction action = KeyboardMapping::instance().lookup(step.key, mods);
+            const QString line = scriptLineForAction(action);
+            if (!line.isEmpty()) {
                 flushString();
-                if (step.mods & Qt::ShiftModifier)
-                    lines << "MOVE CURSOR AT PREVIOUS INPUTFIELD";
-                else
-                    lines << "MOVE CURSOR AT NEXT INPUTFIELD";
-                break;
-            case Qt::Key_Backtab:   flushString(); lines << "MOVE CURSOR AT PREVIOUS INPUTFIELD"; break;
-            case Qt::Key_Backspace: flushString(); lines << "PRESS BACKSPACE"; break;
-            case Qt::Key_Delete:    flushString(); lines << "PRESS DELETE"; break;
-            case Qt::Key_Insert:    flushString(); lines << "PRESS INSERT"; break;
-            case Qt::Key_Home:      flushString(); lines << "PRESS HOME"; break;
-            case Qt::Key_End:       flushString(); lines << "PRESS END"; break;
-            case Qt::Key_Escape:    flushString(); lines << "PRESS ESC"; break;
-            case Qt::Key_Up:        flushString(); lines << "MOVE CURSOR UP 1"; break;
-            case Qt::Key_Down:      flushString(); lines << "MOVE CURSOR DOWN 1"; break;
-            case Qt::Key_Left:      flushString(); lines << "MOVE CURSOR LEFT 1"; break;
-            case Qt::Key_Right:     flushString(); lines << "MOVE CURSOR RIGHT 1"; break;
-            // Return/Enter keypress is recorded separately as an AID key — skip it here
-            // to avoid emitting TYPE "\n" before PRESS ENTER
-            case Qt::Key_Return:
-            case Qt::Key_Enter:     flushString(); break;
-            default:
-                handled = false;
-                break;
-            }
-            if (!handled) {
-                if (!step.text.isEmpty()) {
-                    pendingString += step.text;
-                } else {
-                    flushString();
-                    lines << QString("# Unknown key: %1").arg(step.key);
-                }
+                lines << line;
+            } else if (action == MappedAction::None && !step.text.isEmpty()
+                       && step.text.at(0).isPrint()) {
+                pendingString += step.text;
+            } else {
+                // An AID chord (its AID step follows) or a key that did
+                // nothing on the terminal
+                flushString();
             }
             break;
         }
