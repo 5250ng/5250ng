@@ -41,6 +41,8 @@ QString macroToScript(const Macro &macro) {
             QString escaped = pendingString;
             escaped.replace('\\', "\\\\");
             escaped.replace('"', "\\\"");
+            // TYPE interpolates $NAME; $$ types a literal $
+            escaped.replace('$', "$$");
             lines << QString("TYPE \"%1\"").arg(escaped);
             pendingString.clear();
         }

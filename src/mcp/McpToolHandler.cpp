@@ -909,7 +909,7 @@ QJsonObject McpToolHandler::handleSendKeys(const QJsonObject &args) {
         if (scriptLines.isEmpty() && match.captured(1).isNull())
             firstKey = match.captured(0).toUpper();
         if (!match.captured(1).isNull()) {
-            QString text = escapeScriptString(match.captured(1));
+            QString text = escapeInterpolatedScriptString(match.captured(1));
             scriptLines << QString("TYPE \"%1\"").arg(text);
         } else {
             QString key = match.captured(0).toUpper();
@@ -1030,7 +1030,7 @@ QJsonObject McpToolHandler::handleTypeText(const QJsonObject &args) {
         return makeResult(lockErr, true);
 
     // Escape for the 5250script TYPE command (quotes, backslashes, newlines)
-    QString safeText = escapeScriptString(text);
+    QString safeText = escapeInterpolatedScriptString(text);
 
     QJsonObject scriptArgs;
     scriptArgs["script"] = QString("TYPE \"%1\"").arg(safeText);
@@ -1104,16 +1104,18 @@ QJsonObject McpToolHandler::handleWaitForText(const QJsonObject &args) {
 
     int timeout = args.value("timeout").toInt(30000);
 
-    // Escape for 5250script (quotes, backslashes, newlines)
+    // Escape for 5250script (quotes, backslashes, newlines). EXPECT TEXT
+    // matches its literal verbatim, but the ABORT message is interpolated.
     QString safeText = escapeScriptString(text);
+    QString safeMessage = escapeInterpolatedScriptString(text);
 
     QString script = QString(
         "GLOBAL EXPECT_TIMEOUT %1\n"
         "EXPECT TEXT \"%2\"\n"
         "IF $EXPECT_RESULT == \"TIMEOUT\" THEN\n"
-        "    ABORT \"Timed out waiting for text: %2\"\n"
+        "    ABORT \"Timed out waiting for text: %3\"\n"
         "ENDIF\n"
-    ).arg(timeout).arg(safeText);
+    ).arg(timeout).arg(safeText, safeMessage);
 
     QJsonObject scriptArgs;
     scriptArgs["script"] = script;
@@ -1181,8 +1183,8 @@ QJsonObject McpToolHandler::handleLogin(const QJsonObject &args) {
     // (quotes, backslashes, and newlines — a newline would otherwise inject
     // new script statements, a trailing backslash would unterminate the
     // string literal).
-    QString safeUser = escapeScriptString(username);
-    QString safePass = escapeScriptString(password);
+    QString safeUser = escapeInterpolatedScriptString(username);
+    QString safePass = escapeInterpolatedScriptString(password);
 
     // Login script with auto-signoff and display program messages handling.
     // Sets $SESSION_USERNAME and $SESSION_PASSWORD then calls the login flow.
