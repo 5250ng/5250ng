@@ -156,11 +156,16 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append("IBMSUBSVAR");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
 
-    // KBDTYPE = USB (US English keyboard)
+    // KBDTYPE and CHARSET follow the session's code page, so the host
+    // creates the device with a matching keyboard and a valid CCSID pair
+    const QByteArray keyboardType = core::CodePage::keyboardType(m_codePage).toLatin1();
+    const QByteArray characterSet = QByteArray::number(core::CodePage::characterSet(m_codePage));
+
+    // KBDTYPE - national keyboard type
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("KBDTYPE");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
-    negotiation.append("USB");
+    negotiation.append(keyboardType);
 
     // CODEPAGE - use the session's configured code page
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
@@ -168,11 +173,11 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
     negotiation.append(QByteArray::number(static_cast<int>(m_codePage)));
 
-    // CHARSET = 697 (EBCDIC character set)
+    // CHARSET - graphic character set paired with the code page
     negotiation.append(static_cast<uint8_t>(0x03)); // USERVAR
     negotiation.append("CHARSET");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
-    negotiation.append("697");
+    negotiation.append(characterSet);
 
     negotiation.append(static_cast<uint8_t>(TelnetCommand::IAC));
     negotiation.append(static_cast<uint8_t>(TelnetCommand::SE));
@@ -181,10 +186,12 @@ void TN5250Client::sendNewEnviron() {
         m_socket->write(negotiation);
         logger::Logger::instance()->debug(
             QString("[TN5250->Client]: Sent NEW_ENVIRON: DEVNAME=%1 IBMRSEED=%2"
-                    " IBMSUBSVAR=(empty) KBDTYPE=USB CODEPAGE=%3 CHARSET=697")
+                    " IBMSUBSVAR=(empty) KBDTYPE=%3 CODEPAGE=%4 CHARSET=%5")
                 .arg(m_deviceName.isEmpty() ? "(auto)" : m_deviceName)
                 .arg(encrypted ? "encrypted" : "(empty)")
-                .arg(static_cast<int>(m_codePage)));
+                .arg(QString::fromLatin1(keyboardType))
+                .arg(static_cast<int>(m_codePage))
+                .arg(QString::fromLatin1(characterSet)));
     }
 }
 

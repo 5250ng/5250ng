@@ -67,6 +67,37 @@ QString CodePage::codepageName(ID id) {
     return "Unknown";
 }
 
+// Keyboard types and character sets as in IBM's national language support
+// tables (the same pairs tn5250j uses in KbdTypesCodePages).
+QString CodePage::keyboardType(ID id) {
+    switch (id) {
+    case ID::CP037: return QStringLiteral("USB");
+    case ID::CP273: return QStringLiteral("AGB");
+    case ID::CP277: return QStringLiteral("DMB");
+    case ID::CP278: return QStringLiteral("SWB");
+    case ID::CP280: return QStringLiteral("ITB");
+    case ID::CP284: return QStringLiteral("SPB");
+    case ID::CP285: return QStringLiteral("UKB");
+    case ID::CP297: return QStringLiteral("FAB");
+    case ID::CP500: return QStringLiteral("INB");
+    case ID::CP870: return QStringLiteral("ROB");
+    case ID::CP420: return QStringLiteral("CLB");
+    case ID::CP424: return QStringLiteral("NCB");
+    case ID::CP838: return QStringLiteral("THB");
+    }
+    return QStringLiteral("USB");
+}
+
+int CodePage::characterSet(ID id) {
+    switch (id) {
+    case ID::CP870: return 959;  // Latin-2
+    case ID::CP420: return 235;  // Arabic
+    case ID::CP424: return 941;  // Hebrew
+    case ID::CP838: return 1176; // Thai
+    default:        return 697;  // Latin-1
+    }
+}
+
 QList<CodePage::ID> CodePage::supportedCodePages() {
     return {
         ID::CP037, ID::CP273, ID::CP277, ID::CP278,
