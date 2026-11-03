@@ -459,7 +459,7 @@ QString McpToolHandler::readScreenText(ui::widgets::Q5250ScreenWidget *widget) {
     for (int r = 0; r < buf->rows(); ++r) {
         QString line;
         for (int c = 0; c < buf->cols(); ++c) {
-            uint8_t ch = buf->character(r, c);
+            uint8_t ch = buf->displayedCharacter(r, c);
             line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
         }
         while (line.endsWith(' '))
@@ -514,7 +514,7 @@ QJsonObject McpToolHandler::handleGetFieldAt(const QJsonObject &args) {
         return makeResult(QString("No field at position (%1, %2).").arg(row).arg(col), true);
 
     auto field = buf->getField(row, col);
-    QByteArray data = buf->getFieldData(field);
+    QByteArray data = buf->getDisplayedFieldData(field);
     QString fieldText;
     for (uint8_t byte : data)
         fieldText += sanitizeChar(core::EBCDIC::ebcdicToChar(byte));
@@ -556,7 +556,7 @@ QJsonObject McpToolHandler::handleFindText(const QJsonObject &args) {
     for (int r = 0; r < buf->rows(); ++r) {
         QString line;
         for (int c = 0; c < buf->cols(); ++c) {
-            uint8_t ch = buf->character(r, c);
+            uint8_t ch = buf->displayedCharacter(r, c);
             line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
         }
         int col = 0;
@@ -587,7 +587,7 @@ QJsonObject McpToolHandler::handleReadLine(const QJsonObject &args) {
 
     QString line;
     for (int c = 0; c < buf->cols(); ++c) {
-        uint8_t ch = buf->character(row, c);
+        uint8_t ch = buf->displayedCharacter(row, c);
         line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
     }
     while (line.endsWith(' '))
@@ -619,7 +619,7 @@ QJsonObject McpToolHandler::handleReadRegion(const QJsonObject &args) {
     for (int r = row; r < row + numRows; ++r) {
         QString line;
         for (int c = col; c < col + numCols; ++c) {
-            uint8_t ch = buf->character(r, c);
+            uint8_t ch = buf->displayedCharacter(r, c);
             line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
         }
         while (line.endsWith(' '))
