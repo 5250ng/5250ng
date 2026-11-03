@@ -23,6 +23,7 @@
 #include "agent/providers/anthropic_provider.h"
 #include "agent/providers/openai_provider.h"
 #include "core/ebcdic.h"
+#include "core/system_name.h"
 #include "logger/logger.h"
 #include "session/config.h"
 #include "session/manager.h"
@@ -53,7 +54,9 @@
 #include <QSet>
 #include <QUuid>
 #include <QTabBar>
+#include <QPointer>
 #include <QTimer>
+#include <memory>
 #include <QWidgetAction>
 #include "ui/themes/terminal_theme_manager.h"
 #include "ui/themes/manager.h"
@@ -830,6 +833,35 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
             if (m_sessions.indexOf(session) != m_activeIndex) return;
             updateCursorCoordinatesFont();
         });
+
+    // Show the system named on the sign-on screen in the footer. The screen
+    // changes once per order while a record is drawn, so look once it has
+    // settled; the pointers guard against the tab closing meanwhile.
+    {
+        QPointer<ui::widgets::Q5250ScreenWidget> display = session->displayWidget;
+        QPointer<QLabel> label = session->systemNameLabel;
+        auto pending = std::make_shared<bool>(false);
+        connect(session->displayWidget->screenBuffer(), &ui::widgets::ScreenBuffer::screenChanged,
+                session->displayWidget, [display, label, pending]() {
+            if (*pending) return;
+            *pending = true;
+            QTimer::singleShot(100, display.data(), [display, label, pending]() {
+                *pending = false;
+                if (!display || !label || !display->screenBuffer()) return;
+                auto *buf = display->screenBuffer();
+                QStringList rows;
+                for (int r = 0; r < qMin(buf->rows(), 8); ++r) {
+                    QByteArray row;
+                    for (int c = 0; c < buf->cols(); ++c)
+                        row.append(static_cast<char>(buf->character(r, c)));
+                    rows << core::EBCDIC::ebcdicToString(row);
+                }
+                const QString systemName = core::signOnSystemName(rows);
+                if (!systemName.isEmpty())
+                    label->setText(systemName);
+            });
+        });
+    }
 
     // Wire terminal state to status bar indicators
     connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::terminalStateChanged, this,
