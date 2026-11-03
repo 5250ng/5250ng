@@ -58,12 +58,17 @@ void HotspotDetector::detectFunctionKeys(const QString &line, int row, QVector<H
 }
 
 void HotspotDetector::detectMenuItems(const QString &line, int row, QVector<Hotspot> &out) const {
-    // Match patterns like "1. User tasks", "12. Work with jobs"
-    // Only match at start of significant content (after leading spaces)
-    static const QRegularExpression rx(R"(^\s{2,}(\d{1,2})\.\s+(\S.+?)\s*$)");
+    // Match patterns like "1. User tasks", "12. Work with jobs": a line that
+    // starts (after two or more blanks) with an option. A run of two or more
+    // blanks ends an option's label; a further option may follow right after
+    // it (\G), so two-column menus ("1. Foo     11. Bar") give one hotspot
+    // per option, while a trailing command-name column, or "1." in the middle
+    // of ordinary text, is not an option.
+    static const QRegularExpression rx(R"((?:^|\G)\s{2,}(\d{1,2})\.\s+(\S(?:.*?\S)??)(?=\s{2,}|\s*$))");
 
-    auto m = rx.match(line);
-    if (m.hasMatch()) {
+    auto it = rx.globalMatch(line);
+    while (it.hasNext()) {
+        auto m = it.next();
         Hotspot h;
         h.row = row;
         h.startCol = m.capturedStart(1);
