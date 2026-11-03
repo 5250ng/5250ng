@@ -598,6 +598,16 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_script_input_dialog COMMAND test_script_input_dialog)
 
+    # Script saves must not commit a truncated file
+    add_executable(test_script_save_flush
+        tests/unit/test_script_save_flush.cpp
+        src/ui/dialogs/script_editor_window.cpp
+        src/ui/dialogs/script_editor_dialog.cpp
+    )
+    target_link_libraries(test_script_save_flush PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_script_save_flush COMMAND test_script_save_flush)
+
     # Script editor window (application target, uses QtUiStyle)
     add_executable(test_script_editor_window
         tests/unit/test_script_editor_window.cpp
