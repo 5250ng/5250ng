@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "Q5250ScreenWidget.h"
+
+#include <type_traits>
 #include "logger/logger.h"
 #include <QApplication>
 #include <QClipboard>
@@ -346,8 +348,10 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
     painter.setClipRect(rect());
     painter.translate(offset);
 
-    int rows = m_screenBuffer->rows();
-    int cols = m_screenBuffer->cols();
+    // History view paints the snapshot being viewed instead of the live screen
+    const ScreenBuffer *buffer = displayedBuffer();
+    int rows = buffer->rows();
+    int cols = buffer->cols();
 
     // The GDDM picture is a background to the alphanumeric data, as the GDDM
     // Programming Guide describes for a display file using ALWGPH, so it is
@@ -370,7 +374,7 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
 
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < cols; ++col) {
-            const ScreenCell &cell = m_screenBuffer->cell(row, col);
+            const ScreenCell &cell = buffer->cell(row, col);
             renderCell(painter, row, col, cell);
         }
     }
@@ -380,12 +384,12 @@ void Q5250ScreenWidget::renderScreen(QPainter &painter) {
     for (int row = 0; row < rows; ++row) {
         int col = 0;
         while (col < cols) {
-            const ScreenCell &cell = m_screenBuffer->cell(row, col);
+            const ScreenCell &cell = buffer->cell(row, col);
             if (cell.attributes.underline && !cell.attributes.nonDisplay) {
                 int runStart = col;
                 QColor ulColor = getColorForCode(cell.attributes.color);
                 while (col < cols) {
-                    const ScreenCell &c = m_screenBuffer->cell(row, col);
+                    const ScreenCell &c = buffer->cell(row, col);
                     if (!c.attributes.underline || c.attributes.nonDisplay)
                         break;
                     ++col;
@@ -863,7 +867,26 @@ void Q5250ScreenWidget::pushScreenToHistory() {
     // A screen that settled back to what was recorded last is not new
     if (m_screenHistory.count() > 0 && m_screenHistory.at(0).cellData == snap.cellData)
         return;
+    static_assert(std::is_trivially_copyable_v<ScreenCell> && alignof(ScreenCell) == 1);
+    snap.rawCells.resize(qsizetype(snap.rows) * snap.cols * qsizetype(sizeof(ScreenCell)));
+    auto *raw = reinterpret_cast<ScreenCell *>(snap.rawCells.data());
+    for (int r = 0; r < snap.rows; ++r)
+        for (int c = 0; c < snap.cols; ++c)
+            raw[r * snap.cols + c] = m_screenBuffer->cell(r, c);
+    // At full depth the push drops the oldest snapshot
+    const bool viewedDropped = isViewingHistory() &&
+                               m_screenHistory.count() >= m_screenHistory.maxDepth() &&
+                               m_historyIndex == m_screenHistory.count() - 1;
     m_screenHistory.push(snap);
+
+    // Index 0 is the newest snapshot: keep showing the screen being viewed,
+    // or return to the live screen when that screen left the history
+    if (viewedDropped) {
+        exitHistoryView();
+    } else if (isViewingHistory()) {
+        ++m_historyIndex;
+        emit historyViewChanged(m_historyIndex, m_screenHistory.count());
+    }
 }
 
 /**
@@ -877,6 +900,28 @@ void Q5250ScreenWidget::viewHistoryScreen(int index) {
     m_historyIndex = index;
     emit historyViewChanged(index, m_screenHistory.count());
     update();
+}
+
+/**
+ * @brief The buffer the screen paints: the snapshot being viewed in history
+ * view, otherwise the live screen.
+ */
+const ScreenBuffer *Q5250ScreenWidget::displayedBuffer() {
+    if (!isViewingHistory() || m_historyIndex >= m_screenHistory.count())
+        return m_screenBuffer;
+    const core::ScreenSnapshot &snap = m_screenHistory.at(m_historyIndex);
+    const qsizetype cells = qsizetype(snap.rows) * snap.cols;
+    if (cells <= 0 || snap.rawCells.size() != cells * qsizetype(sizeof(ScreenCell)))
+        return m_screenBuffer;
+    if (!m_historyBuffer)
+        m_historyBuffer = new ScreenBuffer(snap.rows, snap.cols, this);
+    else if (m_historyBuffer->rows() != snap.rows || m_historyBuffer->cols() != snap.cols)
+        m_historyBuffer->resize(snap.rows, snap.cols);
+    const auto *raw = reinterpret_cast<const ScreenCell *>(snap.rawCells.constData());
+    for (int r = 0; r < snap.rows; ++r)
+        for (int c = 0; c < snap.cols; ++c)
+            m_historyBuffer->cell(r, c) = raw[r * snap.cols + c];
+    return m_historyBuffer;
 }
 
 /**

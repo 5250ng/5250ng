@@ -25,7 +25,8 @@ namespace core {
 
 struct ScreenSnapshot {
     QDateTime timestamp;
-    QByteArray cellData;   // Serialized ScreenCell array (raw bytes)
+    QByteArray cellData;   // Screen text as UTF-8, one character per cell
+    QByteArray rawCells;   // The display's cells (characters and attributes)
     int rows = 0;
     int cols = 0;
     int cursorRow = 0;

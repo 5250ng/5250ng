@@ -376,6 +376,8 @@ class Q5250ScreenWidget : public QWidget {
     int m_historyIndex = -1; // -1 = live screen
     QTimer m_historyTimer;   // snapshots a screen once it stops changing
     void pushScreenToHistory();
+    ScreenBuffer *m_historyBuffer = nullptr; // the viewed snapshot, for painting
+    const ScreenBuffer *displayedBuffer();
 };
 
 } // namespace ui::widgets

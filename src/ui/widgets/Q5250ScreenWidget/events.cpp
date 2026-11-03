@@ -78,6 +78,25 @@ void Q5250ScreenWidget::resizeEvent(QResizeEvent *event) {
 }
 
 void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
+    // A past screen in history view is read-only: a key returns to the live
+    // screen instead of acting on a screen the host is no longer showing.
+    // Modifiers alone (the start of Ctrl+C or an Alt menu chord) and Copy,
+    // which copies the screen shown, stay in history view.
+    if (isViewingHistory() && !m_mcpInjecting) {
+        const int key = event->key();
+        if (key == Qt::Key_Shift || key == Qt::Key_Control || key == Qt::Key_Alt ||
+            key == Qt::Key_Meta || key == Qt::Key_AltGr || key == Qt::Key_CapsLock) {
+            QWidget::keyPressEvent(event);
+            return;
+        }
+        if (event->matches(QKeySequence::Copy) && hasSelection())
+            copySelection();
+        else
+            exitHistoryView();
+        event->accept();
+        return;
+    }
+
     // In read-only mode, only allow copy (MCP-injected input bypasses this)
     if (m_readOnly && !m_mcpInjecting) {
         if (event->matches(QKeySequence::Copy)) {
@@ -202,6 +221,9 @@ bool Q5250ScreenWidget::acceptsInput(core::MappedAction action) const {
     using core::MappedAction;
     if (m_readOnly && !m_mcpInjecting)
         return false;
+    // History view shows a past screen; input would act on the live one
+    if (isViewingHistory() && !m_mcpInjecting)
+        return false;
     switch (m_keyboardState) {
     case KeyboardState::Locked:
         return action == MappedAction::Attn || action == MappedAction::SysReq;
@@ -321,7 +343,7 @@ void Q5250ScreenWidget::mousePressEvent(QMouseEvent *event) {
         QAction *copyAction = menu.addAction("Copy");
         copyAction->setEnabled(hasSelection());
         QAction *pasteAction = menu.addAction("Paste");
-        pasteAction->setEnabled(!m_readOnly);
+        pasteAction->setEnabled(!m_readOnly && !isViewingHistory());
         QAction *selectAllAction = menu.addAction("Select All");
         menu.addSeparator();
         QAction *clearSelAction = menu.addAction("Clear Selection");
@@ -384,7 +406,8 @@ void Q5250ScreenWidget::mouseReleaseEvent(QMouseEvent *event) {
             // If no drag occurred (same cell), treat as simple click
             if (m_selectionStart == m_selectionEnd &&
                 m_selectionStart.x() >= 0 && m_selectionStart.y() >= 0) {
-                if (!m_readOnly) {
+                // Neither hotspots nor cursor moves act on a past screen
+                if (!m_readOnly && !isViewingHistory()) {
                     // Check for hotspot click
                     if (m_hotspotDetector.isEnabled()) {
                         const core::Hotspot *hs = core::HotspotDetector::hotspotAt(
