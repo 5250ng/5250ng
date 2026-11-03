@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "tool_definitions.h"
+#include "core/settings_permissions.h"
 #include <QSettings>
 
 namespace agent {
@@ -80,6 +81,9 @@ static void saveOAuthConfig(QSettings &settings, const QString &prefix, const OA
 
 void AgentConfig::load() {
     QSettings settings;
+    // Settings written before secrets were protected may still be readable
+    // by other users
+    core::restrictSettingsToOwner(settings);
     settings.beginGroup("AI");
     m_activeProviderId = settings.value("activeProvider", m_activeProviderId).toString();
     m_openaiApiKey = settings.value("openaiApiKey").toString();
@@ -158,6 +162,8 @@ void AgentConfig::save() {
     settings.endGroup();
 
     settings.endGroup();
+    // The API keys above must not be readable by other users
+    core::restrictSettingsToOwner(settings);
 }
 
 ToolConfig AgentConfig::toolConfig(const QString &toolName) const {

@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "token_storage.h"
+#include "core/settings_permissions.h"
 #include <QSettings>
 
 namespace agent {
@@ -32,6 +33,8 @@ void TokenStorage::saveTokens(const QString &providerId, const QString &accessTo
     settings.setValue("refreshToken", refreshToken);
     settings.setValue("expiresAt", expiresAt.toString(Qt::ISODate));
     settings.endGroup();
+    // OAuth access and refresh tokens must not be readable by other users
+    core::restrictSettingsToOwner(settings);
 }
 
 bool TokenStorage::loadTokens(const QString &providerId, QString &accessToken,

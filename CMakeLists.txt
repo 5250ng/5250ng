@@ -142,6 +142,7 @@ set(CORE_SOURCES
     src/core/macro_to_script.h
     src/core/script_library.cpp
     src/core/script_library.h
+    src/core/settings_permissions.h
     src/core/command_runner.cpp
     src/core/command_runner.h
     src/core/pcap_replay.cpp
@@ -712,6 +713,14 @@ if(BUILD_TESTS)
     add_test(NAME test_mcp_request_guard COMMAND test_mcp_request_guard)
 
     # Scripting tests
+    # AI secrets in the settings file (AgentConfig lives in the application target)
+    add_executable(test_secret_settings_permissions
+        tests/unit/test_secret_settings_permissions.cpp
+        src/agent/config.cpp
+        src/agent/auth/token_storage.cpp)
+    target_link_libraries(test_secret_settings_permissions PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_secret_settings_permissions COMMAND test_secret_settings_permissions)
+
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
     add_tn5250_test(test_script_escape tests/unit/test_script_escape.cpp)
     add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
