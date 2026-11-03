@@ -718,6 +718,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
             }
         });
     session->config = m_currentSession;
+    session->requestedDeviceName = config.deviceName();
 
     // Use session name for saved sessions, ip:port for CLI/unsaved
     QString tabDisplayName;

@@ -20,6 +20,16 @@
 #include <QtUiStyle/StyledMessageBox.h>
 
 /**
+ * The tab's configuration as it should be saved: without runtime-only
+ * adjustments such as the de-duplicated device name.
+ */
+session::SessionConfig MainWindow::savedConfig(const Session *s) {
+    session::SessionConfig config = s->config;
+    config.setDeviceName(s->requestedDeviceName);
+    return config;
+}
+
+/**
  * Save the active tab's configuration back to its saved session, or prompt
  * for a name when the tab was not opened from a saved session.
  */
@@ -38,7 +48,7 @@ void MainWindow::onSaveSession() {
         onSaveSessionAs();
         return;
     }
-    if (!mgr.saveSession(s->config)) {
+    if (!mgr.saveSession(savedConfig(s))) {
         qt_ui_style::StyledMessageBox::warning(this, "Save Session", "Failed to save session.");
         return;
     }
@@ -60,7 +70,7 @@ void MainWindow::onSaveSessionAs() {
         return;
     }
 
-    session::SessionConfig config = s->config;
+    session::SessionConfig config = savedConfig(s);
     if (!ConnectDialog::promptSaveSessionAs(this, config))
         return;
 

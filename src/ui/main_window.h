@@ -195,6 +195,9 @@ class MainWindow : public MainWindowBase {
         QLabel *macroLabel;        // Macro recording/playback indicator
         QWidget *statusBar;
         session::SessionConfig config;
+        // Device name as configured, before the per-host de-duplication
+        // that gave this tab a unique one (config holds the one in use)
+        QString requestedDeviceName;
         ui::rendering::TN5250CommandHandler *commandHandler;
         core::CommandRunner *commandRunner = nullptr;
         ui::widgets::QCRTOverlayWidget *crtOverlay;
@@ -216,6 +219,8 @@ class MainWindow : public MainWindowBase {
     };
     // Checks or disables the per-session View/Scripts/Tools items
     void syncSessionActions(Session *s);
+    // The tab configuration as Session > Save writes it
+    static session::SessionConfig savedConfig(const Session *s);
 
     void runStartupScript(Session *session);
     void scheduleStartupScript(Session *session);

@@ -19,6 +19,8 @@
 void MainWindow::onDuplicateSession() {
     if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size())
         return;
-    session::SessionConfig config = m_sessions[m_activeIndex]->config;
+    // The configured device name, not the one this tab was given to avoid a
+    // clash; the new tab gets its own unique name
+    session::SessionConfig config = savedConfig(m_sessions[m_activeIndex]);
     connectToServer(config);
 }
