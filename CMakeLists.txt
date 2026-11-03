@@ -218,6 +218,7 @@ set(AGENT_SOURCES
     src/mcp/McpToolHandler.cpp
     src/mcp/McpHttpParser.h
     src/mcp/McpHttpParser.cpp
+    src/mcp/mcp_request_guard.h
     src/agent/agent_script_runner.h
     src/agent/agent_script_runner.cpp
     src/agent/script_generator.h
@@ -662,6 +663,19 @@ if(BUILD_TESTS)
     target_link_libraries(test_mcp_http_parser PRIVATE tn5250_core Qt6::Test)
     add_test(NAME test_mcp_http_parser COMMAND test_mcp_http_parser)
     add_tn5250_test(test_mcp_validation tests/unit/test_mcp_validation.cpp)
+    # MCP server refuses cross-origin and DNS-rebound requests
+    add_executable(test_mcp_request_guard
+        tests/unit/test_mcp_request_guard.cpp
+        src/mcp/McpServer.cpp
+        src/mcp/McpHttpParser.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_request_guard PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_request_guard COMMAND test_mcp_request_guard)
 
     # Scripting tests
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
