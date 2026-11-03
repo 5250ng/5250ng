@@ -165,6 +165,13 @@ void MainWindow::onStopExecution() {
     if (s->macroRecorder && s->macroRecorder->isPlaying()) {
         s->macroRecorder->stopPlayback();
     }
+    // Stop also cancels a startup script queued behind the running one,
+    // rather than starting it the moment the user stopped scripting
+    if (s->startupScriptQueued) {
+        QObject::disconnect(s->startupScriptQueued);
+        s->startupScriptQueued = {};
+        LOG_INFO("Startup script: queued run cancelled by Stop");
+    }
     if (s->scriptExecutor && s->scriptExecutor->isRunning()) {
         s->scriptExecutor->stop();
     }
@@ -615,6 +622,24 @@ void MainWindow::scheduleStartupScript(Session *s) {
 
 void MainWindow::runStartupScript(Session *s) {
     if (!s || !s->displayWidget) return;
+
+    // Another script is running on this session (a manual run during the
+    // first-screen wait, or across a reconnect). Wiring the executor again
+    // would deliver its keys twice and execute() would refuse to start, so
+    // run the startup script once that one has finished.
+    if (s->scriptExecutor && s->scriptExecutor->isRunning()) {
+        if (s->startupScriptQueued) return;
+        LOG_INFO("Startup script: another script is running, starting after it");
+        s->startupScriptQueued = connect(s->scriptExecutor,
+            &core::scripting::ScriptExecutor::executionFinished, this, [this, s]() {
+                s->startupScriptQueued = {};
+                // Let the finished script's own handlers tear down first
+                QTimer::singleShot(0, this, [this, s]() {
+                    if (m_sessions.contains(s)) runStartupScript(s);
+                });
+            }, Qt::SingleShotConnection);
+        return;
+    }
 
     // The script runs on this session whichever tab is shown. It must not
     // make itself the active session: the menus (Edit, Disconnect, Save,
