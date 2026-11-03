@@ -36,6 +36,22 @@
 namespace ui::widgets {
 
 bool Q5250ScreenWidget::event(QEvent *ev) {
+    // A chord bound to a 5250 action belongs to the session while the
+    // screen has focus and would act on it: accepting the override keeps
+    // window and menu shortcuts (F11 Full Screen, ...) from taking it first.
+    // Only explicit bindings count, so a modified F-key that merely follows
+    // its base key (Ctrl+F6 switches tabs) is left to the window, and a
+    // locked or read-only screen, which would drop the key, leaves it too.
+    if (ev->type() == QEvent::ShortcutOverride) {
+        const auto *ke = static_cast<QKeyEvent *>(ev);
+        Qt::KeyboardModifiers mods = ke->modifiers() &
+            (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+        core::MappedAction mapped = core::KeyboardMapping::instance().lookup(ke->key(), mods);
+        if (mapped != core::MappedAction::None && acceptsInput(mapped)) {
+            ev->accept();
+            return true;
+        }
+    }
     // Intercept Tab/Backtab before Qt's focus-chain machinery consumes them.
     // QWidget::event() normally converts these into focus-next/focus-prev and
     // never calls keyPressEvent, so we must catch them here.

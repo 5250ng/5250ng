@@ -532,6 +532,8 @@ if(BUILD_TESTS)
     add_tn5250_test(test_typing_outside_fields tests/unit/test_typing_outside_fields.cpp)
 
     add_tn5250_test(test_paste_input_rules tests/unit/test_paste_input_rules.cpp)
+
+    add_tn5250_test(test_shortcut_override tests/unit/test_shortcut_override.cpp)
     add_tn5250_test(test_auto_enter_aid tests/unit/test_auto_enter_aid.cpp)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
     add_tn5250_test(test_macro_chords tests/unit/test_macro_chords.cpp)
