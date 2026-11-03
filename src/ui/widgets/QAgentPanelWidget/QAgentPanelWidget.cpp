@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "QAgentPanelWidget.h"
+#include "collapsible_preview.h"
 #include "agent/agent_script_runner.h"
 #include "agent/config.h"
 #include "agent/markdown_converter.h"
@@ -355,63 +356,15 @@ QString QAgentPanelWidget::buildCollapsibleHtml(int blockId) const {
     QString codeBg   = tm.color("agent.code.background", "#1a1a2e");
     QString codeText = tm.color("agent.code.text", "#d4d4d4");
     QString labelClr = tm.color("agent.assistant.label", "#50c878");
-    // Dimmed color for the fading lines (blend codeText toward codeBg)
-    QString dimText  = tm.color("agent.code.text", "#d4d4d4");
 
     const auto &block = it.value();
     QString arrow = block.collapsed
         ? QStringLiteral("\xe2\x96\xb6")   // ▶
         : QStringLiteral("\xe2\x96\xbc");   // ▼
 
-    QString content;
-
-    if (block.collapsed) {
-        // Show first ~3 lines, then progressively dimmed lines to simulate fade
-        QStringList lines = block.fullHtml.split(QStringLiteral("<br/>"));
-        if (lines.size() <= 1)
-            lines = block.fullHtml.split(QStringLiteral("<br>"));
-
-        int totalLines = lines.size();
-        int visibleLines = qMin(3, totalLines);
-        content = lines.mid(0, visibleLines).join(QStringLiteral("<br/>"));
-
-        if (totalLines > visibleLines) {
-            // Add 1-2 progressively faded lines
-            int fadeCount = qMin(2, totalLines - visibleLines);
-            // Opacity steps: 50%, 25%
-            const int opacities[] = {128, 64};
-            for (int i = 0; i < fadeCount; ++i) {
-                // Build a color with reduced alpha by blending with background
-                // QTextBrowser doesn't support rgba, so approximate by mixing colors
-                int alpha = opacities[i];
-                QString fadedColor = QString("color: rgba(%1, %2)")
-                    .arg(dimText.mid(1))  // won't work — use hex blending instead
-                    .arg(alpha);
-                Q_UNUSED(fadedColor);
-                // Since QTextBrowser doesn't support rgba(), use pre-blended colors
-                // Parse codeBg and codeText to blend manually
-                QColor bg(codeBg), fg(codeText);
-                double a = alpha / 255.0;
-                QColor blended(
-                    int(fg.red() * a + bg.red() * (1 - a)),
-                    int(fg.green() * a + bg.green() * (1 - a)),
-                    int(fg.blue() * a + bg.blue() * (1 - a)));
-
-                content += QStringLiteral("<br/><span style='color:%1;'>%2</span>")
-                    .arg(blended.name(), lines[visibleLines + i].toHtmlEscaped());
-            }
-
-            int remaining = totalLines - visibleLines - fadeCount;
-            if (remaining > 0) {
-                content += QStringLiteral(
-                    "<br/><a href='toggle://%1' style='color:%2; font-size:11px;'>"
-                    "... %3 more lines</a>")
-                    .arg(blockId).arg(labelClr).arg(remaining);
-            }
-        }
-    } else {
-        content = block.fullHtml;
-    }
+    QString content = block.collapsed
+        ? collapsedBlockPreviewHtml(block.fullHtml, codeBg, codeText, labelClr, blockId)
+        : block.fullHtml;
 
     return QStringLiteral(
         "<table width='100%%' cellpadding='6' cellspacing='0'>"
