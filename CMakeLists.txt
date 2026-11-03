@@ -616,6 +616,11 @@ if(BUILD_TESTS)
         src/mcp/McpHttpParser.cpp)
     target_link_libraries(test_mcp_http_parser PRIVATE tn5250_core Qt6::Test)
     add_test(NAME test_mcp_http_parser COMMAND test_mcp_http_parser)
+    add_executable(test_mcp_chunked_request
+        tests/unit/test_mcp_chunked_request.cpp
+        src/mcp/McpHttpParser.cpp)
+    target_link_libraries(test_mcp_chunked_request PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_mcp_chunked_request COMMAND test_mcp_chunked_request)
     add_tn5250_test(test_mcp_validation tests/unit/test_mcp_validation.cpp)
 
     # Scripting tests
