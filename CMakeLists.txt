@@ -377,6 +377,7 @@ set(UI_SOURCES
     src/ui/actions/onReplayPcap.cpp
     # setup
     src/ui/setup/setupUI.cpp
+    src/ui/widgets/popup_choice_filter.h
     src/ui/setup/setupMenuBar.cpp
     src/ui/setup/setupStatusBar.cpp
 )
@@ -525,6 +526,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_auto_enter_aid tests/unit/test_auto_enter_aid.cpp)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
+    add_tn5250_test(test_popup_choice_filter tests/unit/test_popup_choice_filter.cpp)
     add_tn5250_test(test_aid_key_map tests/unit/test_aid_key_map.cpp)
     add_tn5250_test(test_wheel_roll tests/unit/test_wheel_roll.cpp)
     add_tn5250_test(test_script_local_keys tests/unit/test_script_local_keys.cpp)

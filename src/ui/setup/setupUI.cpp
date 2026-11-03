@@ -16,6 +16,7 @@
 
 #include "ui/main_window.h"
 #include "ui/themes/manager.h"
+#include "ui/widgets/popup_choice_filter.h"
 #include <QComboBox>
 #include <QFrame>
 #include <QLabel>
@@ -158,7 +159,13 @@ void MainWindow::setupUI() {
     m_emptyOpenCombo = new QComboBox(this);
     m_emptyOpenCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_emptyOpenCombo->addItem("(Open saved session)");
-    connect(m_emptyOpenCombo, &QComboBox::currentTextChanged, this, &MainWindow::onQuickOpenChanged);
+    // Open only on an explicit pick from the popup: currentTextChanged also
+    // fires while the wheel or the arrow keys move through the entries, and
+    // activated() fires again when the same entry is picked a second time.
+    new ui::widgets::PopupChoiceFilter(m_emptyOpenCombo);
+    connect(m_emptyOpenCombo, &QComboBox::activated, this, [this](int index) {
+        onQuickOpenChanged(m_emptyOpenCombo->itemText(index));
+    });
     emptyLayout->addWidget(m_emptyOpenCombo);
     emptyLayout->addStretch();
     outerLayout->addWidget(emptyBox, 0, Qt::AlignCenter);
