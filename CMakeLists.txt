@@ -665,6 +665,24 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_server_reentry COMMAND test_mcp_server_reentry)
 
+    # Agent panel script generation handlers (issue #260). Built without the
+    # agent prompt resources, so the generator fails at once instead of
+    # sending a request to a provider.
+    set(AGENT_SOURCES_NO_QRC ${AGENT_SOURCES})
+    list(FILTER AGENT_SOURCES_NO_QRC EXCLUDE REGEX "\\.qrc$")
+    add_executable(test_agent_generation_handlers
+        tests/unit/test_agent_generation_handlers.cpp
+        ${UI_SOURCES}
+        ${AGENT_SOURCES_NO_QRC}
+    )
+    target_link_libraries(test_agent_generation_handlers PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_agent_generation_handlers PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_agent_generation_handlers PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_agent_generation_handlers COMMAND test_agent_generation_handlers)
+
     # Startup scripts of background tabs (real MainWindow, application sources)
     add_executable(test_startup_script_background
         tests/integration/test_startup_script_background.cpp

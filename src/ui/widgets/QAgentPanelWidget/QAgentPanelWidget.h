@@ -70,6 +70,7 @@ class QAgentPanelWidget : public QWidget {
     void onScriptFinished(bool success, const QString &log);
     void onGenerateScriptToolCall(const agent::ToolCall &call);
     void onScriptGenerated(const QString &toolCallId, const QString &script);
+    void disconnectScriptGeneration();
     void onScriptGenerationError(const QString &toolCallId, const QString &error);
     void appendScriptBlock(const QString &script);
     void onReadFileToolCall(const agent::ToolCall &call);
@@ -104,6 +105,8 @@ class QAgentPanelWidget : public QWidget {
     Q5250ScreenWidget *m_displayWidget = nullptr;
     agent::AgentScriptRunner *m_scriptRunner = nullptr;
     agent::ScriptGeneratorSubagent *m_scriptGenerator = nullptr;
+    // Success and error handlers of the generation in progress
+    QMetaObject::Connection m_generationConns[2];
     QString m_screenContext;
 
     // Pending tool call state
