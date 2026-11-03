@@ -691,6 +691,7 @@ if(BUILD_TESTS)
         target_compile_definitions(test_reconnect_teardown PRIVATE HAVE_QT6_SSL)
     endif()
     add_test(NAME test_reconnect_teardown COMMAND test_reconnect_teardown)
+    add_tn5250_test(test_session_worker_stop tests/integration/test_session_worker_stop.cpp)
 
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
