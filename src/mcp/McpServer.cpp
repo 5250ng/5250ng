@@ -143,9 +143,9 @@ void McpServer::onNewConnection() {
         // Qt's signal dispatcher when the nested loop returns and the
         // dispatcher tries to touch the freed sender metadata.  A queued
         // connection decouples our slot from the emission stack, so the
-        // socket can be safely destroyed mid-tool-call.  This also
-        // prevents a second request arriving on a keep-alive connection
-        // from re-entering onClientData and corrupting the shared parser.
+        // socket can be safely destroyed mid-tool-call.  It does not stop
+        // a tool's nested event loop from delivering readyRead again; the
+        // busy guard in onClientData() handles that re-entry.
         connect(socket, &QTcpSocket::readyRead, this, &McpServer::onClientData,
                 Qt::QueuedConnection);
         connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
@@ -160,6 +160,19 @@ void McpServer::onClientData() {
         socket->abort();
         return;
     }
+
+    // A tool call running a nested event loop (scripts, wait_for_text)
+    // lets this socket's readyRead in again before the outer call has reset
+    // the parser, which would dispatch the in-flight request a second time.
+    // Leave the new bytes in the socket: the outer call's drain loop below
+    // reads them once the current request is done, keeping requests in order.
+    if (socket->property("_mcp_busy").toBool())
+        return;
+    socket->setProperty("_mcp_busy", true);
+    struct BusyGuard {
+        QPointer<QTcpSocket> s;
+        ~BusyGuard() { if (s) s->setProperty("_mcp_busy", false); }
+    } busyGuard{socket};
 
     // Store parser as a property on the socket
     auto *parser = socket->findChild<QObject *>("_mcp_parser");
@@ -205,12 +218,11 @@ void McpServer::onClientData() {
         // disconnected.  Only reset the parser if the socket is still alive.
         if (!socket.isNull())
             httpParser->reset();
-        // Drain any additional requests that arrived in the same TCP read.
-        // Now that reset() preserves the parser's leftover bytes (everything
-        // past the just-parsed body), feed(empty) re-runs the state machine
-        // on what is already buffered and returns true once another full
-        // request is available.
-        while (!socket.isNull() && httpParser->feed(QByteArray())) {
+        // Drain any additional requests: those that arrived in the same TCP
+        // read (reset() keeps the parser's leftover bytes past the parsed
+        // body) and those that arrived while the request ran, which the
+        // re-entry guard above left unread in the socket.
+        while (!socket.isNull() && httpParser->feed(socket->readAll())) {
             handleHttpRequest(socket);
             if (!socket.isNull()) httpParser->reset();
         }
