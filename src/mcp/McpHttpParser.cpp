@@ -61,11 +61,23 @@ bool McpHttpParser::feed(const QByteArray &data) {
             }
         }
 
+        // Only Content-Length framing is implemented. A chunked (or any
+        // other) Transfer-Encoding body would otherwise be read as an empty
+        // body followed by its chunk lines as a second request, so refuse it
+        // and let the caller close the connection.
+        if (m_request.headers.contains("transfer-encoding")) {
+            m_error = true;
+            m_errorStatus = 501;
+            m_errorMessage = QStringLiteral("Transfer-Encoding is not supported; send Content-Length");
+            return false;
+        }
+
         bool lengthOk = false;
         const QString lengthHeader = m_request.headers.value("content-length", "0");
         m_contentLength = lengthHeader.toInt(&lengthOk);
         if (!lengthOk || m_contentLength < 0 || m_contentLength > kMaxBodySize) {
             m_error = true;
+            m_errorStatus = (lengthOk && m_contentLength > kMaxBodySize) ? 413 : 400;
             m_errorMessage = QStringLiteral("Invalid or oversized Content-Length");
             return false;
         }
@@ -112,6 +124,7 @@ void McpHttpParser::reset() {
     m_contentLength = 0;
     m_bodyStart = -1;
     m_error = false;
+    m_errorStatus = 413;
     m_errorMessage.clear();
 }
 

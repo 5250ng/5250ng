@@ -66,6 +66,10 @@ class McpHttpParser {
     /// Human-readable reason for the current error, or empty if none.
     QString errorMessage() const { return m_errorMessage; }
 
+    /// HTTP status to answer the current error with (413 oversized, 400
+    /// malformed, 501 unsupported framing), or 0 if there is no error.
+    int errorStatusCode() const { return m_error ? m_errorStatus : 0; }
+
   private:
     QByteArray m_buffer;
     HttpRequest m_request;
@@ -73,6 +77,7 @@ class McpHttpParser {
     int m_contentLength = 0;
     int m_bodyStart = -1;
     bool m_error = false;
+    int m_errorStatus = 413;
     QString m_errorMessage;
 };
 

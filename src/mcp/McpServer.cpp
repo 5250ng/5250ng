@@ -159,14 +159,21 @@ void McpServer::onClientData() {
         httpParser = reinterpret_cast<McpHttpParser *>(parser->property("ptr").value<quintptr>());
     }
 
-    // Local helper: write the same 413 error response and disconnect the
+    // Local helper: write the parser's error response and disconnect the
     // socket. Used by both the first-request error branch and the
     // pipelined-drain error branch so the two paths stay in sync.
     auto sendParseError = [&]() {
         MCP_ERROR(QString("HTTP parse error: %1").arg(httpParser->errorMessage()));
         HttpResponse resp;
-        resp.statusCode = 413;
-        resp.statusText = QStringLiteral("Payload Too Large");
+        resp.statusCode = httpParser->errorStatusCode();
+        switch (resp.statusCode) {
+        case 400: resp.statusText = QStringLiteral("Bad Request"); break;
+        case 501: resp.statusText = QStringLiteral("Not Implemented"); break;
+        default:
+            resp.statusCode = 413;
+            resp.statusText = QStringLiteral("Payload Too Large");
+            break;
+        }
         resp.headers["Content-Type"] = "application/json";
         QJsonObject err;
         err["error"] = httpParser->errorMessage();
@@ -195,7 +202,7 @@ void McpServer::onClientData() {
         // A malformed pipelined request (oversized header, bad
         // Content-Length, oversized body) leaves the parser in error
         // state and breaks out of the drain loop. Respond with the same
-        // 413 + close as the first-request error branch, otherwise the
+        // error response + close as the first-request error branch, otherwise the
         // client is left waiting for a response that never comes.
         if (!socket.isNull() && httpParser->hasError()) {
             sendParseError();
