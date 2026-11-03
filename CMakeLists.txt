@@ -651,6 +651,20 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_server_stop COMMAND test_mcp_server_stop)
 
+    # MCP requests arriving during a tool's nested event loop (issue #254)
+    add_executable(test_mcp_server_reentry
+        tests/unit/test_mcp_server_reentry.cpp
+        src/mcp/McpServer.cpp
+        src/mcp/McpHttpParser.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_server_reentry PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_server_reentry COMMAND test_mcp_server_reentry)
+
     # Startup scripts of background tabs (real MainWindow, application sources)
     add_executable(test_startup_script_background
         tests/integration/test_startup_script_background.cpp
