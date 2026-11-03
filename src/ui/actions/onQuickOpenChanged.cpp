@@ -17,6 +17,7 @@
 #include "session/config.h"
 #include "session/manager.h"
 #include "ui/main_window.h"
+#include <QSignalBlocker>
 #include <QtUiStyle/StyledMessageBox.h>
 #include <QString>
 
@@ -31,12 +32,16 @@ void MainWindow::onQuickOpenChanged(const QString &sessionName) {
     if (sessionName.isEmpty() || sessionName == "(Open saved session)") {
         return;
     }
+    // Back to the placeholder, so the box does not keep showing the session
+    // and the same one can be opened again later
+    if (m_emptyOpenCombo) {
+        QSignalBlocker blocker(m_emptyOpenCombo);
+        m_emptyOpenCombo->setCurrentIndex(0);
+    }
     session::SessionManager mgr(this);
     session::SessionConfig cfg;
     if (mgr.loadSession(sessionName, cfg)) {
         connectToServer(cfg);
-        // Reset selection to placeholder for next use
-        // no reset needed for submenu
     } else {
         qt_ui_style::StyledMessageBox::warning(
             this, "Open Session",
