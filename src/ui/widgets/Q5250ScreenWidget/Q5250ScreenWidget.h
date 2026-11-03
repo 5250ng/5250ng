@@ -374,6 +374,7 @@ class Q5250ScreenWidget : public QWidget {
     // Screen history / scrollback
     core::ScreenHistory m_screenHistory;
     int m_historyIndex = -1; // -1 = live screen
+    QTimer m_historyTimer;   // snapshots a screen once it stops changing
     void pushScreenToHistory();
 };
 

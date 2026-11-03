@@ -57,8 +57,9 @@ void Q5250ScreenWidget::refreshMatchReplaceOverlay() {
 }
 
 void Q5250ScreenWidget::onScreenChanged() {
-    // Push to screen history and refresh hotspots on each screen update
-    pushScreenToHistory();
+    // The buffer changes once per written cell while a host record is
+    // drawn: take the history snapshot once the screen has settled
+    m_historyTimer.start();
     if (m_hotspotDetector.isEnabled())
         refreshHotspots();
     // Rebuild match-and-replace overlay

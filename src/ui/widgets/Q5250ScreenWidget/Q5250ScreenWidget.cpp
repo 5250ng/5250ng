@@ -48,6 +48,11 @@ Q5250ScreenWidget::Q5250ScreenWidget(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setAttribute(Qt::WA_OpaquePaintEvent);
 
+    // One history snapshot per screen, once host writes have settled
+    m_historyTimer.setSingleShot(true);
+    m_historyTimer.setInterval(150);
+    connect(&m_historyTimer, &QTimer::timeout, this, &Q5250ScreenWidget::pushScreenToHistory);
+
     // Initialize color scheme (standard 5250 colors)
     m_colorScheme.resize(16);
     m_colorScheme[0] = QColor(0, 0, 0);        // Black
@@ -855,6 +860,9 @@ void Q5250ScreenWidget::pushScreenToHistory() {
         for (int c = 0; c < snap.cols; ++c)
             text.append(core::EBCDIC::ebcdicToChar(m_screenBuffer->cell(r, c).character));
     snap.cellData = text.toUtf8();
+    // A screen that settled back to what was recorded last is not new
+    if (m_screenHistory.count() > 0 && m_screenHistory.at(0).cellData == snap.cellData)
+        return;
     m_screenHistory.push(snap);
 }
 
