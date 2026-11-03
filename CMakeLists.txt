@@ -641,6 +641,27 @@ if(BUILD_TESTS)
     add_tn5250_test(test_tn5250_tls_connection tests/integration/test_tn5250_tls_connection.cpp)
     add_tn5250_test(test_session_worker_reconnect tests/integration/test_session_worker_reconnect.cpp)
 
+    # Command-line validation: each invalid invocation must exit with an
+    # error on stderr instead of starting the GUI. A GUI app on Windows has
+    # no stderr for CTest to read, so these run elsewhere only.
+    if(NOT WIN32)
+        macro(add_cli_error_test NAME EXPECTED)
+            add_test(NAME test_cli_${NAME} COMMAND 5250ng ${ARGN})
+            set_tests_properties(test_cli_${NAME} PROPERTIES
+                PASS_REGULAR_EXPRESSION "${EXPECTED}"
+                TIMEOUT 30
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${CMAKE_BINARY_DIR}/cli-test-home;XDG_CONFIG_HOME=${CMAKE_BINARY_DIR}/cli-test-home/.config")
+        endmacro()
+        add_cli_error_test(orphan_port "--port requires --host" -p 99999)
+        add_cli_error_test(orphan_tls "--tls requires --host" --tls)
+        add_cli_error_test(orphan_mcp_port "--mcp-server-port requires --enable-mcp-server"
+                           --mcp-server-port 80)
+        add_cli_error_test(bad_mcp_port "Invalid MCP port number: 80"
+                           --enable-mcp-server --mcp-server-port 80)
+        add_cli_error_test(bad_port "Invalid port number: 99999" --host 127.0.0.1 -p 99999)
+        add_cli_error_test(positional "Unexpected argument: extra" extra)
+    endif()
+
     message(STATUS "Testing enabled - unit and integration tests configured")
 endif()
 

@@ -138,7 +138,7 @@ $ 5250ng -h
 
 Options:
   -H, --host <hostname>            Host to connect to (auto-connects at startup)
-  -p, --port <port>                Port number (default: 23)
+  -p, --port <port>                Port number (default: 23, or 992 with --tls)
   --tls                            Use TLS/SSL encryption
   -s, --load-session-from-name     Load a saved session by name
   -f, --load-session-from-file     Load a session from a JSON file
@@ -156,10 +156,10 @@ Options:
     ./build/bin/5250ng --host as400.example.com
     ```
 
- + Connect with TLS on port 992:
+ + Connect with TLS (port 992 unless `--port` is given):
 
     ```
-    ./build/bin/5250ng --host as400.example.com --port 992 --tls
+    ./build/bin/5250ng --host as400.example.com --tls
     ```
 
  + Load a saved session profile:

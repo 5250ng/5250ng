@@ -37,9 +37,9 @@
 #include <QStyleFactory>
 #include <QTimer>
 
+#include <cstdio>
 #ifdef Q_OS_WIN
 #include <windows.h>
-#include <cstdio>
 #endif
 
 // On Windows GUI apps (WinMain), stdout/stderr are not connected to any
@@ -53,6 +53,22 @@ static void attachWindowsConsole() {
         freopen_s(&f, "CONOUT$", "w", stderr);
     }
 #endif
+}
+
+// Reports a command-line error on stderr and returns the exit status. The
+// message is printed as is (Logger output goes through qCritical, which
+// quotes it, and is hidden unless -d is given), and on Windows a console is
+// attached first when stderr is not already redirected, since a GUI app has
+// none.
+static int commandLineError(const QString &message) {
+#ifdef Q_OS_WIN
+    HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
+    if (err == nullptr || err == INVALID_HANDLE_VALUE)
+        attachWindowsConsole();
+#endif
+    std::fprintf(stderr, "5250ng: %s\n", qPrintable(message));
+    std::fflush(stderr);
+    return 1;
 }
 
 int main(int argc, char *argv[]) {
@@ -85,7 +101,7 @@ int main(int argc, char *argv[]) {
     parser.addOption(hostOption);
 
     // Port option
-    QCommandLineOption portOption(QStringList() << "p" << "port", "Port number (default: 23)", "port", "23");
+    QCommandLineOption portOption(QStringList() << "p" << "port", "Port number (default: 23, or 992 with --tls)", "port");
     parser.addOption(portOption);
 
     // TLS option
@@ -122,6 +138,21 @@ int main(int argc, char *argv[]) {
         logger::Logger::instance()->setDebugLogging(true);
     }
 
+    // Options that only make sense together with another one are an error
+    // on their own, rather than being silently ignored.
+    if (!parser.positionalArguments().isEmpty()) {
+        return commandLineError(
+            QString("Unexpected argument: %1").arg(parser.positionalArguments().constFirst()));
+    }
+    if (!parser.isSet(hostOption)) {
+        if (parser.isSet(portOption))
+            return commandLineError("--port requires --host");
+        if (parser.isSet(tlsOption))
+            return commandLineError("--tls requires --host");
+    }
+    if (parser.isSet(mcpPortOption) && !parser.isSet(mcpEnableOption))
+        return commandLineError("--mcp-server-port requires --enable-mcp-server");
+
     // Create session config from command line options
     session::SessionConfig autoConnectConfig;
     bool autoConnect = false;
@@ -131,21 +162,16 @@ int main(int argc, char *argv[]) {
                            + (parser.isSet(sessionFileOption) ? 1 : 0)
                            + (parser.isSet(replayPcapOption) ? 1 : 0);
     if (connectOptionCount > 1) {
-        logger::Logger::instance()->error(
+        return commandLineError(
             "Options --host, --load-session-from-name, --load-session-from-file, "
-            "and --replay-pcap are mutually exclusive"
-        );
-        return 1;
+            "and --replay-pcap are mutually exclusive");
     }
 
     QString replayPcapPath;
     if (parser.isSet(replayPcapOption)) {
         replayPcapPath = parser.value(replayPcapOption);
         if (!QFile::exists(replayPcapPath)) {
-            logger::Logger::instance()->error(
-                QString("Capture file not found: %1").arg(replayPcapPath)
-            );
-            return 1;
+            return commandLineError(QString("Capture file not found: %1").arg(replayPcapPath));
         }
     }
 
@@ -153,10 +179,7 @@ int main(int argc, char *argv[]) {
         QString sessionName = parser.value(sessionOption);
         session::SessionManager mgr;
         if (!mgr.loadSession(sessionName, autoConnectConfig)) {
-            logger::Logger::instance()->error(
-                QString("Session not found: %1").arg(sessionName)
-            );
-            return 1;
+            return commandLineError(QString("Session not found: %1").arg(sessionName));
         }
         autoConnect = true;
         logger::Logger::instance()->debug(
@@ -166,24 +189,15 @@ int main(int argc, char *argv[]) {
         QString filePath = parser.value(sessionFileOption);
         QFile file(filePath);
         if (!file.open(QIODevice::ReadOnly)) {
-            logger::Logger::instance()->error(
-                QString("Cannot open session file: %1").arg(filePath)
-            );
-            return 1;
+            return commandLineError(QString("Cannot open session file: %1").arg(filePath));
         }
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         file.close();
         if (doc.isNull() || !doc.isObject()) {
-            logger::Logger::instance()->error(
-                QString("Invalid JSON in session file: %1").arg(filePath)
-            );
-            return 1;
+            return commandLineError(QString("Invalid JSON in session file: %1").arg(filePath));
         }
         if (!autoConnectConfig.fromJson(doc.object())) {
-            logger::Logger::instance()->error(
-                QString("Invalid session configuration in: %1").arg(filePath)
-            );
-            return 1;
+            return commandLineError(QString("Invalid session configuration in: %1").arg(filePath));
         }
         autoConnect = true;
         logger::Logger::instance()->debug(
@@ -191,18 +205,17 @@ int main(int argc, char *argv[]) {
         );
     } else if (parser.isSet(hostOption)) {
         QString hostname = parser.value(hostOption);
-        bool portOk = false;
-        int portInt = parser.value(portOption).toInt(&portOk);
+        bool useTLS = parser.isSet(tlsOption);
+        bool portOk = true;
+        int portInt = useTLS ? 992 : 23;
+        if (parser.isSet(portOption))
+            portInt = parser.value(portOption).toInt(&portOk);
 
         if (!portOk || portInt < 1 || portInt > 65535) {
-            logger::Logger::instance()->error(
-                QString("Invalid port number: %1").arg(parser.value(portOption))
-            );
-            return 1;
+            return commandLineError(QString("Invalid port number: %1").arg(parser.value(portOption)));
         }
 
         quint16 port = static_cast<quint16>(portInt);
-        bool useTLS = parser.isSet(tlsOption);
 
         autoConnectConfig.setName("Command Line Session");
         autoConnectConfig.setHostname(hostname);
@@ -221,10 +234,7 @@ int main(int argc, char *argv[]) {
                     .arg(useTLS ? " (TLS)" : "")
             );
         } else {
-            logger::Logger::instance()->error(
-                "Invalid connection parameters from command line"
-            );
-            return 1;
+            return commandLineError("Invalid connection parameters from command line");
         }
     }
 
@@ -241,9 +251,8 @@ int main(int argc, char *argv[]) {
             if (portOk && mcpPort >= 1024 && mcpPort <= 65535) {
                 agentCfg.pinMcpServerPort(static_cast<quint16>(mcpPort));
             } else {
-                logger::Logger::instance()->error(
+                return commandLineError(
                     QString("Invalid MCP port number: %1").arg(parser.value(mcpPortOption)));
-                return 1;
             }
         }
         logger::Logger::instance()->debug(
