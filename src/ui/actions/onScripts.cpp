@@ -20,6 +20,7 @@
 #include "core/script_config.h"
 #include "core/script_library.h"
 #include "ui/dialogs/script_editor_window.h"
+#include "ui/dialogs/script_input_dialog.h"
 #include <5250script/script_compiler.h>
 #include <5250script/script_executor.h>
 #include <5250script/script_parser.h>
@@ -413,53 +414,15 @@ void MainWindow::onRunScript(const QString &path) {
 
     // Input
     *connInput = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::inputRequested, this,
-        [this, execGuard](const QStringList &labels, const QStringList &varNames) {
+        [this, execGuard](const QStringList &labels, const QStringList &varNames,
+                          const QList<bool> &masked) {
             if (execGuard.isNull()) return;
 
-            auto *dlg = new qt_ui_style::BaseFramelessDialog(this);
-            dlg->setWindowTitle("Script Input");
-            dlg->setFixedWidth(400);
-            dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
-            dlg->contentLayout()->setSpacing(8);
-
-            QVector<QLineEdit *> fields;
-            for (const QString &label : labels) {
-                auto *row = new QHBoxLayout();
-                auto *lbl = new QLabel(label, dlg);
-                lbl->setMinimumWidth(120);
-                auto *edit = new QLineEdit(dlg);
-                row->addWidget(lbl);
-                row->addWidget(edit);
-                dlg->contentLayout()->addLayout(row);
-                fields.append(edit);
-            }
-
-            auto *btnLayout = new QHBoxLayout();
-            auto *okBtn = new QPushButton("OK", dlg);
-            auto *cancelBtn = new QPushButton("Cancel", dlg);
-            btnLayout->addStretch();
-            btnLayout->addWidget(okBtn);
-            btnLayout->addWidget(cancelBtn);
-            dlg->contentLayout()->addLayout(btnLayout);
-
-            connect(okBtn, &QPushButton::clicked, dlg, &QDialog::accept);
-            connect(cancelBtn, &QPushButton::clicked, dlg, &QDialog::reject);
-            if (!fields.isEmpty()) {
-                connect(fields.last(), &QLineEdit::returnPressed, dlg, &QDialog::accept);
-                fields.first()->setFocus();
-            }
-
-            int result = dlg->exec();
-            if (result == QDialog::Accepted) {
-                QStringList values;
-                for (auto *edit : fields)
-                    values.append(edit->text());
-                delete dlg;
+            QStringList values;
+            if (ui::dialogs::ScriptInputDialog::ask(labels, masked, &values, this))
                 execGuard->resumeAfterInput(varNames, values);
-            } else {
-                delete dlg;
+            else
                 execGuard->stop();
-            }
         });
 
     // Show indicator
@@ -821,53 +784,15 @@ void MainWindow::runStartupScript(Session *s) {
         });
 
     *connInput = connect(s->scriptExecutor, &core::scripting::ScriptExecutor::inputRequested, this,
-        [this, execGuard](const QStringList &labels, const QStringList &varNames) {
+        [this, execGuard](const QStringList &labels, const QStringList &varNames,
+                          const QList<bool> &masked) {
             if (execGuard.isNull()) return;
 
-            auto *dlg = new qt_ui_style::BaseFramelessDialog(this);
-            dlg->setWindowTitle("Script Input");
-            dlg->setFixedWidth(400);
-            dlg->contentLayout()->setContentsMargins(12, 8, 12, 12);
-            dlg->contentLayout()->setSpacing(8);
-
-            QVector<QLineEdit *> fields;
-            for (const QString &label : labels) {
-                auto *row = new QHBoxLayout();
-                auto *lbl = new QLabel(label, dlg);
-                lbl->setMinimumWidth(120);
-                auto *edit = new QLineEdit(dlg);
-                row->addWidget(lbl);
-                row->addWidget(edit);
-                dlg->contentLayout()->addLayout(row);
-                fields.append(edit);
-            }
-
-            auto *btnLayout = new QHBoxLayout();
-            auto *okBtn = new QPushButton("OK", dlg);
-            auto *cancelBtn = new QPushButton("Cancel", dlg);
-            btnLayout->addStretch();
-            btnLayout->addWidget(okBtn);
-            btnLayout->addWidget(cancelBtn);
-            dlg->contentLayout()->addLayout(btnLayout);
-
-            connect(okBtn, &QPushButton::clicked, dlg, &QDialog::accept);
-            connect(cancelBtn, &QPushButton::clicked, dlg, &QDialog::reject);
-            if (!fields.isEmpty()) {
-                connect(fields.last(), &QLineEdit::returnPressed, dlg, &QDialog::accept);
-                fields.first()->setFocus();
-            }
-
-            int result = dlg->exec();
-            if (result == QDialog::Accepted) {
-                QStringList values;
-                for (auto *edit : fields)
-                    values.append(edit->text());
-                delete dlg;
+            QStringList values;
+            if (ui::dialogs::ScriptInputDialog::ask(labels, masked, &values, this))
                 execGuard->resumeAfterInput(varNames, values);
-            } else {
-                delete dlg;
+            else
                 execGuard->stop();
-            }
         });
 
     if (s->macroLabel) {

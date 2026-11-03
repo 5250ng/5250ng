@@ -187,7 +187,7 @@ void AgentScriptRunner::runScript(const QString &scriptText) {
 
     m_connections.append(
         connect(m_executor, &core::scripting::ScriptExecutor::inputRequested, this,
-            [this, execGuard](const QStringList &, const QStringList &) {
+            [this, execGuard](const QStringList &, const QStringList &, const QList<bool> &) {
                 if (!execGuard.isNull()) execGuard->stop();
                 QString log = m_logMessages.join("\n");
                 if (!log.isEmpty()) log += "\n";
