@@ -214,6 +214,8 @@ class MainWindow : public MainWindowBase {
         bool hasActivity = false;
         QByteArray lastScreenHash;
     };
+    // Checks or disables the per-session View/Scripts/Tools items
+    void syncSessionActions(Session *s);
 
     void runStartupScript(Session *session);
     void scheduleStartupScript(Session *session);

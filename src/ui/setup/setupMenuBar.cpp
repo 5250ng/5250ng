@@ -225,4 +225,7 @@ void MainWindow::setupMenuBar() {
     QAction *aboutAction =
         helpMenu->addAction("&About", this, &MainWindow::onAbout);
     aboutAction->setMenuRole(QAction::AboutRole);
+
+    // No session yet: the per-session items start disabled
+    syncSessionActions(nullptr);
 }
