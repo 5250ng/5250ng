@@ -22,6 +22,7 @@
 #include "session/manager.h"
 #include "ui/main_window.h"
 #include "ui/themes/manager.h"
+#include "ui/themes/app_theme_setting.h"
 #include "ui/themes/font_loader.h"
 #include "ui/themes/terminal_theme_manager.h"
 #include <QApplication>
@@ -265,7 +266,9 @@ int main(int argc, char *argv[]) {
     // Load themes early so UI can query theme colors
     ui::themes::ThemeManager::instance().loadBuiltinThemes();
     // Optionally set a default theme
-    ui::themes::ThemeManager::instance().setCurrentTheme("dark");
+    // A stored theme that no longer exists falls back to the default
+    if (!ui::themes::ThemeManager::instance().setCurrentTheme(ui::themes::savedAppTheme()))
+        ui::themes::ThemeManager::instance().setCurrentTheme(QStringLiteral("dark"));
 
     // Load terminal themes (builtin + user-created)
     ui::themes::TerminalThemeManager::instance().loadBuiltinThemes();
