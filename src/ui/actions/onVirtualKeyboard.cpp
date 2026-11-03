@@ -91,6 +91,10 @@ void MainWindow::onEditKeyboardMapping() {
 void MainWindow::onVirtualKeyboardAction(core::MappedAction action) {
     if (m_displayWidget) {
         m_displayWidget->setFocus();
+        // Same rules as typed keys: no input in read-only sessions, and no
+        // second AID while the host still has the keyboard locked
+        if (!m_displayWidget->acceptsInput(action))
+            return;
         m_displayWidget->dispatchMappedAction(action);
     }
 }
@@ -98,6 +102,8 @@ void MainWindow::onVirtualKeyboardAction(core::MappedAction action) {
 void MainWindow::onVirtualKeyboardCharacter(QChar ch) {
     if (m_displayWidget) {
         m_displayWidget->setFocus();
+        if (!m_displayWidget->acceptsInput(core::MappedAction::None))
+            return;
         m_displayWidget->dispatchCharacter(ch);
     }
 }

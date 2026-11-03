@@ -174,6 +174,21 @@ void Q5250ScreenWidget::keyPressEvent(QKeyEvent *event) {
     QWidget::keyPressEvent(event);
 }
 
+bool Q5250ScreenWidget::acceptsInput(core::MappedAction action) const {
+    using core::MappedAction;
+    if (m_readOnly && !m_mcpInjecting)
+        return false;
+    switch (m_keyboardState) {
+    case KeyboardState::Locked:
+        return action == MappedAction::Attn || action == MappedAction::SysReq;
+    case KeyboardState::ErrorLocked:
+        return action == MappedAction::Attn || action == MappedAction::Help
+               || action == MappedAction::Reset;
+    default:
+        return true;
+    }
+}
+
 void Q5250ScreenWidget::dispatchMappedAction(core::MappedAction action) {
     using core::MappedAction;
 
