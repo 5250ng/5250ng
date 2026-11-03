@@ -539,6 +539,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_telnet_subnegotiation tests/unit/test_telnet_subnegotiation.cpp)
     add_tn5250_test(test_logger tests/unit/test_logger.cpp)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
+    add_tn5250_test(test_codepage_new_environ tests/unit/test_codepage_new_environ.cpp)
 
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
     add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)

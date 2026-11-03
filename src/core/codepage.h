@@ -63,6 +63,11 @@ class CodePage {
     // Get list of supported code pages
     static QList<ID> supportedCodePages();
     static QString codepageName(ID id);
+    // Values sent to the host in NEW-ENVIRON (RFC 4777) with the code page:
+    // the national keyboard type (KBDTYPE) and the graphic character set
+    // (CHARSET) that make a valid CCSID pair with it.
+    static QString keyboardType(ID id);
+    static int characterSet(ID id);
     // Returns true if the integer matches one of the supported code page IDs.
     static bool isKnownId(int id);
 
