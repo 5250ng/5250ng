@@ -529,6 +529,7 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
     if (isAID) {
         // Attn key - telnet-level signal, not a normal AID response
         if (firstByte == 0x70) { // AID_ATTN
+            emit aidKeyRecorded(firstByte); // so macros replay it
             emit attentionRequested();
             setKeyboardState(KeyboardState::Locked);
             if (m_insertMode) {
@@ -539,6 +540,7 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
         }
         // SysReq key - telnet-level signal
         if (firstByte == 0x71) { // AID_SYSREQ
+            emit aidKeyRecorded(firstByte); // so macros replay it
             emit systemRequestRequested();
             return;
         }
