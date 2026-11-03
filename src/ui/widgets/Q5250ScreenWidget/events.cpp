@@ -375,16 +375,36 @@ void Q5250ScreenWidget::mouseReleaseEvent(QMouseEvent *event) {
 }
 
 void Q5250ScreenWidget::wheelEvent(QWheelEvent *event) {
-    // Mouse scroll up/down → PageUp/PageDown (RollUp/RollDown) for AS/400 menu scrolling
+    // Mouse scroll up/down → PageUp/PageDown (RollUp/RollDown) for AS/400 menu scrolling.
+    // Ctrl+wheel is left to the parent (zoom).
     QPoint delta = event->angleDelta();
-    if (delta.y() != 0) {
-        int key = (delta.y() > 0) ? Qt::Key_PageUp : Qt::Key_PageDown;
-        QKeyEvent synth(QEvent::KeyPress, key, Qt::NoModifier);
-        keyPressEvent(&synth);
-        event->accept();
+    // A new trackpad gesture starts a new notch (its first event has no delta).
+    if (event->phase() == Qt::ScrollBegin)
+        m_wheelAccumulator = 0;
+    if (delta.y() == 0 || (event->modifiers() & Qt::ControlModifier)) {
+        QWidget::wheelEvent(event);
         return;
     }
-    QWidget::wheelEvent(event);
+    event->accept();
+    // A Roll is sent to the host and locks the keyboard, so scrolling that
+    // arrives meanwhile (trackpad momentum) is dropped, not queued.
+    if (m_keyboardState != KeyboardState::Unlocked
+        && m_keyboardState != KeyboardState::SystemRequest) {
+        m_wheelAccumulator = 0;
+        return;
+    }
+    // High-resolution wheels and trackpads deliver a notch (120) in many
+    // small events: send one Roll per full notch, not one per event. A change
+    // of direction starts a new notch.
+    if ((m_wheelAccumulator > 0) != (delta.y() > 0))
+        m_wheelAccumulator = 0;
+    m_wheelAccumulator += delta.y();
+    if (qAbs(m_wheelAccumulator) < QWheelEvent::DefaultDeltasPerStep)
+        return;
+    int key = (m_wheelAccumulator > 0) ? Qt::Key_PageUp : Qt::Key_PageDown;
+    m_wheelAccumulator = 0;
+    QKeyEvent synth(QEvent::KeyPress, key, Qt::NoModifier);
+    keyPressEvent(&synth);
 }
 
 void Q5250ScreenWidget::focusInEvent(QFocusEvent *event) {

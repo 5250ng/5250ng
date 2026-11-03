@@ -342,6 +342,7 @@ class Q5250ScreenWidget : public QWidget {
     // 5250 terminal state
     KeyboardState m_keyboardState;
     bool m_insertMode;
+    int m_wheelAccumulator = 0; // wheel delta not yet turned into a Roll
     bool m_messageWaiting;
     int m_icRow;
     int m_icCol;
