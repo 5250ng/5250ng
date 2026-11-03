@@ -17,6 +17,7 @@
 #include "../main_window.h"
 #include "mcp/McpServer.h"
 #include <QCoreApplication>
+#include <QMetaMethod>
 
 void MainWindow::onCloseTabRequested(int index) {
     if (index < 0 || index >= m_sessions.size()) {
@@ -34,9 +35,18 @@ void MainWindow::onCloseTabRequested(int index) {
         QMetaObject::invokeMethod(s->worker, "stop", Qt::QueuedConnection);
     }
     // Disconnect cross-object signals within the session to prevent
-    // queued signals from firing between objects during destruction
+    // queued signals from firing between objects during destruction. Only
+    // the screen widget's own signals: a bare disconnect() also cuts the
+    // destroyed() link through which Qt's style sheet style forgets the
+    // widget, and the next style sheet change (a theme switch) then used
+    // the deleted widget.
     if (s->displayWidget) {
-        s->displayWidget->disconnect();
+        const QMetaObject &mo = ui::widgets::Q5250ScreenWidget::staticMetaObject;
+        for (int i = mo.methodOffset(); i < mo.methodCount(); ++i) {
+            const QMetaMethod method = mo.method(i);
+            if (method.methodType() == QMetaMethod::Signal)
+                QObject::disconnect(s->displayWidget, method, nullptr, QMetaMethod());
+        }
     }
     if (s->commandHandler) {
         s->commandHandler->disconnect();

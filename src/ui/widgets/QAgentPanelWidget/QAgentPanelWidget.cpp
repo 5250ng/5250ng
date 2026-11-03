@@ -575,8 +575,10 @@ void QAgentPanelWidget::onToolCallReceived(const agent::ToolCall &call) {
     }
 
     // Wire up buttons for script execution
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    // Only the clicked() handlers: a bare disconnect() also cuts Qt's own
+    // destroyed() link from the style sheet cache (see #388)
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
@@ -826,8 +828,8 @@ void QAgentPanelWidget::onWriteFileToolCall(const agent::ToolCall &call) {
     }
 
     // Wire up buttons for file write
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onAcceptFileWriteClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelFileWriteClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
@@ -1030,8 +1032,8 @@ void QAgentPanelWidget::onSendKeysToolCall(const agent::ToolCall &call) {
     }
 
     // Show Run/Cancel buttons for user confirmation
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
@@ -1101,8 +1103,8 @@ void QAgentPanelWidget::onTypeTextToolCall(const agent::ToolCall &call) {
     }
 
     // Show Run/Cancel buttons for user confirmation
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
@@ -1236,8 +1238,8 @@ void QAgentPanelWidget::onSetCursorPositionToolCall(const agent::ToolCall &call)
         return;
     }
 
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
@@ -1318,8 +1320,8 @@ void QAgentPanelWidget::onMoveCursorToolCall(const agent::ToolCall &call) {
         return;
     }
 
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
@@ -1394,8 +1396,8 @@ void QAgentPanelWidget::onWaitForTextToolCall(const agent::ToolCall &call) {
         return;
     }
 
-    m_acceptButton->disconnect();
-    m_cancelButton->disconnect();
+    QObject::disconnect(m_acceptButton, &QAbstractButton::clicked, nullptr, nullptr);
+    QObject::disconnect(m_cancelButton, &QAbstractButton::clicked, nullptr, nullptr);
     connect(m_acceptButton, &QPushButton::clicked, this, &QAgentPanelWidget::onRunScriptClicked, Qt::SingleShotConnection);
     connect(m_cancelButton, &QPushButton::clicked, this, &QAgentPanelWidget::onCancelScriptClicked, Qt::SingleShotConnection);
     m_acceptButton->setEnabled(true);
