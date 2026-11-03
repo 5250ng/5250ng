@@ -64,7 +64,8 @@ void OAuthFlow::start() {
     }
     authUrl.setQuery(query);
 
-    if (!QDesktopServices::openUrl(authUrl)) {
+    const bool opened = m_openUrl ? m_openUrl(authUrl) : QDesktopServices::openUrl(authUrl);
+    if (!opened) {
         m_server.close();
         emit flowFailed("Failed to open browser for authentication.");
     }
@@ -78,68 +79,93 @@ void OAuthFlow::abort() {
     }
 }
 
+namespace {
+
+void sendPage(QTcpSocket *socket, const QByteArray &status, const QString &title,
+              const QString &text) {
+    const QByteArray body = QStringLiteral("<html><body><h2>%1</h2><p>%2</p></body></html>")
+                                .arg(title.toHtmlEscaped(), text.toHtmlEscaped())
+                                .toUtf8();
+    socket->write("HTTP/1.1 " + status + "\r\n"
+                  "Content-Type: text/html; charset=utf-8\r\n"
+                  "Content-Length: " + QByteArray::number(body.size()) + "\r\n"
+                  "Connection: close\r\n\r\n" + body);
+    socket->flush();
+    socket->disconnectFromHost();
+}
+
+} // namespace
+
 void OAuthFlow::onNewConnection() {
-    QTcpSocket *socket = m_server.nextPendingConnection();
-    if (!socket) return;
+    while (QTcpSocket *socket = m_server.nextPendingConnection()) {
+        connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+        // A request can arrive in several reads: wait for the full request
+        // line before parsing it.
+        auto buffer = std::make_shared<QByteArray>();
+        connect(socket, &QTcpSocket::readyRead, this, [this, socket, buffer]() {
+            buffer->append(socket->readAll());
+            int lineEnd = buffer->indexOf("\r\n");
+            if (lineEnd < 0) lineEnd = buffer->indexOf('\n');
+            if (lineEnd < 0) {
+                if (buffer->size() > 8192)
+                    sendPage(socket, "414 URI Too Long", "Request too long", QString());
+                return;
+            }
+            const QByteArray requestLine = buffer->left(lineEnd);
+            buffer->clear();
+            disconnect(socket, &QTcpSocket::readyRead, this, nullptr);
 
-    connect(socket, &QTcpSocket::readyRead, this, [this, socket]() {
-        QByteArray data = socket->readAll();
+            // "GET /callback?code=...&state=... HTTP/1.1"
+            const QList<QByteArray> parts = requestLine.split(' ');
+            const QUrl requestUrl(QStringLiteral("http://localhost")
+                                  + QString::fromUtf8(parts.value(1)));
+            const QUrlQuery query(requestUrl);
 
-        // Parse the GET request line to extract query parameters
-        int lineEnd = data.indexOf("\r\n");
-        if (lineEnd < 0) lineEnd = data.indexOf("\n");
-        QByteArray requestLine = (lineEnd > 0) ? data.left(lineEnd) : data;
+            // Anything else the browser asks for (favicon.ico, ...) is not
+            // the callback: answer it and keep waiting.
+            if (parts.value(0) != "GET" || requestUrl.path() != QLatin1String("/callback")) {
+                sendPage(socket, "404 Not Found", "Not found", QString());
+                return;
+            }
+            if (m_callbackHandled || m_completed) {
+                sendPage(socket, "410 Gone", "Sign-in already completed",
+                         "You can close this tab and return to 5250ng.");
+                return;
+            }
+            // A callback without our state did not come from the sign-in we
+            // started (CSRF, or a stale tab): refuse it, keep waiting for
+            // the real one.
+            if (query.queryItemValue("state").toUtf8() != m_state) {
+                sendPage(socket, "400 Bad Request", "Authentication failed",
+                         "The sign-in response did not match this request.");
+                return;
+            }
 
-        // Extract path+query from "GET /callback?code=...&state=... HTTP/1.1"
-        int pathStart = requestLine.indexOf(' ') + 1;
-        int pathEnd = requestLine.indexOf(' ', pathStart);
-        QByteArray pathAndQuery = requestLine.mid(pathStart, pathEnd - pathStart);
+            m_callbackHandled = true;
+            m_server.close();
 
-        QUrl requestUrl("http://localhost" + QString::fromUtf8(pathAndQuery));
-        QUrlQuery query(requestUrl);
+            if (query.hasQueryItem("error")) {
+                m_completed = true;
+                QString errorDesc = query.queryItemValue("error_description", QUrl::FullyDecoded);
+                if (errorDesc.isEmpty()) errorDesc = query.queryItemValue("error");
+                sendPage(socket, "200 OK", "Authentication failed", "Authorization denied: " + errorDesc);
+                emit flowFailed("Authorization denied: " + errorDesc);
+                return;
+            }
 
-        // Send a response to the browser
-        QByteArray response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html\r\n"
-            "Connection: close\r\n\r\n"
-            "<html><body><h2>Authentication successful</h2>"
-            "<p>You can close this tab and return to 5250ng.</p>"
-            "</body></html>";
-        socket->write(response);
-        socket->flush();
-        socket->disconnectFromHost();
+            const QString code = query.queryItemValue("code");
+            if (code.isEmpty()) {
+                m_completed = true;
+                sendPage(socket, "200 OK", "Authentication failed", "No authorization code received.");
+                emit flowFailed("No authorization code received.");
+                return;
+            }
 
-        m_server.close();
-
-        if (m_completed) return;
-
-        // Verify state
-        QString receivedState = query.queryItemValue("state");
-        if (receivedState.toUtf8() != m_state) {
-            m_completed = true;
-            emit flowFailed("OAuth state mismatch - possible CSRF attack.");
-            return;
-        }
-
-        // Check for error
-        if (query.hasQueryItem("error")) {
-            m_completed = true;
-            QString errorDesc = query.queryItemValue("error_description");
-            if (errorDesc.isEmpty()) errorDesc = query.queryItemValue("error");
-            emit flowFailed("Authorization denied: " + errorDesc);
-            return;
-        }
-
-        QString code = query.queryItemValue("code");
-        if (code.isEmpty()) {
-            m_completed = true;
-            emit flowFailed("No authorization code received.");
-            return;
-        }
-
-        exchangeCode(code);
-    });
+            sendPage(socket, "200 OK", "Authorization received",
+                     "You can close this tab and return to 5250ng.");
+            exchangeCode(code);
+        });
+    }
 }
 
 void OAuthFlow::exchangeCode(const QString &code) {
