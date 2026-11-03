@@ -26,6 +26,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMap>
+#include <QSet>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QSplitter>
@@ -59,6 +60,8 @@ class SettingsDialog : public qt_ui_style::BaseFramelessDialog {
     void onCategoryChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
     void onCloseClicked();
     void onSaveClicked();
+    // Writes one page's settings (no confirmation)
+    void savePage(QWidget *page);
 
   private:
     void setupUI();
@@ -148,4 +151,5 @@ class SettingsDialog : public qt_ui_style::BaseFramelessDialog {
     QStringList m_toolNames;
 
     agent::OAuthAuth *m_activeOAuth = nullptr;
+    QSet<QWidget *> m_visitedPages; // pages shown since the dialog opened
 };

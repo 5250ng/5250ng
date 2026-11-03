@@ -16,6 +16,7 @@
 
 #include "ui/main_window.h"
 #include "ui/themes/manager.h"
+#include "ui/themes/app_theme_setting.h"
 #include "ui/widgets/popup_choice_filter.h"
 #include <QComboBox>
 #include <QFrame>
@@ -65,7 +66,9 @@ void MainWindow::setupUI() {
     // Load built-in themes before applying one (must come first)
     ui::themes::ThemeManager::instance().loadBuiltinThemes();
     // Set the UI theme to dark via ThemeManager
-    ui::themes::ThemeManager::instance().setCurrentTheme("dark");
+    // A stored theme that no longer exists falls back to the default
+    if (!ui::themes::ThemeManager::instance().setCurrentTheme(ui::themes::savedAppTheme()))
+        ui::themes::ThemeManager::instance().setCurrentTheme(QStringLiteral("dark"));
 
     // Use BaseFramelessWindow content area
     QVBoxLayout *content = contentLayout();

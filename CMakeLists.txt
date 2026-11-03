@@ -620,6 +620,21 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_menu_check_state COMMAND test_menu_check_state)
 
+    # Settings dialog Save (application sources)
+    add_executable(test_settings_save_all_pages
+        tests/unit/test_settings_save_all_pages.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_settings_save_all_pages PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_settings_save_all_pages PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_settings_save_all_pages PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_settings_save_all_pages COMMAND test_settings_save_all_pages)
+
     # MCP server stop must drop connected clients
     add_executable(test_mcp_server_stop
         tests/unit/test_mcp_server_stop.cpp

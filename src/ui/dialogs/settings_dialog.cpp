@@ -20,6 +20,7 @@
 #include "agent/tool_definitions.h"
 #include "core/macro_config.h"
 #include "core/script_config.h"
+#include "ui/themes/app_theme_setting.h"
 #include "agent/auth/api_key_auth.h"
 #include "agent/auth/oauth_auth.h"
 #include "agent/auth/token_storage.h"
@@ -163,6 +164,11 @@ void SettingsDialog::setupUI() {
 
     connect(m_categoryTree, &QTreeWidget::currentItemChanged, this,
             &SettingsDialog::onCategoryChanged);
+    // Remember every page shown, so Save writes all of them
+    m_visitedPages.insert(m_pages->currentWidget());
+    connect(m_pages, &QStackedWidget::currentChanged, this, [this](int index) {
+        m_visitedPages.insert(m_pages->widget(index));
+    });
 }
 
 QWidget *SettingsDialog::buildThemePage() {
@@ -720,14 +726,12 @@ void SettingsDialog::onScriptsSaveClicked() {
     cfg.setJitterRange(m_defaultJitterMinSpin->value(), m_defaultJitterMaxSpin->value());
     cfg.setConfirmDelete(m_confirmDeleteCheck->isChecked());
     cfg.save();
-    qt_ui_style::StyledMessageBox::information(this, "Scripts Settings", "Settings saved.");
 }
 
 void SettingsDialog::onMacrosSaveClicked() {
     auto &cfg = core::MacroConfig::instance();
     cfg.setRecordTimings(m_recordTimingsCheck->isChecked());
     cfg.save();
-    qt_ui_style::StyledMessageBox::information(this, "Macros Settings", "Settings saved.");
 }
 
 QWidget *SettingsDialog::buildMcpServerPage() {
@@ -780,7 +784,6 @@ void SettingsDialog::onMcpSaveClicked() {
     cfg.setMcpAutoStart(m_mcpAutoStartCheck->isChecked());
     cfg.setMcpServerPort(static_cast<quint16>(m_mcpPortSpin->value()));
     cfg.save();
-    qt_ui_style::StyledMessageBox::information(this, "MCP Server Settings", "Settings saved.");
 }
 
 void SettingsDialog::onAgentProviderChanged(int index) {
@@ -927,7 +930,6 @@ void SettingsDialog::onAgentSaveClicked() {
     cfg.save();
     emit agentConfigChanged();
 
-    qt_ui_style::StyledMessageBox::information(this, "Agent Settings", "Settings saved.");
 }
 
 void SettingsDialog::onOAuthSignInClicked() {
@@ -1055,8 +1057,20 @@ void SettingsDialog::onCategoryChanged(QTreeWidgetItem *current,
 }
 
 void SettingsDialog::onSaveClicked() {
-    QWidget *currentPage = m_pages->currentWidget();
+    // Save every page the user opened in this dialog, not only the one on
+    // screen; pages never opened keep their stored values as they are.
+    for (QWidget *page : std::as_const(m_visitedPages)) {
+        // The 5250 Theme page applies its theme to every open session;
+        // only do that when it is the page on screen, as before, not
+        // because the user looked at it earlier
+        if (page == m_terminalThemePage && page != m_pages->currentWidget())
+            continue;
+        savePage(page);
+    }
+    qt_ui_style::StyledMessageBox::information(this, "Settings", "Settings saved.");
+}
 
+void SettingsDialog::savePage(QWidget *currentPage) {
     if (currentPage == m_toolsPage) {
         // Save all tools from the table + detail panel
         auto &cfg = agent::AgentConfig::instance();
@@ -1074,7 +1088,6 @@ void SettingsDialog::onSaveClicked() {
         }
         cfg.save();
         emit agentConfigChanged();
-        qt_ui_style::StyledMessageBox::information(this, "Tools", "Tool settings saved.");
         return;
     }
 
@@ -1082,8 +1095,10 @@ void SettingsDialog::onSaveClicked() {
         const QString name = m_themeCombo->currentData().toString();
         if (!name.isEmpty()) {
             auto &mgr = ui::themes::ThemeManager::instance();
-            if (mgr.hasTheme(name))
+            if (mgr.hasTheme(name)) {
                 mgr.setCurrentTheme(name);
+                ui::themes::saveAppTheme(name); // restored at the next launch
+            }
         }
     } else if (currentPage == m_terminalThemePage) {
         m_terminalThemePage->onApplyToAll();
