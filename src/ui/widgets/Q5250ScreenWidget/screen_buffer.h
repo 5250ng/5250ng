@@ -65,6 +65,10 @@ class ScreenBuffer : public QObject {
     ScreenCell &cell(int row, int col);
     const ScreenCell &cell(int row, int col) const;
     uint8_t character(int row, int col) const;
+    // The character as the screen shows it: a non-display (DSPATR(ND)) cell
+    // reads as a blank. Use this for any text that leaves the screen (MCP,
+    // agent, scripts); character() is the raw value the host is sent.
+    uint8_t displayedCharacter(int row, int col) const;
     CellAttributes attributes(int row, int col) const;
 
     // Cursor management
@@ -104,6 +108,8 @@ class ScreenBuffer : public QObject {
     void resetAllMDTFlags();
     QVector<Field> getModifiedFields() const;
     QByteArray getFieldData(const Field &field) const;
+    // getFieldData() with non-display cells as blanks (see displayedCharacter())
+    QByteArray getDisplayedFieldData(const Field &field) const;
     void markFieldModified(int row, int col);
 
     // Screen operations

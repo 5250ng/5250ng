@@ -587,7 +587,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                             QString line;
                             line.reserve(screenBuf->cols());
                             for (int c = 0; c < screenBuf->cols(); ++c) {
-                                uint8_t ch = screenBuf->character(r, c);
+                                uint8_t ch = screenBuf->displayedCharacter(r, c);
                                 QChar qc = core::EBCDIC::ebcdicToChar(ch);
                                 line += qc.isPrint() ? qc : QChar(' ');
                             }

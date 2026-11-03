@@ -1155,7 +1155,7 @@ void QAgentPanelWidget::onGetFieldAtToolCall(const agent::ToolCall &call) {
         } else {
             auto field = buf->getField(row, col);
             // Read field text
-            QByteArray fieldData = buf->getFieldData(field);
+            QByteArray fieldData = buf->getDisplayedFieldData(field);
             QString fieldText;
             for (uint8_t byte : fieldData)
                 fieldText += core::EBCDIC::ebcdicToChar(byte);
@@ -1447,7 +1447,7 @@ void QAgentPanelWidget::onFindTextToolCall(const agent::ToolCall &call) {
         for (int r = 0; r < buf->rows(); ++r) {
             QString line;
             for (int c = 0; c < buf->cols(); ++c) {
-                uint8_t ch = buf->character(r, c);
+                uint8_t ch = buf->displayedCharacter(r, c);
                 line += core::EBCDIC::ebcdicToChar(ch);
             }
             int col = 0;
@@ -1491,7 +1491,7 @@ void QAgentPanelWidget::onReadLineToolCall(const agent::ToolCall &call) {
         } else {
             QString line;
             for (int c = 0; c < buf->cols(); ++c) {
-                uint8_t ch = buf->character(row, c);
+                uint8_t ch = buf->displayedCharacter(row, c);
                 line += core::EBCDIC::ebcdicToChar(ch);
             }
             while (line.endsWith(' '))
@@ -1537,7 +1537,7 @@ void QAgentPanelWidget::onReadRegionToolCall(const agent::ToolCall &call) {
             for (int r = row; r < row + numRows; ++r) {
                 QString line;
                 for (int c = col; c < col + numCols; ++c) {
-                    uint8_t ch = buf->character(r, c);
+                    uint8_t ch = buf->displayedCharacter(r, c);
                     line += core::EBCDIC::ebcdicToChar(ch);
                 }
                 while (line.endsWith(' '))

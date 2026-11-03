@@ -84,6 +84,14 @@ uint8_t ScreenBuffer::character(int row, int col) const {
     return m_buffer[index(row, col)].character;
 }
 
+uint8_t ScreenBuffer::displayedCharacter(int row, int col) const {
+    if (!isValidPosition(row, col)) {
+        return 0x40; // EBCDIC space
+    }
+    const ScreenCell &cell = m_buffer[index(row, col)];
+    return cell.attributes.nonDisplay ? 0x40 : cell.character;
+}
+
 CellAttributes ScreenBuffer::attributes(int row, int col) const {
     if (!isValidPosition(row, col)) {
         return CellAttributes();
@@ -462,6 +470,15 @@ QByteArray ScreenBuffer::getFieldData(const Field &field) const {
         int c = (addr + i) % m_cols;
         data.append(static_cast<char>(m_buffer[index(r, c)].character));
     }
+    return data;
+}
+
+QByteArray ScreenBuffer::getDisplayedFieldData(const Field &field) const {
+    QByteArray data;
+    int addr = field.startRow * m_cols + field.startCol;
+    int totalCells = m_rows * m_cols;
+    for (int i = 0; i < field.length && addr + i < totalCells; ++i)
+        data.append(static_cast<char>(displayedCharacter((addr + i) / m_cols, (addr + i) % m_cols)));
     return data;
 }
 

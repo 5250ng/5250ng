@@ -51,7 +51,7 @@ QString ScreenBufferAdapter::readText(int row, int col, int length) const {
 
     QString result;
     for (int i = 0; i < length && col + i < buf->cols(); ++i) {
-        uint8_t ch = buf->character(row, col + i);
+        uint8_t ch = buf->displayedCharacter(row, col + i);
         result += core::EBCDIC::ebcdicToChar(ch);
     }
     return result;
@@ -64,7 +64,7 @@ QString ScreenBufferAdapter::readFieldText(int row, int col) const {
     auto field = buf->getField(row, col);
     if (field.length == 0) return {};
 
-    QByteArray data = buf->getFieldData(field);
+    QByteArray data = buf->getDisplayedFieldData(field);
     return core::EBCDIC::ebcdicToString(data);
 }
 
