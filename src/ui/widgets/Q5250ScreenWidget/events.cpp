@@ -1361,77 +1361,39 @@ void Q5250ScreenWidget::handleFieldMinus() {
 
 void Q5250ScreenWidget::handlePaste() {
     if (!m_screenBuffer) return;
+    // Paste is typed input: refused in read-only mode and while the
+    // keyboard is locked, like the keys it stands for
+    if (!acceptsInput(core::MappedAction::None)) return;
 
     QString text = QApplication::clipboard()->text();
     if (text.isEmpty()) return;
 
-    QPoint cursor = m_screenBuffer->cursorPosition();
-    int row = cursor.y();
-    int col = cursor.x();
+    // Pasting from outside an input field starts in the next one, rather
+    // than losing the characters typing would refuse there
+    const QPoint start = m_screenBuffer->cursorPosition();
+    if (m_screenBuffer->isProtected(start.y(), start.x()))
+        moveToNextField();
 
+    // Each character goes through the typing path, so field rules,
+    // monocase, insert mode and auto-enter apply. Line breaks and tabs
+    // move to the next input field.
     for (int i = 0; i < text.size(); ++i) {
+        // A character that filled an auto-enter field sent the screen and
+        // locked the keyboard: the rest is not for this screen
+        if (m_keyboardState == KeyboardState::Locked ||
+            m_keyboardState == KeyboardState::ErrorLocked)
+            break;
         QChar ch = text[i];
-
-        // Handle newlines by advancing to next field
-        if (ch == '\n' || ch == '\r') {
-            if (i + 1 < text.size() && text[i] == '\r' && text[i + 1] == '\n') {
-                ++i; // Skip \r\n pair
-            }
-            ScreenBuffer::Field nextField = findNextField(row, col);
-            if (nextField.length > 0) {
-                row = nextField.startRow;
-                col = nextField.startCol;
-            }
+        if (ch == '\r' && i + 1 < text.size() && text[i + 1] == '\n')
+            ++i; // \r\n is one line break
+        if (ch == '\n' || ch == '\r' || ch == '\t') {
+            moveToNextField();
             continue;
         }
-
-        // Skip protected positions
-        if (m_screenBuffer->isProtected(row, col)) {
-            // Try to find next unprotected field
-            ScreenBuffer::Field nextField = findNextField(row, col);
-            if (nextField.length > 0) {
-                row = nextField.startRow;
-                col = nextField.startCol;
-            } else {
-                break; // No more fields
-            }
-        }
-
-        // Convert character to EBCDIC
-        uint8_t ebcdic = core::EBCDIC::charToEBCDIC(ch);
-        if (ebcdic == 0x00) continue; // Skip unmappable characters
-
-        m_screenBuffer->writeChar(row, col, ebcdic);
-        m_screenBuffer->markFieldModified(row, col);
-
-        // Advance within field
-        ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
-        if (field.length > 0) {
-            int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-            int fieldEnd = fieldStart + field.length;
-            int curAddr = row * m_screenBuffer->cols() + col;
-            if (curAddr + 1 >= fieldEnd) {
-                // End of field - advance to next field
-                ScreenBuffer::Field nextField = findNextField(row, col);
-                if (nextField.length > 0) {
-                    row = nextField.startRow;
-                    col = nextField.startCol;
-                } else {
-                    break;
-                }
-                continue;
-            }
-        }
-
-        col++;
-        if (col >= m_screenBuffer->cols()) {
-            col = 0;
-            row++;
-            if (row >= m_screenBuffer->rows()) break;
-        }
+        if (!ch.isPrint())
+            continue;
+        dispatchCharacter(ch);
     }
-
-    m_screenBuffer->setCursorPosition(row, col);
     update();
 }
 
