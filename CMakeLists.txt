@@ -818,6 +818,21 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_save_session_device_name COMMAND test_save_session_device_name)
 
+    # Theme change after closing a tab (stylesheet cache of the closed tab)
+    add_executable(test_close_tab_theme_change
+        tests/integration/test_close_tab_theme_change.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_close_tab_theme_change PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_close_tab_theme_change PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_close_tab_theme_change PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_close_tab_theme_change COMMAND test_close_tab_theme_change)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.
