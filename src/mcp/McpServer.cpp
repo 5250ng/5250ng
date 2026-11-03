@@ -16,6 +16,7 @@
 
 #include "McpServer.h"
 #include "McpHttpParser.h"
+#include "mcp_request_guard.h"
 #include "logger/logger.h"
 #include <QDateTime>
 #include <QJsonDocument>
@@ -256,6 +257,36 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         resp.body = R"({"error":"Not found"})";
         socket->write(resp.toBytes());
         socket->flush();
+        return;
+    }
+
+    // Refuse requests from web pages: a foreign Origin (cross-site request)
+    // or a foreign Host (DNS rebinding). Any page in the user's browser could
+    // otherwise call the tools (files, sessions, typing into IBM i).
+    auto refuse = [&](int code, const QString &text, const QString &reason) {
+        MCP_ERROR(QString("Refused %1 request: %2").arg(req.method, reason));
+        HttpResponse resp;
+        resp.statusCode = code;
+        resp.statusText = text;
+        resp.headers["Content-Type"] = "application/json";
+        QJsonObject err;
+        err["error"] = reason;
+        resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
+        socket->write(resp.toBytes());
+        socket->flush();
+        socket->disconnectFromHost();
+    };
+    if (!isAllowedHostHeader(req.headers.value("host"))) {
+        refuse(403, QStringLiteral("Forbidden"), QStringLiteral("Host must be localhost"));
+        return;
+    }
+    if (!isAllowedOrigin(req.headers.value("origin"))) {
+        refuse(403, QStringLiteral("Forbidden"), QStringLiteral("Cross-origin requests are not allowed"));
+        return;
+    }
+    if (req.method == "POST" && !isJsonContentType(req.headers.value("content-type"))) {
+        refuse(415, QStringLiteral("Unsupported Media Type"),
+               QStringLiteral("Content-Type must be application/json"));
         return;
     }
 
