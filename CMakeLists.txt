@@ -594,6 +594,21 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_login COMMAND test_mcp_login)
 
+    # Per-session menu items follow the active tab (real MainWindow)
+    add_executable(test_menu_check_state
+        tests/integration/test_menu_check_state.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_menu_check_state PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_menu_check_state PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_menu_check_state PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_menu_check_state COMMAND test_menu_check_state)
+
     # MCP server stop must drop connected clients
     add_executable(test_mcp_server_stop
         tests/unit/test_mcp_server_stop.cpp

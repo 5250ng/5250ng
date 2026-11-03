@@ -1096,6 +1096,36 @@ void MainWindow::updateCursorCoordinatesFont() {
 }
 
 /**
+ * Sets the View, Scripts and Tools items that toggle per-session state to
+ * the given session's state (checked or not), or disables them when no
+ * session is open: their handlers act on the active session only.
+ */
+void MainWindow::syncSessionActions(Session *s) {
+    auto *display = s ? s->displayWidget : nullptr;
+    auto set = [](QAction *action, bool enabled, bool checked) {
+        if (!action) return;
+        action->setEnabled(enabled);
+        action->setChecked(enabled && checked);
+    };
+    set(m_hotspotsAction, display, display && display->hotspotsEnabled());
+    set(m_cursorRulesAction, display, display && display->showCursorRules());
+    set(m_showFieldProtectionAction, display, display && display->showFieldProtection());
+    set(m_showInputFieldsAction, display, display && display->showInputFields());
+    set(m_showCellGridAction, display, display && display->showCellGrid());
+    set(m_sessionLoggingAction, s, s && s->sessionLogger && s->sessionLogger->isActive());
+    set(m_matchReplaceEnableAction, s, s && s->matchReplace && s->matchReplace->isEnabled());
+    set(m_scriptRecordAction, s, s && s->macroRecorder && s->macroRecorder->isRecording());
+    // MCP-controlled sessions have no agent panel
+    set(m_agentPanelAction, s && s->agentPanel, s && s->agentPanel && s->agentPanel->isVisible());
+    if (m_scriptStopAction) {
+        // Stop applies while recording, playing a macro or running a script
+        m_scriptStopAction->setEnabled(
+            s && ((s->macroRecorder && (s->macroRecorder->isRecording() || s->macroRecorder->isPlaying()))
+                  || (s->scriptExecutor && s->scriptExecutor->isRunning())));
+    }
+}
+
+/**
  * Update convenience pointers and UI to target the session at index.
  *
  * @param index Index in the sessions vector, or -1 to clear active state.
@@ -1117,6 +1147,7 @@ void MainWindow::setActiveSession(int index) {
         // Reset global status to disconnected when no session is active
         m_globalConnectionStatus->setState(tn5250::client::TN5250Client::ConnectionState::Disconnected);
         m_globalConnectionStatus->setStatusText("Not connected");
+        syncSessionActions(nullptr);
         return;
     }
     m_activeIndex = index;
@@ -1141,6 +1172,7 @@ void MainWindow::setActiveSession(int index) {
     // Sync global bottom-bar status from active session
     m_globalConnectionStatus->setState(state);
     m_globalConnectionStatus->setStatusText(s->connectionStatus->statusText());
+    syncSessionActions(s);
     m_mcpReadOnlyAction->setChecked(m_displayWidget->isReadOnly());
     updateCursorCoordinatesFont();
     updateCursorCoordinates();
