@@ -919,6 +919,18 @@ void TN5250CommandHandler::onStrpccmdRequested(bool noWait,
         return;
     }
 
+    // An unattended session (MCP-controlled, replay) has nobody to answer a
+    // dialog: a modal alert or prompt there would hold the host response,
+    // and the MCP request that ran the host program, indefinitely. Refuse
+    // without UI instead; AllowAlways needs no answer and still runs.
+    if (m_unattended && (m_pcCommandPolicy == session::PcCommandPolicy::DenyAndAlert ||
+                         m_pcCommandPolicy == session::PcCommandPolicy::AllowWithPrompt)) {
+        LOG_WARNING(QString("CommandHandler: STRPCCMD refused on an unattended session "
+                            "(no one to confirm): %1").arg(command));
+        sendEnterAndReturn();
+        return;
+    }
+
     // Dispatch on the four STRPCCMD policies. The host always gets ENTER (via
     // sendEnterAndReturn at function exit) regardless of which branch runs.
     switch (m_pcCommandPolicy) {

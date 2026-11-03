@@ -110,6 +110,9 @@ class TN5250CommandHandler : public QObject {
     // STRPCCMD policy — controls how onStrpccmdRequested reacts to a host
     // attempt: Deny silently, Deny + alert, Allow with prompt, Allow always.
     void setPcCommandPolicy(session::PcCommandPolicy policy) { m_pcCommandPolicy = policy; }
+    // No user is there to answer a STRPCCMD alert or prompt (MCP-controlled
+    // or replay session): those policies refuse the command without UI
+    void setUnattended(bool unattended) { m_unattended = unattended; }
 
   private:
     ui::widgets::Q5250ScreenWidget *m_displayWidget = nullptr;
@@ -124,6 +127,7 @@ class TN5250CommandHandler : public QObject {
     QString m_hostname;
     QPointer<QWidget> m_dialogParent;
     session::PcCommandPolicy m_pcCommandPolicy = session::PcCommandPolicy::DenyAndAlert;
+    bool m_unattended = false;
 };
 
 } // namespace ui::rendering

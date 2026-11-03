@@ -944,6 +944,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     session->commandHandler->setHostname(session->config.hostname());
     session->commandHandler->setDialogParent(session->container);
     session->commandHandler->setPcCommandPolicy(session->config.pcCommandPolicy());
+    // Nobody answers STRPCCMD dialogs on a session MCP drives or a replay
+    session->commandHandler->setUnattended(session->mcpControlled || config.isReplay());
 
     session->commandHandler->connectDecoder(session->parser);
 
