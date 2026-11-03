@@ -769,6 +769,21 @@ if(BUILD_TESTS)
     add_test(NAME test_reconnect_teardown COMMAND test_reconnect_teardown)
     add_tn5250_test(test_session_worker_stop tests/integration/test_session_worker_stop.cpp)
 
+    # Session > Save through the real MainWindow (application sources)
+    add_executable(test_save_session_device_name
+        tests/integration/test_save_session_device_name.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_save_session_device_name PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_save_session_device_name PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_save_session_device_name PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_save_session_device_name COMMAND test_save_session_device_name)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.

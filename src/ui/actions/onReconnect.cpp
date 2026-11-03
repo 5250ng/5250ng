@@ -20,7 +20,9 @@ void MainWindow::onReconnect() {
     if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size())
         return;
     Session *s = m_sessions[m_activeIndex];
-    session::SessionConfig config = s->config;
+    // With the configured device name, so the reopened tab still knows it
+    // (the de-duplication picks a free name again)
+    session::SessionConfig config = savedConfig(s);
 
     // Close the old tab and open a new one with the same config. Closing the
     // tab stops the worker and its thread; doing that here first would let
