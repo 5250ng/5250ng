@@ -210,6 +210,8 @@ class MainWindow : public MainWindowBase {
         double bgImageOpacity = 1.0;
         core::MacroRecorder *macroRecorder = nullptr;
         core::scripting::ScriptExecutor *scriptExecutor = nullptr;
+        // Set while a startup script waits for the running script to finish
+        QMetaObject::Connection startupScriptQueued;
         core::SessionLogger *sessionLogger = nullptr;
         core::MatchReplaceEngine *matchReplace = nullptr;
         bool mcpControlled = false;

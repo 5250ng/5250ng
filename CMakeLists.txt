@@ -680,6 +680,21 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_startup_script_background COMMAND test_startup_script_background)
 
+    # Startup script started while another script runs (issue #303)
+    add_executable(test_startup_script_while_running
+        tests/integration/test_startup_script_while_running.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_startup_script_while_running PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_startup_script_while_running PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_startup_script_while_running PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_startup_script_while_running COMMAND test_startup_script_while_running)
+
     # MCP write_file argument validation (McpToolHandler lives in the
     # application target).
     add_executable(test_mcp_write_file
