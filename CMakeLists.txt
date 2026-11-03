@@ -551,6 +551,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_terminal_theme tests/unit/test_terminal_theme.cpp)
     add_tn5250_test(test_pcap_replay tests/unit/test_pcap_replay.cpp)
     add_tn5250_test(test_match_replace tests/unit/test_match_replace.cpp)
+    add_tn5250_test(test_match_replace_hidden_cells tests/unit/test_match_replace_hidden_cells.cpp)
     add_tn5250_test(test_gddm_5292 tests/unit/test_gddm_5292.cpp)
     add_tn5250_test(test_gddm_5292_fuzz tests/unit/test_gddm_5292_fuzz.cpp)
 
