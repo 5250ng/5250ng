@@ -22,11 +22,14 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QKeySequence>
+#include <QScrollBar>
 #include <QStandardPaths>
 
 LogViewerDialog::LogViewerDialog(QWidget *parent)
     : qt_ui_style::BaseFramelessWindow(parent), m_text(new QPlainTextEdit(this)) {
-    setWindowTitle("Session Logs");
+    // Both Session > View Session Logs and Help > View Logs show the
+    // application log
+    setWindowTitle("Application Log");
     resize(800, 600);
     QVBoxLayout *content = contentLayout();
     content->setContentsMargins(8, 8, 8, 8);
@@ -47,6 +50,8 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     content->addWidget(m_findBar, 0);
 
     m_text->setReadOnly(true);
+    // Keep as much as the logger's own buffer, not every line ever logged
+    m_text->setMaximumBlockCount(logger::Logger::maxRecentLogs());
     m_text->setStyleSheet("QPlainTextEdit { background-color: #000000; color: #ffffff; }");
     content->addWidget(m_text, 1);
 
@@ -71,9 +76,9 @@ LogViewerDialog::LogViewerDialog(QWidget *parent)
     }
     m_text->moveCursor(QTextCursor::End);
 
-    // Subscribe to live updates
-    connect(logger::Logger::instance(), &logger::Logger::logMessage,
-            this, &LogViewerDialog::onLogMessage);
+    // Subscribe to live updates, formatted like the lines loaded above
+    connect(logger::Logger::instance(), &logger::Logger::logLineWritten,
+            this, &LogViewerDialog::onLogLine);
 }
 
 void LogViewerDialog::saveDiagnosticLog(QWidget *parent) {
@@ -102,9 +107,20 @@ void LogViewerDialog::saveDiagnosticLog(QWidget *parent) {
         QString("Log saved to:\n%1\n\nAttach this file to your bug report.").arg(fileName));
 }
 
-void LogViewerDialog::onLogMessage(logger::LogLevel /*level*/, const QString &message) {
-    m_text->appendPlainText(message);
-    m_text->moveCursor(QTextCursor::End);
+void LogViewerDialog::onLogLine(const QString &line) {
+    // Follow new lines only while the view is at the bottom; a user reading
+    // or searching further up keeps their place and selection
+    QScrollBar *bar = m_text->verticalScrollBar();
+    const bool atBottom = bar->value() >= bar->maximum();
+    const int value = bar->value();
+    const QTextCursor cursor = m_text->textCursor();
+    m_text->appendPlainText(line);
+    if (atBottom) {
+        m_text->moveCursor(QTextCursor::End);
+    } else {
+        m_text->setTextCursor(cursor);
+        bar->setValue(value);
+    }
 }
 
 void LogViewerDialog::onFindToggle() {

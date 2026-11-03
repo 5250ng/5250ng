@@ -333,6 +333,10 @@ void Logger::writeLog(LogLevel level, const QString &message) {
     if (m_buffer.size() > MAX_BUFFER) {
         m_buffer.erase(m_buffer.begin(), m_buffer.end() - MAX_BUFFER);
     }
+
+    // Outside the lock: a receiver may log in turn
+    locker.unlock();
+    emit logLineWritten(logLine);
 }
 
 QStringList Logger::recentLogs() const {

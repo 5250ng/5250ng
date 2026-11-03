@@ -205,14 +205,25 @@ class Logger : public QObject {
      */
     QStringList recentLogs() const;
 
+    /// Number of lines recentLogs() keeps.
+    static constexpr int maxRecentLogs() { return MAX_BUFFER; }
+
   signals:
     /**
      * Emitted whenever a message is logged (and passes the minimum level filter).
      *
      * @param level   Severity of the message.
-     * @param message Logged message (already formatted with timestamp/level in writeLog()).
+     * @param message The message as passed to the logger (without timestamp
+     *                or level).
      */
     void logMessage(LogLevel level, const QString &message);
+
+    /**
+     * Emitted with each line as written to the log file and the in-memory
+     * buffer ("[timestamp] [LEVEL] message"), i.e. in the format
+     * recentLogs() returns. May be emitted from any thread.
+     */
+    void logLineWritten(const QString &line);
 
     /**
      * Emitted by setDebugLogging() when debug logging is turned on or off.
