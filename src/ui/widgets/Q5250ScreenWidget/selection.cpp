@@ -107,14 +107,16 @@ void Q5250ScreenWidget::copySelection() {
 
     // Build text string from selection
     QString text;
-    int maxRows = m_screenBuffer->rows();
-    int maxCols = m_screenBuffer->cols();
+    // Copy what is shown: the viewed snapshot in history view
+    const ScreenBuffer *buffer = displayedBuffer();
+    int maxRows = buffer->rows();
+    int maxCols = buffer->cols();
 
     for (int row = startRow; row <= endRow && row < maxRows; ++row) {
         QString line;
         for (int col = startCol; col <= endCol && col < maxCols; ++col) {
             if (row >= 0 && col >= 0) {
-                uint8_t ebcdicChar = m_screenBuffer->character(row, col);
+                uint8_t ebcdicChar = buffer->character(row, col);
                 QChar ch = core::EBCDIC::ebcdicToChar(ebcdicChar);
 
                 // Only replace null bytes and EBCDIC spaces with ASCII space to
@@ -156,8 +158,9 @@ void Q5250ScreenWidget::clearSelection() {
 
 void Q5250ScreenWidget::selectAll() {
     if (!m_screenBuffer) return;
+    const ScreenBuffer *buffer = displayedBuffer();
     m_selectionStart = QPoint(0, 0);
-    m_selectionEnd = QPoint(m_screenBuffer->cols() - 1, m_screenBuffer->rows() - 1);
+    m_selectionEnd = QPoint(buffer->cols() - 1, buffer->rows() - 1);
     m_selecting = false;
     update();
 }
