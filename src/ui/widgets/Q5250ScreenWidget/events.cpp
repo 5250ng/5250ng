@@ -576,9 +576,8 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
                 if (curAddr + 1 >= fieldEnd) {
                     // Reached last position of field
                     if (field.autoEnter) {
-                        // Auto-enter: send with Auto Enter AID (0x3F per spec)
-                        emit inputReady(buildAIDResponse(0x3F));
-                        setKeyboardState(KeyboardState::Locked);
+                        rightAdjustField(row, col);
+                        sendAutoEnter();
                     } else if (field.fieldExitReq) {
                         // FER: cursor stays on last character;
                         // operator must press Field Exit key to leave
@@ -726,6 +725,18 @@ void Q5250ScreenWidget::moveCursorDown() {
     int col = m_cursorPos.x();
     if (row + 1 < m_screenBuffer->rows()) {
         moveCursor(row + 1, col);
+    }
+}
+
+// Auto-enter (FFW2 0x80, DDS CHECK(ER)) performs the Enter function, so the
+// host receives the Enter AID. 0x3F is the selector light pen auto-enter
+// AID and is rejected for keyboard input (CPF5257).
+void Q5250ScreenWidget::sendAutoEnter() {
+    emit inputReady(buildAIDResponse(0xF1));
+    setKeyboardState(KeyboardState::Locked);
+    if (m_insertMode) {
+        m_insertMode = false;
+        emit terminalStateChanged();
     }
 }
 
@@ -1058,6 +1069,13 @@ void Q5250ScreenWidget::handleFieldExit() {
 
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
 
+    // Leaving an auto-enter field this way enters the screen too.
+    if (field.autoEnter) {
+        sendAutoEnter();
+        update();
+        return;
+    }
+
     // Advance to next field
     ScreenBuffer::Field nextField = findNextField(row, col);
     if (nextField.length > 0) {
@@ -1165,6 +1183,13 @@ void Q5250ScreenWidget::handleFieldPlus() {
 
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
 
+    // Leaving an auto-enter field this way enters the screen too.
+    if (field.autoEnter) {
+        sendAutoEnter();
+        update();
+        return;
+    }
+
     // Advance to next field
     ScreenBuffer::Field nextField = findNextField(row, col);
     if (nextField.length > 0) {
@@ -1207,6 +1232,13 @@ void Q5250ScreenWidget::handleFieldMinus() {
     }
 
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
+
+    // Leaving an auto-enter field this way enters the screen too.
+    if (field.autoEnter) {
+        sendAutoEnter();
+        update();
+        return;
+    }
 
     // Advance to next field
     ScreenBuffer::Field nextField = findNextField(row, col);
