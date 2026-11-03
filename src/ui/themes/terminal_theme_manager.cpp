@@ -17,6 +17,7 @@
 #include "terminal_theme_manager.h"
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
@@ -261,13 +262,25 @@ bool TerminalThemeManager::importTheme(const QString &filePath) {
     }
 
     TerminalTheme theme = TerminalTheme::fromJson(doc.object());
+    // The id comes from the file and names files on disk (the theme JSON and
+    // its extracted image): keep only characters that cannot leave the themes
+    // directory, as saveUserTheme() does for the JSON file name.
     if (theme.id.isEmpty()) {
         return false;
+    }
+    theme.id.replace(QRegularExpression("[^a-zA-Z0-9_-]"), "_");
+    if (theme.id.count('_') == theme.id.size()) {
+        // Nothing usable left (only punctuation or non-ASCII characters)
+        theme.id = QStringLiteral("imported_theme");
     }
 
     // Ensure unique id if collision
     theme.id = uniqueId(theme.id);
     theme.builtin = false;
+    // A path in an imported file names a file on the exporting machine, and
+    // re-exporting would embed whatever this machine has at that path. Only
+    // an embedded image, extracted below, is kept.
+    theme.backgroundImagePath.clear();
 
     // If the theme has embedded image data, extract it
     if (!theme.backgroundImageData.isEmpty()) {
@@ -298,8 +311,12 @@ bool TerminalThemeManager::exportTheme(const QString &id, const QString &filePat
         && t.backgroundImageData.isEmpty()) {
         QFile imgFile(t.backgroundImagePath);
         if (imgFile.open(QIODevice::ReadOnly)) {
-            t.backgroundImageData = imgFile.readAll();
+            const QByteArray data = imgFile.readAll();
             imgFile.close();
+            // Embed only an actual image, never an arbitrary file the path
+            // happens to name.
+            if (!QImage::fromData(data).isNull())
+                t.backgroundImageData = data;
         }
     }
 

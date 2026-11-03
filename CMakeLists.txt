@@ -560,6 +560,15 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_command_handler_soh COMMAND test_command_handler_soh)
 
+    # Theme import/export file paths (TerminalThemeManager lives in the
+    # application target)
+    add_executable(test_theme_import_paths
+        tests/unit/test_theme_import_paths.cpp
+        src/ui/themes/terminal_theme_manager.cpp
+    )
+    target_link_libraries(test_theme_import_paths PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_theme_import_paths COMMAND test_theme_import_paths)
+
     # MCP login tool (McpToolHandler and the script runner live in the
     # application target, so compile them into the test binary directly).
     add_executable(test_mcp_login
