@@ -621,11 +621,15 @@ void MainWindow::runStartupScript(Session *s) {
     if (idx >= 0 && idx != m_activeIndex)
         setActiveSession(idx);
 
-    // Set initial variables from session variables (parsed from script)
+    // Set initial variables from session variables (parsed from script).
+    // A blank value stays undefined so ISSET fallbacks run; profiles saved
+    // before blank fields were dropped can still contain them.
     QHash<QString, QString> initialVars;
     const auto &sessionVars = s->config.sessionVariables();
-    for (auto it = sessionVars.constBegin(); it != sessionVars.constEnd(); ++it)
-        initialVars[it.key()] = it.value();
+    for (auto it = sessionVars.constBegin(); it != sessionVars.constEnd(); ++it) {
+        if (!it.value().isEmpty())
+            initialVars[it.key()] = it.value();
+    }
 
     // A linked script is re-read from its file; the copy saved with the
     // session is the fallback when the file is gone.
