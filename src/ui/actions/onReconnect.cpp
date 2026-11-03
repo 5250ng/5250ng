@@ -22,16 +22,10 @@ void MainWindow::onReconnect() {
     Session *s = m_sessions[m_activeIndex];
     session::SessionConfig config = s->config;
 
-    // Disconnect current session
-    if (s->worker) {
-        QMetaObject::invokeMethod(s->worker, "stop", Qt::QueuedConnection);
-    }
-    if (s->thread) {
-        s->thread->quit();
-        s->thread->wait(2000);
-    }
-
-    // Close the old tab and open a new one with the same config
+    // Close the old tab and open a new one with the same config. Closing the
+    // tab stops the worker and its thread; doing that here first would let
+    // the finished thread delete the worker, which onCloseTabRequested()
+    // then still uses.
     int oldIndex = m_activeIndex;
     onCloseTabRequested(oldIndex);
     m_skipStartupScriptOnce = !config.startupScriptOnReconnect();

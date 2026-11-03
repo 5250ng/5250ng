@@ -650,7 +650,10 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                     break;
                 }
             }
-            if (m_sessions.indexOf(session) == m_activeIndex) {
+            // A closed session (removed from m_sessions) is never the active
+            // one, even when no tab is left and m_activeIndex is -1 too.
+            const int sessionIndex = m_sessions.indexOf(session);
+            if (sessionIndex >= 0 && sessionIndex == m_activeIndex) {
                 bool connected = (state == tn5250::client::TN5250Client::ConnectionState::Connected
                                || state == tn5250::client::TN5250Client::ConnectionState::Negotiating);
                 m_connected = connected;
@@ -679,7 +682,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                       .arg(delaySeconds).arg(attempt);
             if (session->connectionStatus)
                 session->connectionStatus->setStatusText(text);
-            if (m_sessions.indexOf(session) == m_activeIndex) {
+            const int sessionIndex = m_sessions.indexOf(session);
+            if (sessionIndex >= 0 && sessionIndex == m_activeIndex) {
                 m_globalConnectionStatus->setStatusText(text);
                 // Session > Disconnect cancels the pending reconnect
                 m_disconnectAction->setEnabled(true);
@@ -708,7 +712,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                 session->connectionStatus->setStatusText(
                     QString("Replay finished — %1").arg(session->config.name()));
             }
-            if (m_sessions.indexOf(session) == m_activeIndex && session->connectionStatus) {
+            const int sessionIndex = m_sessions.indexOf(session);
+            if (sessionIndex >= 0 && sessionIndex == m_activeIndex && session->connectionStatus) {
                 m_globalConnectionStatus->setStatusText(session->connectionStatus->statusText());
             }
         });

@@ -627,6 +627,20 @@ if(BUILD_TESTS)
     add_tn5250_test(test_tn5250_connection tests/integration/test_tn5250_connection.cpp)
     add_tn5250_test(test_tn5250_tls_connection tests/integration/test_tn5250_tls_connection.cpp)
     add_tn5250_test(test_session_worker_reconnect tests/integration/test_session_worker_reconnect.cpp)
+    # Session > Reconnect through the real MainWindow (application sources)
+    add_executable(test_reconnect_teardown
+        tests/integration/test_reconnect_teardown.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_reconnect_teardown PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_reconnect_teardown PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_reconnect_teardown PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_reconnect_teardown COMMAND test_reconnect_teardown)
 
     message(STATUS "Testing enabled - unit and integration tests configured")
 endif()
