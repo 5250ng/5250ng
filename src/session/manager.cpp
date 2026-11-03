@@ -21,6 +21,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
@@ -88,27 +89,38 @@ bool SessionManager::saveSession(const SessionConfig &config) {
     }
 
     QString filePath = sessionFilePath(config.name());
-    QFile file(filePath);
+    // Write a temporary file and rename it over the profile only once the
+    // whole document is on disk, so a failed save leaves the previous
+    // profile intact instead of an empty or partial file.
+    QSaveFile file(filePath);
 
     if (!file.open(QIODevice::WriteOnly)) {
         logger::Logger::instance()->warning(QString("SessionManager: Cannot open file for writing: %1").arg(filePath));
         return false;
     }
 
+    // Applies to the temporary file, so the profile (which can hold a
+    // password) is owner-only before any data is written to it.
     const QFileDevice::Permissions ownerOnly =
         QFileDevice::ReadOwner | QFileDevice::WriteOwner;
     if (!file.setPermissions(ownerOnly)) {
         logger::Logger::instance()->warning(
             QString("SessionManager: Cannot restrict file permissions: %1")
                 .arg(filePath));
-        file.close();
+        file.cancelWriting();
         return false;
     }
 
-    QJsonObject json = config.toJson();
-    QJsonDocument doc(json);
-    file.write(doc.toJson());
-    file.close();
+    const QByteArray data = QJsonDocument(config.toJson()).toJson();
+    // flush() before commit(): commit() does not see an error from the
+    // final buffered write (Qt 6.4) and would rename a truncated file.
+    if (file.write(data) != data.size() || !file.flush() || !file.commit()) {
+        logger::Logger::instance()->warning(
+            QString("SessionManager: Cannot write session file %1: %2")
+                .arg(filePath, file.errorString()));
+        file.cancelWriting();
+        return false;
+    }
 
     // Remove the old lossy path only when it belongs to this profile. A
     // colliding legacy file may contain a different session and must survive.
