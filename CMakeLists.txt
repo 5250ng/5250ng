@@ -520,6 +520,7 @@ if(BUILD_TESTS)
     # Unit tests
     add_tn5250_test(test_decoder tests/unit/test_decoder.cpp)
     add_tn5250_test(test_ebcdic tests/unit/test_ebcdic.cpp)
+    add_tn5250_test(test_agent_collapsible_preview tests/unit/test_agent_collapsible_preview.cpp)
     add_tn5250_test(test_screen_buffer tests/unit/test_screen_buffer.cpp)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
