@@ -41,6 +41,11 @@ class SessionSettingsDialog : public QDialog {
     ui::themes::TerminalTheme currentTheme() const;
 
     QString selectedThemeId() const;
+    // Whether the user changed the shown theme since it was loaded
+    bool isThemeEdited() const { return m_themeEdited; }
+    // Select and show the stored theme `id` (for example a theme Apply
+    // derived from an edited built-in), refreshing the theme list
+    void showTheme(const QString &id);
 
     /// Hide the bottom Apply/Apply to All buttons when embedded in another dialog.
     void setEmbeddedMode(bool embedded);
@@ -210,4 +215,5 @@ class SessionSettingsDialog : public QDialog {
     // Current state
     QString m_currentThemeId;
     bool m_loading = false;
+    bool m_themeEdited = false;
 };

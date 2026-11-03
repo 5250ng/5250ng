@@ -715,7 +715,18 @@ void SessionSettingsDialog::setTheme(const ui::themes::TerminalTheme &theme) {
     updatePreview();
 }
 
+void SessionSettingsDialog::showTheme(const QString &id) {
+    m_currentThemeId = id;
+    // A search that hides the theme would select another one instead
+    if (m_themeFilter) {
+        const QSignalBlocker block(m_themeFilter);
+        m_themeFilter->clear();
+    }
+    populateThemeDropdown();
+}
+
 void SessionSettingsDialog::loadThemeToUI(const ui::themes::TerminalTheme &theme) {
+    m_themeEdited = false;
     // Grid mode & cell grid color
     int gmIdx = m_gridModeCombo->findData(
         ui::themes::TerminalTheme::gridModeToString(theme.gridMode));
@@ -935,6 +946,7 @@ void SessionSettingsDialog::onBrowseBackgroundImage() {
 
 void SessionSettingsDialog::onThemePropertyChanged() {
     if (m_loading) return;
+    m_themeEdited = true;
     updatePreview();
     updateContrastLabels();
 }
@@ -993,6 +1005,7 @@ void SessionSettingsDialog::onSaveTheme() {
     t.id = m_currentThemeId;
     t.builtin = false;
     mgr.saveUserTheme(t);
+    m_themeEdited = false;
     qt_ui_style::StyledMessageBox::information(this, "Save Theme", "Theme saved successfully.");
 }
 
@@ -1051,12 +1064,12 @@ void SessionSettingsDialog::onExportTheme() {
     if (path.isEmpty()) return;
 
     auto &mgr = ui::themes::TerminalThemeManager::instance();
-    // First save current UI state temporarily
+    // Export what the editor shows, without registering it over the
+    // stored theme (which would turn an edited built-in into a user theme)
     ui::themes::TerminalTheme t = collectThemeFromUI();
     t.id = m_currentThemeId;
-    mgr.registerTheme(t);
 
-    if (mgr.exportTheme(m_currentThemeId, path)) {
+    if (mgr.exportTheme(t, path)) {
         qt_ui_style::StyledMessageBox::information(this, "Export", "Theme exported successfully.");
     } else {
         qt_ui_style::StyledMessageBox::warning(this, "Export", "Failed to export theme.");
