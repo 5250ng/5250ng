@@ -1075,9 +1075,12 @@ void ConnectDialog::onEditScriptClicked() {
         return;
 
     if (hasFile) {
+        // flush() before commit(): commit() does not see an error from the
+        // final buffered write (Qt 6.4) and would rename a truncated file.
         QSaveFile file(path);
+        const QByteArray data = text.toUtf8();
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)
-            || file.write(text.toUtf8()) < 0 || !file.commit()) {
+            || file.write(data) != data.size() || !file.flush() || !file.commit()) {
             qt_ui_style::StyledMessageBox::warning(this, "Edit Script",
                 QString("Failed to save %1:\n%2").arg(path, file.errorString()));
             return;

@@ -312,11 +312,13 @@ bool ScriptEditorWindow::writeFile(int index, const QString &path) {
     QScriptEditorWidget *editor = editorAt(index);
     // Our own write must not look like an external change
     m_watcher->removePath(path);
+    // flush() before commit(): commit() does not see an error from the
+    // final buffered write (Qt 6.4) and would rename a truncated file.
     QSaveFile file(path);
     bool ok = file.open(QIODevice::WriteOnly | QIODevice::Text);
     if (ok) {
-        file.write(editor->text().toUtf8());
-        ok = file.commit();
+        const QByteArray data = editor->text().toUtf8();
+        ok = file.write(data) == data.size() && file.flush() && file.commit();
     }
     m_watcher->addPath(path);
     if (!ok) {
