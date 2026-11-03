@@ -43,7 +43,10 @@ void Q5250ScreenWidget::refreshMatchReplaceOverlay() {
         line.reserve(cols);
         for (int c = 0; c < cols; ++c) {
             uint8_t ch = m_screenBuffer->character(r, c);
-            if (ch == 0x00)
+            // Non-display cells (passwords) take part as blanks: a rule
+            // must not match their contents, nor shift them into
+            // visible cells
+            if (ch == 0x00 || m_screenBuffer->cell(r, c).attributes.nonDisplay)
                 line.append(QChar(' '));
             else
                 line.append(core::EBCDIC::ebcdicToChar(ch));
