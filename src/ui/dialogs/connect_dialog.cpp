@@ -1154,11 +1154,20 @@ void ConnectDialog::onDeleteSessionClicked() {
     }
     session::SessionManager mgr(this);
     if (mgr.deleteSession(sessionName)) {
-        int idx = m_sessionCombo->findText(sessionName);
-        if (idx >= 0) {
-            m_sessionCombo->removeItem(idx);
+        {
+            // Removing the current entry makes the combo select its
+            // neighbour, which would load that session into the form and
+            // then leave it there as an unsaved new session.
+            QSignalBlocker blocker(m_sessionCombo);
+            int idx = m_sessionCombo->findText(sessionName);
+            if (idx >= 0) {
+                m_sessionCombo->removeItem(idx);
+            }
+            m_sessionCombo->setCurrentIndex(m_sessionCombo->findText("(New Session)"));
         }
-        m_sessionCombo->setCurrentText("(New Session)");
+        // Start a new session from defaults rather than the deleted values
+        m_currentConfig = session::SessionConfig();
+        updateUI();
         m_savedSessionName.clear();
         m_deleteSessionButton->setEnabled(false);
         qt_ui_style::StyledMessageBox::information(this, "Delete Session", QString("Session '%1' deleted.").arg(sessionName));
