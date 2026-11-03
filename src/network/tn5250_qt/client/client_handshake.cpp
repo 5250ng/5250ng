@@ -96,9 +96,10 @@ void TN5250Client::sendNewEnviron() {
     negotiation.append("DEVNAME");
     negotiation.append(static_cast<uint8_t>(0x01)); // VALUE
     if (!m_deviceNameSent && !m_deviceName.isEmpty()) {
-        // RFC 1572 reserves 0x00 (VAR), 0x01 (VALUE), 0x02 (ESC), 0x03
-        // (USERVAR) and 0xFF (IAC) as in-band markers; user-supplied bytes
-        // must be ESC-escaped before being placed in the value, otherwise a
+        // RFC 1572 reserves 0x00 (VAR), 0x01 (VALUE), 0x02 (ESC) and 0x03
+        // (USERVAR) as in-band markers, and 0xFF (IAC) must be doubled
+        // inside the subnegotiation; user-supplied bytes must be escaped
+        // before being placed in the value, otherwise a
         // NUL or SOH in the device name would prematurely terminate the
         // value and confuse the host parser.
         negotiation.append(IBMRSeed::escapeNewEnviron(m_deviceName.toUtf8()));
