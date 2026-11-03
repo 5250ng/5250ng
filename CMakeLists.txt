@@ -587,6 +587,20 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_login COMMAND test_mcp_login)
 
+    # MCP server stop must drop connected clients
+    add_executable(test_mcp_server_stop
+        tests/unit/test_mcp_server_stop.cpp
+        src/mcp/McpServer.cpp
+        src/mcp/McpHttpParser.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_server_stop PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_server_stop COMMAND test_mcp_server_stop)
+
     # MCP write_file argument validation (McpToolHandler lives in the
     # application target).
     add_executable(test_mcp_write_file

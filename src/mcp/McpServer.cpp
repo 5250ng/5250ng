@@ -106,6 +106,15 @@ void McpServer::stop() {
     if (m_server->isListening()) {
         MCP_INFO("Stopping server");
         m_server->close();
+        // close() only stops accepting new connections. Drop the clients
+        // already connected too, or a keep-alive client could go on calling
+        // tools after the user turned the server off. Accepted sockets are
+        // children of the QTcpServer.
+        const auto clients = m_server->findChildren<QTcpSocket *>(QString(), Qt::FindDirectChildrenOnly);
+        for (QTcpSocket *socket : clients) {
+            disconnect(socket, &QTcpSocket::readyRead, this, &McpServer::onClientData);
+            socket->abort();
+        }
         m_initialized = false;
         m_sessionId.clear();
         emit stopped();
@@ -145,6 +154,11 @@ void McpServer::onNewConnection() {
 void McpServer::onClientData() {
     QPointer<QTcpSocket> socket = qobject_cast<QTcpSocket *>(sender());
     if (!socket) return;
+    // A readyRead queued before stop() must not run a request either.
+    if (!m_server->isListening()) {
+        socket->abort();
+        return;
+    }
 
     // Store parser as a property on the socket
     auto *parser = socket->findChild<QObject *>("_mcp_parser");
@@ -218,6 +232,14 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
     // gets destroyed via deleteLater.  Without this guard, writing the
     // response after the tool call returns would be a use-after-free.
     QPointer<QTcpSocket> socket = sock;
+
+    // Every request goes through here, including pipelined ones drained
+    // from the parser after an earlier request's tool call (whose nested
+    // event loop may have run stop()). None may run once the server is off.
+    if (!m_server->isListening() || socket->state() != QAbstractSocket::ConnectedState) {
+        socket->abort();
+        return;
+    }
 
     auto *wrapper = socket->findChild<QObject *>("_mcp_parser");
     auto *parser = reinterpret_cast<McpHttpParser *>(wrapper->property("ptr").value<quintptr>());
