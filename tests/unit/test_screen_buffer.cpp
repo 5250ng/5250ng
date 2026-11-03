@@ -38,6 +38,7 @@ class TestScreenBuffer : public QObject {
     void testWriteOperations();
     void testAttributes();
     void testProtectedFields();
+    void testPositionOutsideFieldsIsProtected();
 
   private:
     ScreenBuffer *m_buffer;
@@ -260,6 +261,19 @@ void TestScreenBuffer::testAttributes() {
 
     m_buffer->setUnderline(0, 4, true);
     QVERIFY(m_buffer->attributes(0, 4).underline);
+}
+
+// Issue #373: host text written outside every field carries no protected
+// attribute, but a 5250 display protects every position outside an input field
+void TestScreenBuffer::testPositionOutsideFieldsIsProtected() {
+    m_buffer->writeChar(1, 1, 0xC1);
+    QVERIFY(m_buffer->isProtected(1, 1));
+    m_buffer->setField(3, 10, 5, false);
+    QVERIFY(m_buffer->isProtected(1, 1));
+    QVERIFY(m_buffer->isProtected(3, 9));
+    QVERIFY(!m_buffer->isProtected(3, 10));
+    QVERIFY(!m_buffer->isProtected(3, 14));
+    QVERIFY(m_buffer->isProtected(3, 15));
 }
 
 void TestScreenBuffer::testProtectedFields() {

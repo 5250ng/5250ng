@@ -208,7 +208,9 @@ bool ScreenBuffer::isProtected(int row, int col) const {
     if (!isValidPosition(row, col)) {
         return true; // Out of bounds is protected
     }
-    return m_buffer[index(row, col)].attributes.protected_field;
+    // Every position outside an input field is protected on a 5250 display;
+    // host text written outside any field carries no protected attribute
+    return m_buffer[index(row, col)].attributes.protected_field || !isInField(row, col);
 }
 
 void ScreenBuffer::clear() {
