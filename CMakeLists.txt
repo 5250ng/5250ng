@@ -529,6 +529,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_script_editor tests/unit/test_script_editor.cpp)
     add_tn5250_test(test_script_config tests/unit/test_script_config.cpp)
     add_tn5250_test(test_command_runner tests/unit/test_command_runner.cpp)
+    add_tn5250_test(test_script_metadata_quotes tests/unit/test_script_metadata_quotes.cpp)
 
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
     add_tn5250_test(test_telnet_subnegotiation tests/unit/test_telnet_subnegotiation.cpp)

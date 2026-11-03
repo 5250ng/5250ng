@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "script_library.h"
 #include "core/macro_recorder.h"
+#include <5250script/script_compiler.h>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -44,15 +45,15 @@ QString createScriptFromTemplate(const QString &name) {
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return QString();
     file.write(QString(
-        "# @script.name = \"%1\"\n"
+        "# @script.name = %1\n"
         "# @script.description = \"\"\n"
         "# @script.version = \"1.0\"\n"
-        "# @menu.path = \"%1\"\n"
+        "# @menu.path = %1\n"
         "\n"
         "EXPECT KEYBOARD UNLOCKED\n"
         "TYPE \"hello\"\n"
         "PRESS ENTER\n"
-    ).arg(name).toUtf8());
+    ).arg(core::scripting::ScriptCompiler::quoteMetadataValue(name)).toUtf8());
     file.close();
     return path;
 }

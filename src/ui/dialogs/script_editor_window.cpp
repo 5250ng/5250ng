@@ -53,12 +53,12 @@ std::function<void()> s_stopHandler;
 
 QString starterTemplate(const QString &name) {
     return QString(
-        "# @script.name = \"%1\"\n"
+        "# @script.name = %1\n"
         "# @script.description = \"\"\n"
         "# @script.version = \"1.0\"\n"
-        "# @menu.path = \"%1\"\n"
+        "# @menu.path = %1\n"
         "\n"
-        "EXPECT KEYBOARD UNLOCKED\n").arg(name);
+        "EXPECT KEYBOARD UNLOCKED\n").arg(core::scripting::ScriptCompiler::quoteMetadataValue(name));
 }
 
 } // namespace

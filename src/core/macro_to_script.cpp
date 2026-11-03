@@ -23,9 +23,10 @@ namespace core {
 QString macroToScript(const Macro &macro) {
     QStringList lines;
 
-    lines << QString("# @script.name = \"%1\"").arg(macro.name);
+    using core::scripting::ScriptCompiler;
+    lines << "# @script.name = " + ScriptCompiler::quoteMetadataValue(macro.name);
     if (!macro.description.isEmpty())
-        lines << QString("# @script.description = \"%1\"").arg(macro.description);
+        lines << "# @script.description = " + ScriptCompiler::quoteMetadataValue(macro.description);
     lines << QString("# @script.version = \"1.0\"");
     lines << "";
 
