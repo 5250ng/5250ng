@@ -630,6 +630,18 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_login COMMAND test_mcp_login)
 
+    # read_region bounds without overflow (issue #406)
+    add_executable(test_read_region_bounds
+        tests/unit/test_read_region_bounds.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_read_region_bounds PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_read_region_bounds COMMAND test_read_region_bounds)
+
     # Non-display cells in MCP and script screen reads (issue #381)
     add_executable(test_nondisplay_exports
         tests/unit/test_nondisplay_exports.cpp
