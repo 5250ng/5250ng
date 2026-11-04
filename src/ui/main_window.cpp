@@ -62,6 +62,7 @@
 #include <QWidgetAction>
 #include "ui/themes/terminal_theme_manager.h"
 #include "ui/themes/manager.h"
+#include "ui/window_geometry.h"
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -253,6 +254,7 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("5250ng");
     resize(900, 645);
     setMinimumSize(640, 480);
+    ui::restoreWindowGeometry(this, ui::kMainWindowGeometryKey);
     setAcceptDrops(true);
 
     setupUI();
