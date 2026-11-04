@@ -718,6 +718,20 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_agent_generation_handlers COMMAND test_agent_generation_handlers)
 
+    # Agent panel Clear while a script runs (issue #261)
+    add_executable(test_agent_clear
+        tests/unit/test_agent_clear.cpp
+        ${UI_SOURCES}
+        ${AGENT_SOURCES_NO_QRC}
+    )
+    target_link_libraries(test_agent_clear PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_agent_clear PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_agent_clear PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_agent_clear COMMAND test_agent_clear)
+
     # Startup scripts of background tabs (real MainWindow, application sources)
     add_executable(test_startup_script_background
         tests/integration/test_startup_script_background.cpp

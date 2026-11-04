@@ -92,15 +92,22 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
         m_collapsibleBlocks.clear();
         m_thinkingTimer->stop();
         m_thinkingBlockPosition = -1;
+        // Nothing from the cleared conversation may answer afterwards: drop
+        // the pending tool call before stopping the runner (stop() reports
+        // finished synchronously, which would send its result), and abort
+        // the provider's request in flight, whose reply could otherwise be
+        // shown, or run as a tool call, in the new conversation
+        m_pendingToolCall.reset();
         if (m_scriptRunner && m_scriptRunner->isRunning())
             m_scriptRunner->stop();
         disconnectScriptGeneration();
         if (m_scriptGenerator)
             m_scriptGenerator->cancel();
-        m_pendingToolCall.reset();
         m_toolCallBar->setVisible(false);
-        if (m_provider)
+        if (m_provider) {
+            m_provider->cancel();
             m_provider->clearHistory();
+        }
         setInputEnabled(true);
     });
     headerLayout->addWidget(m_clearButton);
