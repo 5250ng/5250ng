@@ -1305,12 +1305,23 @@ void QAgentPanelWidget::onMoveCursorToolCall(const agent::ToolCall &call) {
         return;
     }
 
-    if (rows == 0 && cols == 0) {
+    // One script line is built per row and column moved: bound the counts by
+    // the screen (compared without negating, so INT_MIN cannot overflow)
+    const auto *buf = m_displayWidget->screenBuffer();
+    const int maxRows = buf ? buf->rows() - 1 : 26;
+    // Left and right wrap from row to row, so a column count can usefully
+    // reach every cell; up and down stop at the edge
+    const int maxCols = buf ? buf->rows() * buf->cols() - 1 : 27 * 132 - 1;
+    const bool outOfRange = rows < -maxRows || rows > maxRows || cols < -maxCols || cols > maxCols;
+    if ((rows == 0 && cols == 0) || outOfRange) {
         if (m_provider) {
             agent::ToolResult result;
             result.toolCallId = call.id;
             result.success = false;
-            result.output = "No movement specified.";
+            result.output = outOfRange
+                ? QString("Movement out of range: rows must be within +/-%1 and cols within "
+                          "+/-%2 on this screen.").arg(maxRows).arg(maxCols)
+                : QString("No movement specified.");
             showThinkingIndicator();
             m_provider->sendToolResult(result);
         } else {
