@@ -38,6 +38,23 @@
 #include <QtUiStyle/StyledInputDialog.h>
 #include <QtUiStyle/StyledMessageBox.h>
 
+// A custom device type that names a known model cannot show a larger screen
+// than that model supports (issue #411). Warns and returns false when the
+// configured size is too large for it.
+static bool deviceSupportsScreenSize(QWidget *parent, const QString &title,
+                                     const session::SessionConfig &config) {
+    const auto *dev = tn5250::devices::findSupportedDevice(config.deviceType().trimmed());
+    if (!dev || (config.screenRows() <= dev->lines && config.screenCols() <= dev->columns))
+        return true;
+    qt_ui_style::StyledMessageBox::warning(
+        parent, title,
+        QString("%1 supports a screen of at most %2x%3, but the screen size is %4x%5.\n"
+                "Choose a device that supports this size, or reduce the screen size.")
+            .arg(dev->model).arg(dev->lines).arg(dev->columns)
+            .arg(config.screenRows()).arg(config.screenCols()));
+    return false;
+}
+
 ConnectDialog::ConnectDialog(QWidget *parent) : qt_ui_style::BaseFramelessDialog(parent) {
     setupUI();
     updateUI();
@@ -757,6 +774,8 @@ void ConnectDialog::saveCurrentSession() {
                                                "Hostname is required to save a session.");
         return;
     }
+    if (!deviceSupportsScreenSize(this, "Save Session", config))
+        return;
     session::SessionManager sessionManager(this);
     if (!config.isValid() || !sessionManager.saveSession(config)) {
         qt_ui_style::StyledMessageBox::warning(this, "Save Session", "Failed to save session.");
@@ -771,6 +790,8 @@ void ConnectDialog::saveCurrentSession() {
 
 void ConnectDialog::saveCurrentAsSession() {
     session::SessionConfig config = getSessionConfig();
+    if (!deviceSupportsScreenSize(this, "Save Session", config))
+        return;
     if (!promptSaveSessionAs(this, config)) {
         return;
     }
@@ -806,6 +827,8 @@ void ConnectDialog::onConnectClicked() {
                                               "Hostname is required.");
         return;
     }
+    if (!deviceSupportsScreenSize(this, "Connect", config))
+        return;
 
     emit connectRequested(config);
     accept();

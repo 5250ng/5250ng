@@ -859,6 +859,17 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_connect_dialog_delete_session
              COMMAND test_connect_dialog_delete_session)
+    add_executable(test_connect_dialog_device_size
+        tests/unit/test_connect_dialog_device_size.cpp
+        src/ui/dialogs/connect_dialog.cpp
+        src/ui/dialogs/script_editor_window.cpp
+        src/ui/dialogs/script_editor_dialog.cpp
+        src/ui/themes/terminal_theme_manager.cpp
+    )
+    target_link_libraries(test_connect_dialog_device_size PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_connect_dialog_device_size
+             COMMAND test_connect_dialog_device_size)
 
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),
