@@ -759,11 +759,22 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         });
     }
     m_sessions.insert(newIndex, session);
-    m_tabWidget->setCurrentIndex(newIndex);
-    // Ensure m_activeIndex is set even if currentChanged didn't fire
-    // (happens when addTab auto-selects the first tab before m_sessions is populated)
-    if (m_activeIndex != newIndex)
-        setActiveSession(newIndex);
+    // A tab an MCP client opens stays in the background when the user already
+    // has a tab open, so it does not take the screen away from them (#413)
+    const int previousIndex = m_activeIndex;
+    if (session->mcpControlled && previousIndex >= 0 && previousIndex < m_sessions.size() &&
+        previousIndex != newIndex) {
+        // The window-wide session and code page were set for the new tab
+        // above; give them back to the tab that stays current. The later
+        // setActiveSession(m_activeIndex) keeps it that way.
+        setActiveSession(previousIndex);
+    } else {
+        m_tabWidget->setCurrentIndex(newIndex);
+        // Ensure m_activeIndex is set even if currentChanged didn't fire
+        // (happens when addTab auto-selects the first tab before m_sessions is populated)
+        if (m_activeIndex != newIndex)
+            setActiveSession(newIndex);
+    }
 
     // Set per-tab data for the custom McpTabStyle
     {
@@ -939,8 +950,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
             }
         });
 
-    // Set active pointers and connect signals for this session
-    setActiveSession(newIndex);
+    // Refresh the active pointers now that the tab is wired. This is the new
+    // tab, unless it is an MCP tab left in the background above.
+    setActiveSession(m_activeIndex);
 
     // Create command handler for this session
     session->commandHandler = new ui::rendering::TN5250CommandHandler(session->container);

@@ -109,7 +109,11 @@ void MainWindow::onCloseTabRequested(int index) {
     QCoreApplication::sendPostedEvents(this, QEvent::MetaCall);
     delete s;
     if (!m_sessions.isEmpty()) {
-        int newIndex = qMin(index, m_sessions.size() - 1);
+        // Follow the tab the widget now shows. Closing a background tab (for
+        // example an MCP one, #413) keeps the current tab current.
+        int newIndex = m_tabWidget->currentIndex();
+        if (newIndex < 0 || newIndex >= m_sessions.size())
+            newIndex = qMin(index, m_sessions.size() - 1);
         setActiveSession(newIndex);
     } else {
         setActiveSession(-1);
