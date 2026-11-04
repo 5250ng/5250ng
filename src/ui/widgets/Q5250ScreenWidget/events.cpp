@@ -353,6 +353,34 @@ void Q5250ScreenWidget::dispatchCharacter(QChar ch) {
     if (!encoded.isEmpty()) processEncodedInput(encoded, /*isAID=*/false);
 }
 
+void Q5250ScreenWidget::activateMenuOption(const QString &number) {
+    if (!m_screenBuffer || number.isEmpty()) return;
+    if (!acceptsInput(core::MappedAction::Enter)) return;
+
+    // The menu's selection field: where the host put the insert cursor
+    // (the cursor itself may have been moved anywhere since), else the
+    // field under the cursor; it must be an input field the option fits in
+    auto inputField = [this, &number](int row, int col, ScreenBuffer::Field *out) {
+        const ScreenBuffer::Field f = m_screenBuffer->getField(row, col);
+        if (f.length < number.size() || f.protected_field || f.bypass) return false;
+        *out = f;
+        return true;
+    };
+    ScreenBuffer::Field field;
+    const QPoint cursor = m_screenBuffer->cursorPosition();
+    if (!(m_hasICAddress && inputField(m_icRow, m_icCol, &field)) &&
+        !inputField(cursor.y(), cursor.x(), &field))
+        return;
+
+    // Replace the whole field's content with the option, then send it
+    moveCursor(field.startRow, field.startCol);
+    dispatchMappedAction(core::MappedAction::EraseEOF);
+    for (QChar ch : number)
+        dispatchCharacter(ch);
+    if (m_keyboardState == KeyboardState::Unlocked)
+        dispatchMappedAction(core::MappedAction::Enter);
+}
+
 void Q5250ScreenWidget::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::RightButton) {
         QMenu menu(this);

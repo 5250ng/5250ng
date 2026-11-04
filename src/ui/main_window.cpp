@@ -935,13 +935,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                 aid.append(static_cast<char>(hotspot.aidByte));
                 session->displayWidget->processEncodedInput(aid, true);
             } else if (hotspot.type == core::Hotspot::MenuItem && !hotspot.menuNumber.isEmpty()) {
-                // Type the menu number and press Enter
-                for (QChar ch : hotspot.menuNumber) {
-                    QKeyEvent ev(QEvent::KeyPress, 0, Qt::NoModifier, QString(ch));
-                    session->displayWidget->processKeyEvent(&ev);
-                }
-                QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
-                session->displayWidget->processKeyEvent(&enter);
+                session->displayWidget->activateMenuOption(hotspot.menuNumber);
             }
         });
 

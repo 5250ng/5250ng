@@ -198,6 +198,11 @@ class Q5250ScreenWidget : public QWidget {
     // Inject a single character as if typed into the active field (used by
     // the virtual keyboard widget). Respects read-only/keyboard-lock state.
     void dispatchCharacter(QChar ch);
+    // Select a menu option as a clicked menu hotspot does: put `number` in
+    // the menu's selection field (the input field where the host placed the
+    // cursor, else the one under the cursor), replacing what is there, and
+    // press Enter. Does nothing without such a field or when input is refused.
+    void activateMenuOption(const QString &number);
 
     void setReadType(uint8_t readType) { m_readType = readType; }
     uint8_t readType() const { return m_readType; }
