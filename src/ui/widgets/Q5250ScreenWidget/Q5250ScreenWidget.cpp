@@ -814,7 +814,7 @@ void Q5250ScreenWidget::refreshHotspots() {
     QVector<QChar> text(rows * cols);
     for (int r = 0; r < rows; ++r)
         for (int c = 0; c < cols; ++c)
-            text[r * cols + c] = core::EBCDIC::ebcdicToChar(m_screenBuffer->cell(r, c).character);
+            text[r * cols + c] = core::EBCDIC::ebcdicToChar(m_screenBuffer->displayedCharacter(r, c));
     m_hotspots = m_hotspotDetector.detect(text, rows, cols);
 }
 
@@ -862,7 +862,7 @@ void Q5250ScreenWidget::pushScreenToHistory() {
     text.reserve(snap.rows * snap.cols);
     for (int r = 0; r < snap.rows; ++r)
         for (int c = 0; c < snap.cols; ++c)
-            text.append(core::EBCDIC::ebcdicToChar(m_screenBuffer->cell(r, c).character));
+            text.append(core::EBCDIC::ebcdicToChar(m_screenBuffer->displayedCharacter(r, c)));
     snap.cellData = text.toUtf8();
     // A screen that settled back to what was recorded last is not new
     if (m_screenHistory.count() > 0 && m_screenHistory.at(0).cellData == snap.cellData)
@@ -872,7 +872,13 @@ void Q5250ScreenWidget::pushScreenToHistory() {
     auto *raw = reinterpret_cast<ScreenCell *>(snap.rawCells.data());
     for (int r = 0; r < snap.rows; ++r)
         for (int c = 0; c < snap.cols; ++c)
-            raw[r * snap.cols + c] = m_screenBuffer->cell(r, c);
+        {
+            // Kept as the screen shows it: a hidden (password) character is
+            // not stored, only its blank
+            ScreenCell cell = m_screenBuffer->cell(r, c);
+            cell.character = m_screenBuffer->displayedCharacter(r, c);
+            raw[r * snap.cols + c] = cell;
+        }
     // At full depth the push drops the oldest snapshot
     const bool viewedDropped = isViewingHistory() &&
                                m_screenHistory.count() >= m_screenHistory.maxDepth() &&
