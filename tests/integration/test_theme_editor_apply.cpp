@@ -84,17 +84,17 @@ class TestThemeEditorApply : public QObject {
             if (!dlg) return;
             driver.stop();
             SessionSettingsDialog *editor = dlg->terminalThemeEditor();
-            editor->onApply(); // the session's built-in, untouched
+            editor->onApplyToAll(); // what Save runs; the session's built-in, untouched
             afterUntouched = derivedThemes();
 
             QSpinBox *spin = editor->findChild<QSpinBox *>();
             spin->setValue(spin->value() + 1); // an edit
-            editor->onApply();
+            editor->onApplyToAll();
             afterFirstEdit = derivedThemes();
             shownAfterEdit = editor->selectedThemeId();
 
             spin->setValue(spin->value() + 1); // a further edit
-            editor->onApply();
+            editor->onApplyToAll();
             afterSecondEdit = derivedThemes();
             dlg->reject();
         });

@@ -128,8 +128,6 @@ void SettingsDialog::setupUI() {
     m_pages->addWidget(m_toolsPage); // index 5: tools
 
     // Forward the embedded editor's signals
-    connect(m_terminalThemePage, &SessionSettingsDialog::applyRequested,
-            this, &SettingsDialog::terminalThemeApplyRequested);
     connect(m_terminalThemePage, &SessionSettingsDialog::applyToAllRequested,
             this, &SettingsDialog::terminalThemeApplyToAllRequested);
 

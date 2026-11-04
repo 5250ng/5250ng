@@ -216,4 +216,5 @@ class SessionSettingsDialog : public QDialog {
     QString m_currentThemeId;
     bool m_loading = false;
     bool m_themeEdited = false;
+    QLabel *m_embeddedNote = nullptr;
 };

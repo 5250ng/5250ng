@@ -981,6 +981,20 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_theme_editor_apply COMMAND test_theme_editor_apply)
 
+    # Settings 5250 Theme page note on what Save does (issue #355)
+    add_executable(test_theme_page_note
+        tests/unit/test_theme_page_note.cpp
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_theme_page_note PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_theme_page_note PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_theme_page_note PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_theme_page_note COMMAND test_theme_page_note)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.

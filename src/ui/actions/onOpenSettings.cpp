@@ -53,16 +53,7 @@ void MainWindow::onOpenSettings() {
         dlg.setTerminalTheme(mgr.resolvedTheme(themeId));
     }
 
-    // Apply to current session
-    connect(&dlg, &SettingsDialog::terminalThemeApplyRequested,
-            this, [this, &dlg](const ui::themes::TerminalTheme &t) {
-        if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) return;
-        const QString id = applyEditedTheme(dlg, t);
-        applyThemeToSession(m_sessions[m_activeIndex], id);
-        m_currentSession.setTerminalThemeId(id);
-    });
-
-    // Apply to all sessions
+    // Save on the 5250 Theme page applies its theme to every open session
     connect(&dlg, &SettingsDialog::terminalThemeApplyToAllRequested,
             this, [this, &dlg](const ui::themes::TerminalTheme &t) {
         const QString id = applyEditedTheme(dlg, t);
