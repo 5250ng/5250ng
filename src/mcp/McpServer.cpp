@@ -23,6 +23,7 @@
 #include <QJsonDocument>
 #include <QPointer>
 #include <QTcpSocket>
+#include <QTimer>
 #include <QUuid>
 
 #define MCP_LOG(msg) logger::Logger::instance()->debug_with_prefix("[MCP]", msg)
@@ -150,6 +151,26 @@ void McpServer::onNewConnection() {
         connect(socket, &QTcpSocket::readyRead, this, &McpServer::onClientData,
                 Qt::QueuedConnection);
         connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+
+        // Responses keep the connection open, so close one that stays
+        // quiet. The timer is stopped while a request is being handled
+        // (onClientData), so a long tool call is never cut off.
+        if (idleTimeoutMs() > 0) {
+            auto *idle = new QTimer(socket);
+            idle->setObjectName(QStringLiteral("_mcp_idle"));
+            idle->setSingleShot(true);
+            idle->setInterval(idleTimeoutMs());
+            connect(idle, &QTimer::timeout, socket, [socket, idle]() {
+                if (socket->property("_mcp_busy").toBool()) {
+                    idle->start();
+                    return;
+                }
+                MCP_LOG(QString("Closing idle connection from %1:%2")
+                            .arg(socket->peerAddress().toString()).arg(socket->peerPort()));
+                socket->disconnectFromHost();
+            });
+            idle->start();
+        }
     }
 }
 
@@ -170,10 +191,18 @@ void McpServer::onClientData() {
     if (socket->property("_mcp_busy").toBool())
         return;
     socket->setProperty("_mcp_busy", true);
+    auto *idle = socket->findChild<QTimer *>(QStringLiteral("_mcp_idle"));
+    if (idle)
+        idle->stop();
     struct BusyGuard {
         QPointer<QTcpSocket> s;
-        ~BusyGuard() { if (s) s->setProperty("_mcp_busy", false); }
-    } busyGuard{socket};
+        QPointer<QTimer> idle;
+        ~BusyGuard() {
+            if (s) s->setProperty("_mcp_busy", false);
+            // The idle period starts once the request is answered
+            if (s && idle && s->state() == QAbstractSocket::ConnectedState) idle->start();
+        }
+    } busyGuard{socket, idle};
 
     // Store parser as a property on the socket
     auto *parser = socket->findChild<QObject *>("_mcp_parser");
@@ -207,6 +236,7 @@ void McpServer::onClientData() {
         QJsonObject err;
         err["error"] = httpParser->errorMessage();
         resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
+        resp.headers["Connection"] = "close";
         socket->write(resp.toBytes());
         socket->flush();
         socket->disconnectFromHost();
@@ -223,7 +253,12 @@ void McpServer::onClientData() {
         // read (reset() keeps the parser's leftover bytes past the parsed
         // body) and those that arrived while the request ran, which the
         // re-entry guard above left unread in the socket.
-        while (!socket.isNull() && httpParser->feed(socket->readAll())) {
+        // A response that closes the connection ends the loop: no further
+        // request on it may run (RFC 9112 section 9.6). handleHttpRequest()
+        // refuses one on a closing socket too, but with abort(), which
+        // would drop response bytes not yet sent
+        while (!socket.isNull() && socket->state() == QAbstractSocket::ConnectedState
+               && httpParser->feed(socket->readAll())) {
             handleHttpRequest(socket);
             if (!socket.isNull()) httpParser->reset();
         }
@@ -258,6 +293,16 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
     auto *wrapper = socket->findChild<QObject *>("_mcp_parser");
     auto *parser = reinterpret_cast<McpHttpParser *>(wrapper->property("ptr").value<quintptr>());
     HttpRequest req = parser->request();
+    // Every response to a request that asks to close says so, and the
+    // connection is closed once it is written
+    auto sendResponse = [&socket, closeAfter = req.wantsClose()](HttpResponse &resp) {
+        if (closeAfter)
+            resp.headers["Connection"] = "close";
+        socket->write(resp.toBytes());
+        socket->flush();
+        if (closeAfter)
+            socket->disconnectFromHost();
+    };
 
     MCP_LOG(QString("HTTP %1 %2").arg(req.method, req.path));
 
@@ -268,8 +313,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         resp.statusText = "Not Found";
         resp.headers["Content-Type"] = "application/json";
         resp.body = R"({"error":"Not found"})";
-        socket->write(resp.toBytes());
-        socket->flush();
+        sendResponse(resp);
         return;
     }
 
@@ -285,8 +329,8 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         QJsonObject err;
         err["error"] = reason;
         resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
-        socket->write(resp.toBytes());
-        socket->flush();
+        resp.headers["Connection"] = "close";
+        sendResponse(resp);
         socket->disconnectFromHost();
     };
     if (!isAllowedHostHeader(req.headers.value("host"))) {
@@ -308,8 +352,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         HttpResponse resp;
         resp.statusCode = 202;
         resp.statusText = "Accepted";
-        socket->write(resp.toBytes());
-        socket->flush();
+        sendResponse(resp);
         m_initialized = false;
         m_sessionId.clear();
         return;
@@ -321,8 +364,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         resp.statusCode = 200;
         resp.headers["Content-Type"] = "application/json";
         resp.body = R"({"status":"ok","server":"5250ng-mcp","version":"1.0.0"})";
-        socket->write(resp.toBytes());
-        socket->flush();
+        sendResponse(resp);
         return;
     }
 
@@ -332,8 +374,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         resp.statusCode = 405;
         resp.statusText = "Method Not Allowed";
         resp.headers["Allow"] = "GET, POST, DELETE";
-        socket->write(resp.toBytes());
-        socket->flush();
+        sendResponse(resp);
         return;
     }
 
@@ -351,8 +392,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
             resp.statusCode = 202;
             resp.statusText = "Accepted";
         }
-        socket->write(resp.toBytes());
-        socket->flush();
+        sendResponse(resp);
     };
 
     // Parse JSON-RPC request

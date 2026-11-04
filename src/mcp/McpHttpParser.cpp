@@ -18,6 +18,18 @@
 
 namespace mcp {
 
+bool HttpRequest::wantsClose() const {
+    // Connection is a comma-separated list of case-insensitive options
+    bool close = false;
+    bool keepAlive = false;
+    for (const QString &option : headers.value("connection").split(',')) {
+        const QString o = option.trimmed();
+        close = close || o.compare(QLatin1String("close"), Qt::CaseInsensitive) == 0;
+        keepAlive = keepAlive || o.compare(QLatin1String("keep-alive"), Qt::CaseInsensitive) == 0;
+    }
+    return close || (version == QLatin1String("HTTP/1.0") && !keepAlive);
+}
+
 bool McpHttpParser::feed(const QByteArray &data) {
     if (m_error) return false;
     m_buffer.append(data);
@@ -48,6 +60,8 @@ bool McpHttpParser::feed(const QByteArray &data) {
             m_request.method = QString::fromLatin1(parts[0]);
             m_request.path = QString::fromLatin1(parts[1]);
         }
+        if (parts.size() >= 3)
+            m_request.version = QString::fromLatin1(parts[2]);
 
         // Parse headers
         QByteArray headerBlock = m_buffer.mid(firstLine + 2, headerEnd - firstLine - 2);
@@ -137,9 +151,8 @@ QByteArray HttpResponse::toBytes() const {
     if (!headers.contains("Content-Length") && !headers.contains("Transfer-Encoding")) {
         result.append(QString("Content-Length: %1\r\n").arg(body.size()).toLatin1());
     }
-    if (!headers.contains("Connection")) {
-        result.append("Connection: close\r\n");
-    }
+    // No Connection header by default: HTTP/1.1 connections are persistent,
+    // and the server only closes after responses that set "close"
     result.append("\r\n");
     result.append(body);
     return result;

@@ -23,8 +23,14 @@
 namespace mcp {
 
 struct HttpRequest {
+    /// True when the server must close the connection after answering:
+    /// the client sent "Connection: close", or spoke HTTP/1.0 without
+    /// "keep-alive" (RFC 9112 sections 9.3 and 9.6).
+    bool wantsClose() const;
+
     QString method;  // GET, POST, DELETE
     QString path;    // /mcp
+    QString version; // HTTP/1.1
     QMap<QString, QString> headers;
     QByteArray body;
 };
