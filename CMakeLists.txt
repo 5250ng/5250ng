@@ -712,6 +712,20 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_server_reentry COMMAND test_mcp_server_reentry)
 
+    # MCP tools/call with an unknown tool name is a -32602 error (issue #428)
+    add_executable(test_mcp_unknown_tool
+        tests/unit/test_mcp_unknown_tool.cpp
+        src/mcp/McpServer.cpp
+        src/mcp/McpHttpParser.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_unknown_tool PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_unknown_tool COMMAND test_mcp_unknown_tool)
+
     # Agent panel script generation handlers (issue #260). Built without the
     # agent prompt resources, so the generator fails at once instead of
     # sending a request to a provider.

@@ -248,13 +248,27 @@ QJsonObject McpToolHandler::callTool(const QString &name, const QJsonObject &arg
     if (name == agent::kToolSetDebugLogging)  return handleSetDebugLogging(arguments);
     if (name == agent::kToolGetLogs)          return handleGetLogs(arguments);
 
-    // Deprecated / unavailable
-    if (name == agent::kToolConnect)
-        return makeResult("The 'connect' tool has been replaced by 'create_session'.", true);
-    if (name == agent::kToolGenerateScript)
-        return makeResult("generate_5250script is not available over MCP.", true);
+    // McpServer answers names outside listTools() with a -32602 error
+    // before calling here; this covers a direct caller
+    return makeResult(unknownToolMessage(name), true);
+}
 
-    return makeResult("Unknown tool: " + name, true);
+bool McpToolHandler::hasTool(const QString &name) const {
+    for (const QJsonValue &tool : listTools()) {
+        if (tool.toObject().value("name").toString() == name)
+            return true;
+    }
+    return false;
+}
+
+QString McpToolHandler::unknownToolMessage(const QString &name) {
+    if (name.isEmpty())
+        return QStringLiteral("No tool name provided.");
+    if (name == agent::kToolConnect)
+        return QStringLiteral("The 'connect' tool has been replaced by 'create_session'.");
+    if (name == agent::kToolGenerateScript)
+        return QStringLiteral("generate_5250script is not available over MCP.");
+    return QStringLiteral("Unknown tool: ") + name;
 }
 
 // ---------------------------------------------------------------------------

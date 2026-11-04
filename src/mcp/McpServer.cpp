@@ -400,7 +400,16 @@ QJsonObject McpServer::handleJsonRpc(const QJsonObject &request) {
     if (method == "initialize")        response = jsonRpcResult(id, handleInitialize(params));
     else if (method == "ping")         response = jsonRpcResult(id, handlePing());
     else if (method == "tools/list")   response = jsonRpcResult(id, handleToolsList(params));
-    else if (method == "tools/call")   response = jsonRpcResult(id, handleToolsCall(params));
+    else if (method == "tools/call") {
+        // An unknown tool is a protocol error (MCP tools "Error Handling"),
+        // not a tool result with isError
+        const QJsonValue nameValue = params.value("name");
+        const QString name = nameValue.toString();
+        if (!nameValue.isString() || !m_toolHandler->hasTool(name))
+            response = jsonRpcError(id, -32602, McpToolHandler::unknownToolMessage(name));
+        else
+            response = jsonRpcResult(id, handleToolsCall(params));
+    }
     else                               response = jsonRpcError(id, -32601, "Method not found: " + method);
 
     // Log the response
@@ -465,9 +474,6 @@ QJsonObject McpServer::handleToolsList(const QJsonObject &params) {
 QJsonObject McpServer::handleToolsCall(const QJsonObject &params) {
     QString name = params.value("name").toString();
     QJsonObject arguments = params.value("arguments").toObject();
-
-    if (name.isEmpty())
-        return m_toolHandler->makeResult("No tool name provided.", true);
 
     return m_toolHandler->callTool(name, arguments);
 }
