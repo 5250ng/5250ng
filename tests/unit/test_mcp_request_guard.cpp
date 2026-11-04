@@ -96,14 +96,36 @@ class TestMcpRequestGuard : public QObject {
         QVERIFY2(r.startsWith("HTTP/1.1 200") && r.contains("\"result\""), r.constData());
     }
 
+    // Issue #429: there is no SSE stream, so a client asking for one gets
+    // 405 (MCP Streamable HTTP); a plain GET keeps its health check
+    void getEventStreamIs405() {
+        mcp::McpServer server;
+        QVERIFY(server.start(0));
+        QByteArray r = send(server, "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                                    "Accept: text/event-stream\r\n\r\n");
+        QVERIFY2(r.startsWith("HTTP/1.1 405"), r.constData());
+        QVERIFY2(r.contains("Allow: GET, POST, DELETE"), r.constData());
+        r = send(server, "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                         "Accept: application/json, Text/Event-Stream\r\n\r\n");
+        QVERIFY2(r.startsWith("HTTP/1.1 405"), r.constData());
+        r = send(server, "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nAccept: application/json\r\n\r\n");
+        QVERIFY2(r.startsWith("HTTP/1.1 200") && r.contains("\"status\":\"ok\""), r.constData());
+    }
+
   private:
     static QByteArray post(mcp::McpServer &server, const QByteArray &headers, const QByteArray &body) {
+        return send(server, "POST /mcp HTTP/1.1\r\n" + headers + "Content-Length: "
+                                + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+    }
+
+    // Send one raw request and read the response (headers plus a body of
+    // its Content-Length)
+    static QByteArray send(mcp::McpServer &server, const QByteArray &request) {
         QTcpSocket client;
         client.connectToHost(QHostAddress::LocalHost, server.port());
         if (!client.waitForConnected(5000))
             return QByteArray();
-        client.write("POST /mcp HTTP/1.1\r\n" + headers + "Content-Length: "
-                     + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+        client.write(request);
         QByteArray reply;
         QElapsedTimer t;
         t.start();
