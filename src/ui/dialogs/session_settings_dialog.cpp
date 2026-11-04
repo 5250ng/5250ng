@@ -26,6 +26,7 @@
 #include <QHBoxLayout>
 #include <QRandomGenerator>
 #include <QScrollArea>
+#include <QSplitter>
 #include <QVBoxLayout>
 #include <cmath>
 
@@ -42,8 +43,20 @@ void SessionSettingsDialog::setupUI() {
 
     QVBoxLayout *root = new QVBoxLayout(this);
 
+    // The preview stays above the settings, outside the scroll area, so the
+    // effect of a change is visible next to the control that made it. The
+    // splitter lets the user trade preview height for settings rows.
+    QSplitter *splitter = new QSplitter(Qt::Vertical, this);
+    splitter->setChildrenCollapsible(false);
+
+    QGroupBox *previewGroup = new QGroupBox("Preview", splitter);
+    QVBoxLayout *previewLayout = new QVBoxLayout(previewGroup);
+    m_preview = new ThemePreviewWidget(previewGroup);
+    previewLayout->addWidget(m_preview);
+    splitter->addWidget(previewGroup);
+
     // Scrollable content
-    QScrollArea *scroll = new QScrollArea(this);
+    QScrollArea *scroll = new QScrollArea(splitter);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
 
@@ -65,16 +78,15 @@ void SessionSettingsDialog::setupUI() {
     contentLayout->addWidget(buildCRTSection());
     contentLayout->addWidget(buildBrightnessSection());
 
-    // Preview
-    QGroupBox *previewGroup = new QGroupBox("Preview", content);
-    QVBoxLayout *previewLayout = new QVBoxLayout(previewGroup);
-    m_preview = new ThemePreviewWidget(previewGroup);
-    previewLayout->addWidget(m_preview);
-    contentLayout->addWidget(previewGroup);
-
     contentLayout->addStretch();
     scroll->setWidget(content);
-    root->addWidget(scroll, 1);
+    splitter->addWidget(scroll);
+    splitter->setStretchFactor(0, 0);
+    splitter->setStretchFactor(1, 1);
+    // Start the preview at its minimum height rather than its size hint, so
+    // the settings keep as many rows as possible on the embedded page
+    splitter->setSizes({previewGroup->minimumSizeHint().height(), QWIDGETSIZE_MAX});
+    root->addWidget(splitter, 1);
 
     // Bottom buttons (hidden when embedded in SettingsDialog)
     m_buttonBar = new QWidget(this);

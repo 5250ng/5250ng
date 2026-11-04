@@ -1038,6 +1038,20 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_theme_page_note COMMAND test_theme_page_note)
 
+    # Session Settings preview stays in view while settings scroll (issue #365)
+    add_executable(test_settings_preview_visible
+        tests/unit/test_settings_preview_visible.cpp
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_settings_preview_visible PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_settings_preview_visible PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_settings_preview_visible PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_settings_preview_visible COMMAND test_settings_preview_visible)
+
     # Agent panel tool escaping, arrow keys and file I/O (issue #262)
     add_executable(test_agent_tool_escaping
         tests/unit/test_agent_tool_escaping.cpp
