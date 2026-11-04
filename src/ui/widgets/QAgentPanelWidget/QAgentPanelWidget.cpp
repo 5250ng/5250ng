@@ -170,12 +170,14 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
     for (const QKeySequence &sequence :
          QKeySequence::keyBindings(QKeySequence::ZoomIn)) {
         auto *shortcut = new QShortcut(sequence, this);
+        shortcut->setWhatsThis(tr("Agent Panel Zoom In"));
         connect(shortcut, &QShortcut::activated, this,
                 [this]() { adjustFontSize(1); });
     }
     for (const QKeySequence &sequence :
          QKeySequence::keyBindings(QKeySequence::ZoomOut)) {
         auto *shortcut = new QShortcut(sequence, this);
+        shortcut->setWhatsThis(tr("Agent Panel Zoom Out"));
         connect(shortcut, &QShortcut::activated, this,
                 [this]() { adjustFontSize(-1); });
     }
