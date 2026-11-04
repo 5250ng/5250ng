@@ -30,6 +30,7 @@
 #include "session/config.h"
 #include "session/manager.h"
 #include "ui/dialogs/log_viewer.h"
+#include "ui/session_log_view.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250TerminalView.h"
 #include <QApplication>
@@ -353,6 +354,13 @@ void MainWindow::onMcpShowLogs() {
 }
 
 void MainWindow::onViewSessionLogs() {
+    if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size())
+        return;
+    const Session *s = m_sessions[m_activeIndex];
+    ui::showSessionLog(this, s->sessionLogger, m_tabWidget->tabText(m_activeIndex));
+}
+
+void MainWindow::onViewApplicationLog() {
     auto *dlg = new LogViewerDialog(this);
     dlg->setAttribute(Qt::WA_DeleteOnClose, true);
     dlg->show();

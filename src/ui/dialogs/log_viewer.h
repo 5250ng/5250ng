@@ -23,13 +23,24 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QShortcut>
+#include <QTimer>
 #include <QVBoxLayout>
 
 class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     Q_OBJECT
   public:
+    // The application log: the logger's in-memory buffer, then live lines
     explicit LogViewerDialog(QWidget *parent = nullptr);
+    // A session log file: its last kMaxInitialBytes, then whatever is
+    // appended to it while the window is open
+    LogViewerDialog(const QString &filePath, const QString &title, QWidget *parent = nullptr);
     ~LogViewerDialog() override = default;
+
+    static constexpr qint64 kMaxInitialBytes = 2 * 1024 * 1024;
+    static constexpr int kMaxFileLines = 20000;
+    static constexpr int kFollowIntervalMs = 500;
+
+    QString filePath() const { return m_filePath; }
 
     /**
      * Ask for a destination (Desktop by default) and write
@@ -39,12 +50,17 @@ class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
 
   private slots:
     void onLogLine(const QString &line);
+    void readNewFileData();
     void onFindToggle();
     void onFindReturnPressed();
     void onFindNext();
     void onFindPrev();
 
   private:
+    void buildUi();
+    // Append text, keeping the view at the bottom only if it already was
+    void appendFollowing(const QString &text);
+
     QWidget *m_findBar;
     QLineEdit *m_findEdit;
     QPushButton *m_nextBtn;
@@ -52,4 +68,10 @@ class LogViewerDialog : public qt_ui_style::BaseFramelessWindow {
     QShortcut *m_shortcutFind;
     QPushButton *m_saveBtn;
     QPlainTextEdit *m_text;
+
+    // Session log file mode
+    QString m_filePath;
+    qint64 m_fileOffset = 0;
+    QByteArray m_partialLine;   // bytes after the last newline read so far
+    bool m_skipToNewline = false; // the first read starts mid-line
 };
