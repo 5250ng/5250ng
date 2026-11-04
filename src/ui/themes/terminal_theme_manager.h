@@ -35,6 +35,12 @@ class TerminalThemeManager : public QObject {
 
     // Theme registry
     void registerTheme(const TerminalTheme &theme);
+    // Registers a theme from the theme editor and returns the id to use.
+    // `changed` tells whether the user edited it. A built-in is never
+    // replaced: an edited one becomes a saved user theme derived from it,
+    // under a new id; an unchanged one is left as it is. A user theme keeps
+    // its id and its identity (built-in flag, description, parent).
+    QString applyEditedTheme(const TerminalTheme &edited, bool changed);
     QStringList availableThemes() const;
     bool hasTheme(const QString &id) const;
     TerminalTheme theme(const QString &id) const;
@@ -48,6 +54,7 @@ class TerminalThemeManager : public QObject {
     // Import/Export (.5250theme or .json)
     bool importTheme(const QString &filePath);
     bool exportTheme(const QString &id, const QString &filePath) const;
+    bool exportTheme(const TerminalTheme &theme, const QString &filePath) const;
 
     // Default theme
     static QString defaultThemeId() { return QStringLiteral("classic_green"); }

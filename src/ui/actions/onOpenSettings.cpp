@@ -27,6 +27,18 @@ using namespace core;
  *   - Application Theme: UI theme selection
  *   - 5250 Theme: full terminal theme editor (colors, fonts, CRT, etc.)
  */
+// Registers the 5250 Theme page's theme and returns the id to apply. An
+// edited built-in becomes a derived user theme, which the editor then
+// shows, so a further Apply updates that theme instead of deriving again.
+static QString applyEditedTheme(SettingsDialog &dlg, const ui::themes::TerminalTheme &t) {
+    SessionSettingsDialog *editor = dlg.terminalThemeEditor();
+    const bool changed = editor && editor->isThemeEdited();
+    const QString id = ui::themes::TerminalThemeManager::instance().applyEditedTheme(t, changed);
+    if (editor && id != t.id)
+        editor->showTheme(id);
+    return id;
+}
+
 void MainWindow::onOpenSettings() {
     SettingsDialog dlg(this);
 
@@ -43,21 +55,21 @@ void MainWindow::onOpenSettings() {
 
     // Apply to current session
     connect(&dlg, &SettingsDialog::terminalThemeApplyRequested,
-            this, [this](const ui::themes::TerminalTheme &t) {
+            this, [this, &dlg](const ui::themes::TerminalTheme &t) {
         if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) return;
-        ui::themes::TerminalThemeManager::instance().registerTheme(t);
-        applyThemeToSession(m_sessions[m_activeIndex], t.id);
-        m_currentSession.setTerminalThemeId(t.id);
+        const QString id = applyEditedTheme(dlg, t);
+        applyThemeToSession(m_sessions[m_activeIndex], id);
+        m_currentSession.setTerminalThemeId(id);
     });
 
     // Apply to all sessions
     connect(&dlg, &SettingsDialog::terminalThemeApplyToAllRequested,
-            this, [this](const ui::themes::TerminalTheme &t) {
-        ui::themes::TerminalThemeManager::instance().registerTheme(t);
+            this, [this, &dlg](const ui::themes::TerminalTheme &t) {
+        const QString id = applyEditedTheme(dlg, t);
         for (Session *session : m_sessions) {
-            applyThemeToSession(session, t.id);
+            applyThemeToSession(session, id);
         }
-        m_currentSession.setTerminalThemeId(t.id);
+        m_currentSession.setTerminalThemeId(id);
     });
 
     // Refresh agent providers on all sessions when config changes

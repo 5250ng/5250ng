@@ -956,6 +956,30 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_save_session_profile_edits COMMAND test_save_session_profile_edits)
 
+    # Edited built-in terminal themes (issue #287)
+    add_executable(test_edited_builtin_theme
+        tests/unit/test_edited_builtin_theme.cpp
+        src/ui/themes/terminal_theme_manager.cpp
+        src/ui/themes/themes.qrc
+    )
+    target_link_libraries(test_edited_builtin_theme PRIVATE tn5250_core Qt6::Test)
+    add_test(NAME test_edited_builtin_theme COMMAND test_edited_builtin_theme)
+
+    # Settings 5250 Theme page Apply of built-in themes (issue #390)
+    add_executable(test_theme_editor_apply
+        tests/integration/test_theme_editor_apply.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_theme_editor_apply PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_theme_editor_apply PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_theme_editor_apply PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_theme_editor_apply COMMAND test_theme_editor_apply)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.

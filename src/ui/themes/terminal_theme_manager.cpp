@@ -118,6 +118,38 @@ void TerminalThemeManager::registerTheme(const TerminalTheme &theme) {
     emit themeRegistered(theme.id);
 }
 
+QString TerminalThemeManager::applyEditedTheme(const TerminalTheme &edited, bool changed) {
+    const TerminalTheme stored = theme(edited.id);
+    TerminalTheme t = edited;
+    if (!stored.id.isEmpty()) {
+        // The editor rebuilds the theme from its widgets, without the
+        // identity of the theme it was loaded from
+        t.builtin = stored.builtin;
+        t.description = stored.description;
+        t.parentThemeId = stored.parentThemeId;
+    }
+    if (!t.builtin) {
+        registerTheme(t);
+        return t.id;
+    }
+    if (!changed)
+        return t.id; // an unchanged built-in: nothing to register
+
+    // Edited: keep the built-in, save the edit as a user theme based on it
+    TerminalTheme derived = duplicateTheme(t.id, t.displayName + QStringLiteral(" (custom)"));
+    const QString derivedId = derived.id;
+    const QString derivedName = derived.displayName;
+    derived = t;
+    derived.id = derivedId;
+    derived.displayName = derivedName;
+    derived.description.clear();
+    derived.builtin = false;
+    derived.parentThemeId = edited.id;
+    if (!saveUserTheme(derived))
+        registerTheme(derived); // keep it for this run even if the file failed
+    return derived.id;
+}
+
 QStringList TerminalThemeManager::availableThemes() const {
     QMutexLocker locker(&m_mutex);
     QStringList ids = m_themes.keys();
@@ -301,7 +333,11 @@ bool TerminalThemeManager::importTheme(const QString &filePath) {
 }
 
 bool TerminalThemeManager::exportTheme(const QString &id, const QString &filePath) const {
-    TerminalTheme t = resolvedTheme(id);
+    return exportTheme(resolvedTheme(id), filePath);
+}
+
+bool TerminalThemeManager::exportTheme(const TerminalTheme &theme, const QString &filePath) const {
+    TerminalTheme t = theme;
     if (t.id.isEmpty()) {
         return false;
     }
