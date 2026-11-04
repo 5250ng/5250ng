@@ -204,7 +204,9 @@ void ConnectDialog::setupUI() {
         "to rely on the system certificate store and no client certificate.", this);
     tlsNote->setWordWrap(true);
     tlsLayout->addRow(tlsNote);
-    auto addFileRow = [this, tlsLayout](const QString &label, const QString &placeholder,
+    // The certificate rows and the invalid-certificate option only apply with TLS on
+    QList<QWidget *> tlsInputs{m_allowInvalidCertsCheck};
+    auto addFileRow = [this, tlsLayout, &tlsInputs](const QString &label, const QString &placeholder,
                                         const QString &tooltip, const QString &filter) {
         QLineEdit *edit = new QLineEdit(this);
         edit->setPlaceholderText(placeholder);
@@ -220,6 +222,7 @@ void ConnectDialog::setupUI() {
         row->addWidget(edit, 1);
         row->addWidget(browse);
         tlsLayout->addRow(label + ":", row);
+        tlsInputs << edit << browse << tlsLayout->labelForField(row);
         return edit;
     };
     const QString certFilter = "Certificates (*.pem *.crt *.cer *.der);;All Files (*)";
@@ -238,6 +241,12 @@ void ConnectDialog::setupUI() {
         "certificate file also contains the key.",
         "Private keys (*.pem *.key *.der);;All Files (*)");
     tlsGroup->setLayout(tlsLayout);
+    auto setTlsInputsEnabled = [tlsInputs](bool enabled) {
+        for (QWidget *w : tlsInputs)
+            if (w) w->setEnabled(enabled);
+    };
+    setTlsInputsEnabled(m_tlsCheck->isChecked());
+    connect(m_tlsCheck, &QCheckBox::toggled, this, setTlsInputsEnabled);
     const int tlsPage = addPage(tlsGroup);
 
     // Timeouts and automatic reconnect
