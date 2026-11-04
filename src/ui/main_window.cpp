@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "main_window.h"
+
+#include <utility>
 #include "agent/config.h"
 #include "ui/dialogs/mcp_log_viewer.h"
 #include "ui/dialogs/mcp_password_prompt_dialog.h"
@@ -385,6 +387,10 @@ MainWindow::~MainWindow() {
  */
 void MainWindow::connectToServer(const session::SessionConfig &config,
                                  const QString &mcpSessionId) {
+    // Taken first, so an early return cannot hand it to a later tab
+    const std::optional<QByteArray> inheritedSnapshot =
+        std::exchange(m_inheritProfileSnapshotOnce, std::nullopt);
+
     m_currentSession = config;
 
     // Apply the configured EBCDIC code page
@@ -722,6 +728,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         });
     session->config = m_currentSession;
     session->requestedDeviceName = config.deviceName();
+    session->profileSnapshot = inheritedSnapshot ? *inheritedSnapshot : savedProfileJson(session);
 
     // Use session name for saved sessions, ip:port for CLI/unsaved
     QString tabDisplayName;

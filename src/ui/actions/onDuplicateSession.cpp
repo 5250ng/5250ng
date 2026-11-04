@@ -22,5 +22,7 @@ void MainWindow::onDuplicateSession() {
     // The configured device name, not the one this tab was given to avoid a
     // clash; the new tab gets its own unique name
     session::SessionConfig config = savedConfig(m_sessions[m_activeIndex]);
+    // The copy is the original tab's, so is the profile snapshot it is from
+    m_inheritProfileSnapshotOnce = m_sessions[m_activeIndex]->profileSnapshot;
     connectToServer(config);
 }

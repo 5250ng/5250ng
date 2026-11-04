@@ -18,6 +18,7 @@
 #include "session/config.h"
 #include "session/manager.h"
 #include <QtUiStyle/StyledMessageBox.h>
+#include <QJsonDocument>
 
 /**
  * The tab's configuration as it should be saved: without runtime-only
@@ -27,6 +28,14 @@ session::SessionConfig MainWindow::savedConfig(const Session *s) {
     session::SessionConfig config = s->config;
     config.setDeviceName(s->requestedDeviceName);
     return config;
+}
+
+QByteArray MainWindow::savedProfileJson(const Session *s) {
+    session::SessionManager mgr;
+    session::SessionConfig saved;
+    if (s->config.name().isEmpty() || !mgr.loadSession(s->config.name(), saved))
+        return {};
+    return QJsonDocument(saved.toJson()).toJson(QJsonDocument::Compact);
 }
 
 /**
@@ -48,10 +57,22 @@ void MainWindow::onSaveSession() {
         onSaveSessionAs();
         return;
     }
+    // The profile may have been edited (Connect dialog, another tab) since
+    // this tab read it; saving writes the tab's whole copy over those edits
+    if (savedProfileJson(s) != s->profileSnapshot) {
+        auto answer = qt_ui_style::StyledMessageBox::question(
+            this, "Save Session",
+            QString("The saved session '%1' was changed since this tab opened it.\n\n"
+                    "Replace it with this tab's settings? The other changes will be lost.")
+                .arg(s->config.name()));
+        if (answer != qt_ui_style::StyledMessageBox::Yes)
+            return;
+    }
     if (!mgr.saveSession(savedConfig(s))) {
         qt_ui_style::StyledMessageBox::warning(this, "Save Session", "Failed to save session.");
         return;
     }
+    s->profileSnapshot = savedProfileJson(s);
     qt_ui_style::StyledMessageBox::information(
         this, "Save Session",
         QString("Session '%1' saved successfully.").arg(s->config.name()));
@@ -76,6 +97,7 @@ void MainWindow::onSaveSessionAs() {
 
     // The tab now belongs to the saved session it was written to
     s->config.setName(config.name());
+    s->profileSnapshot = savedProfileJson(s);
     m_currentSession.setName(config.name());
     m_tabWidget->setTabText(m_activeIndex, config.name());
     if (m_emptyOpenCombo)

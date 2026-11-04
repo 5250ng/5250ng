@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "core/match_replace_engine.h"
 #include "core/macro_recorder.h"
 #include <5250script/script_executor.h>
@@ -198,6 +200,9 @@ class MainWindow : public MainWindowBase {
         // Device name as configured, before the per-host de-duplication
         // that gave this tab a unique one (config holds the one in use)
         QString requestedDeviceName;
+        // The saved profile as it was when this tab last read or wrote it;
+        // empty when the tab is not backed by a saved session
+        QByteArray profileSnapshot;
         ui::rendering::TN5250CommandHandler *commandHandler;
         core::CommandRunner *commandRunner = nullptr;
         ui::widgets::QCRTOverlayWidget *crtOverlay;
@@ -223,6 +228,8 @@ class MainWindow : public MainWindowBase {
     void syncSessionActions(Session *s);
     // The tab configuration as Session > Save writes it
     static session::SessionConfig savedConfig(const Session *s);
+    // The saved profile of the tab's session as serialized JSON, or empty
+    static QByteArray savedProfileJson(const Session *s);
 
     void runStartupScript(Session *session);
     void scheduleStartupScript(Session *session);
@@ -243,6 +250,9 @@ class MainWindow : public MainWindowBase {
     // Set by onReconnect() when the session's startup script must not run
     // for the tab it is about to open; consumed by connectToServer().
     bool m_skipStartupScriptOnce = false;
+    // A tab reopened from another tab (Reconnect, Duplicate) inherits its
+    // profile snapshot instead of reading the profile afresh
+    std::optional<QByteArray> m_inheritProfileSnapshotOnce;
 
     // UI elements
     QAction *m_connectAction;

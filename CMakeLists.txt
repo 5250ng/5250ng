@@ -940,6 +940,21 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_remap_edge_cases COMMAND test_remap_edge_cases)
 
+    # Session > Save over a profile edited since the tab opened (issue #348)
+    add_executable(test_save_session_profile_edits
+        tests/integration/test_save_session_profile_edits.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_save_session_profile_edits PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_save_session_profile_edits PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_save_session_profile_edits PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_save_session_profile_edits COMMAND test_save_session_profile_edits)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.
