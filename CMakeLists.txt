@@ -1009,6 +1009,20 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_theme_page_note COMMAND test_theme_page_note)
 
+    # Agent panel tool escaping, arrow keys and file I/O (issue #262)
+    add_executable(test_agent_tool_escaping
+        tests/unit/test_agent_tool_escaping.cpp
+        ${UI_SOURCES}
+        ${AGENT_SOURCES_NO_QRC}
+    )
+    target_link_libraries(test_agent_tool_escaping PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_agent_tool_escaping PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_agent_tool_escaping PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_agent_tool_escaping COMMAND test_agent_tool_escaping)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.

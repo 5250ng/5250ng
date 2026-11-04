@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "QAgentPanelWidget.h"
+#include "mcp/script_escape.h"
 #include "collapsible_preview.h"
 #include "agent/agent_script_runner.h"
 #include "agent/config.h"
@@ -788,7 +789,7 @@ void QAgentPanelWidget::onReadFileToolCall(const agent::ToolCall &call) {
     QFile file(path);
     agent::ToolResult result;
     result.toolCallId = call.id;
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (file.open(QIODevice::ReadOnly)) {
         result.success = true;
         result.output = QString::fromUtf8(file.readAll());
         file.close();
@@ -809,13 +810,18 @@ void QAgentPanelWidget::onReadFileToolCall(const agent::ToolCall &call) {
 void QAgentPanelWidget::onWriteFileToolCall(const agent::ToolCall &call) {
     QString path = call.filePath();
     QString content = call.fileContent();
-    if (path.isEmpty()) {
-        appendError("Agent requested write_file but no path was provided.");
+    // A call without "content" (as the MCP tool checks) would otherwise
+    // truncate the file to nothing once accepted
+    const bool hasContent =
+        QJsonDocument::fromJson(call.arguments.toUtf8()).object().value("content").isString();
+    if (path.isEmpty() || !hasContent) {
+        appendError(path.isEmpty() ? "Agent requested write_file but no path was provided."
+                                   : "Agent requested write_file but no content was provided.");
         if (m_provider) {
             agent::ToolResult result;
             result.toolCallId = call.id;
             result.success = false;
-            result.output = "No file path provided.";
+            result.output = path.isEmpty() ? "No file path provided." : "No file content provided.";
             showThinkingIndicator();
             m_provider->sendToolResult(result);
         } else {
@@ -878,9 +884,16 @@ void QAgentPanelWidget::onAcceptFileWriteClicked() {
     agent::ToolResult result;
     result.toolCallId = toolCallId;
 
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        file.write(content.toUtf8());
+    // Binary mode: the content is written byte for byte (no newline
+    // translation), and a short or failed write is reported as a failure
+    const QByteArray payload = content.toUtf8();
+    bool written = file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                   && file.write(payload) == payload.size() && file.flush();
+    if (written) {
         file.close();
+        written = file.error() == QFileDevice::NoError;
+    }
+    if (written) {
         result.success = true;
         result.output = "File written successfully: " + path;
 
@@ -1018,11 +1031,16 @@ void QAgentPanelWidget::onSendKeysToolCall(const agent::ToolCall &call) {
     while (it.hasNext()) {
         auto match = it.next();
         if (!match.captured(1).isNull()) {
-            // Quoted text -> TYPE command
-            scriptLines << QString("TYPE \"%1\"").arg(match.captured(1));
+            // Quoted text -> TYPE command, escaped as the MCP tool does so the
+            // model's text cannot end the literal or inject statements
+            scriptLines << QString("TYPE \"%1\"").arg(mcp::escapeInterpolatedScriptString(match.captured(1)));
         } else {
-            // Bare key name -> PRESS command
-            scriptLines << QString("PRESS %1").arg(match.captured(0).toUpper());
+            // Bare key name -> PRESS command; arrow keys move the cursor
+            const QString key = match.captured(0).toUpper();
+            if (key == "UP" || key == "DOWN" || key == "LEFT" || key == "RIGHT")
+                scriptLines << QString("MOVE CURSOR %1").arg(key);
+            else
+                scriptLines << QString("PRESS %1").arg(key);
         }
     }
 
@@ -1094,10 +1112,9 @@ void QAgentPanelWidget::onTypeTextToolCall(const agent::ToolCall &call) {
         return;
     }
 
-    // Escape double quotes for the 5250script TYPE command
-    QString safeText = text;
-    safeText.replace('"', "\\\"");
-    QString script = QString("TYPE \"%1\"").arg(safeText);
+    // Escape for the 5250script TYPE literal (backslashes, quotes, line
+    // breaks and $), as the MCP tool does
+    QString script = QString("TYPE \"%1\"").arg(mcp::escapeInterpolatedScriptString(text));
 
     auto &tm = ui::themes::ThemeManager::instance();
     QString labelColor = tm.color("agent.assistant.label", "#50c878");
@@ -1386,15 +1403,15 @@ void QAgentPanelWidget::onWaitForTextToolCall(const agent::ToolCall &call) {
         return;
     }
 
-    QString safeText = text;
-    safeText.replace('"', "\\\"");
+    // EXPECT TEXT matches its literal verbatim; the ABORT message is
+    // interpolated, so it also needs $ doubled
     QString script = QString(
         "GLOBAL EXPECT_TIMEOUT %1\n"
         "EXPECT TEXT \"%2\"\n"
         "IF $EXPECT_RESULT == \"TIMEOUT\" THEN\n"
-        "    ABORT \"Timed out waiting for text: %2\"\n"
+        "    ABORT \"Timed out waiting for text: %3\"\n"
         "ENDIF\n"
-    ).arg(timeout).arg(safeText);
+    ).arg(timeout).arg(mcp::escapeScriptString(text), mcp::escapeInterpolatedScriptString(text));
 
     auto &tm = ui::themes::ThemeManager::instance();
     QString labelColor = tm.color("agent.assistant.label", "#50c878");
