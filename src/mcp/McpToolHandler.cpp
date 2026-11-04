@@ -610,7 +610,8 @@ QJsonObject McpToolHandler::handleReadRegion(const QJsonObject &args) {
         return makeResult("Failed to access screen buffer.", true);
     if (row < 0 || col < 0 || numRows <= 0 || numCols <= 0)
         return makeResult("Invalid region parameters.", true);
-    if (row + numRows > buf->rows() || col + numCols > buf->cols())
+    // Compared without adding, which could overflow for huge arguments
+    if (numRows > buf->rows() - row || numCols > buf->cols() - col)
         return makeResult(QString("Region (%1,%2)+(%3,%4) exceeds screen bounds (%5x%6).")
             .arg(row).arg(col).arg(numRows).arg(numCols)
             .arg(buf->rows()).arg(buf->cols()), true);

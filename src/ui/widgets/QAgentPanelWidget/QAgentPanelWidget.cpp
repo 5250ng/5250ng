@@ -1543,7 +1543,8 @@ void QAgentPanelWidget::onReadRegionToolCall(const agent::ToolCall &call) {
         if (row < 0 || col < 0 || numRows <= 0 || numCols <= 0) {
             result.success = false;
             result.output = "Invalid region parameters.";
-        } else if (row + numRows > buf->rows() || col + numCols > buf->cols()) {
+        } else if (numRows > buf->rows() - row || numCols > buf->cols() - col) {
+            // (compared without adding, which could overflow)
             result.success = false;
             result.output = QString("Region (%1,%2)+(%3,%4) exceeds screen bounds (%5x%6).")
                 .arg(row).arg(col).arg(numRows).arg(numCols)
