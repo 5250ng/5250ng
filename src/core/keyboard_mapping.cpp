@@ -166,6 +166,12 @@ MappedAction KeyboardMapping::lookup(int key, Qt::KeyboardModifiers modifiers) c
 
 MappedAction KeyboardMapping::lookup(const KeyChord &chord) const {
     auto it = m_chordToAction.constFind(chord);
+    // Qt on xcb and Windows reports Shift+Tab as Key_Backtab with Shift
+    // still held; without its own binding it is the plain Backtab chord
+    if (it == m_chordToAction.constEnd() && chord.key == Qt::Key_Backtab &&
+        (chord.modifiers & Qt::ShiftModifier))
+        it = m_chordToAction.constFind(
+            KeyChord{chord.key, chord.modifiers & ~Qt::KeyboardModifiers(Qt::ShiftModifier)});
     if (it == m_chordToAction.constEnd()) return MappedAction::None;
     return it.value();
 }

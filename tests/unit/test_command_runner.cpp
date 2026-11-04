@@ -35,6 +35,7 @@ class TestCommandRunner : public QObject {
     void testNoWaitLaunchesDetachedAndReturnsImmediately();
     void testEmptyCommandIsRejected();
     void testUnterminatedQuoteIsRejected();
+    void testEmptyQuotedArgumentIsKept();
 };
 
 void TestCommandRunner::testDisabledByDefault() {
@@ -141,6 +142,21 @@ void TestCommandRunner::testUnterminatedQuoteIsRejected() {
 
     auto result = runner.run("prog \"arg1 arg2", CommandRunner::Mode::Wait);
     QCOMPARE(result.outcome, CommandRunner::Outcome::StartFailed);
+}
+
+// Issue #275: an empty quoted argument was dropped, shifting the ones after it
+void TestCommandRunner::testEmptyQuotedArgumentIsKept() {
+#ifdef Q_OS_WIN
+    QSKIP("needs /bin/sh");
+#else
+    CommandRunner runner;
+    runner.setEnabled(true);
+    runner.setConfirmCallback([](const QString &, const QString &) { return true; });
+    // The shell exits with its argument count: "" and x make 2
+    auto result = runner.run("/bin/sh -c \"exit $#\" sh \"\" x", CommandRunner::Mode::Wait);
+    QCOMPARE(result.outcome, CommandRunner::Outcome::Completed);
+    QCOMPARE(result.exitCode, 2);
+#endif
 }
 
 QTEST_MAIN(TestCommandRunner)
