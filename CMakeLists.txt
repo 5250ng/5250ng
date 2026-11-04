@@ -909,6 +909,16 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_close_tab_theme_change COMMAND test_close_tab_theme_change)
 
+    # Remap Keyboard capture and virtual keyboard modifiers (issue #299)
+    add_executable(test_remap_edge_cases
+        tests/unit/test_remap_edge_cases.cpp
+        src/ui/dialogs/keyboard_remap_dialog.cpp
+        src/ui/widgets/QVirtualKeyboardWidget/QVirtualKeyboardWidget.cpp
+    )
+    target_link_libraries(test_remap_edge_cases PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_remap_edge_cases COMMAND test_remap_edge_cases)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.

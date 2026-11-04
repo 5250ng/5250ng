@@ -213,9 +213,12 @@ void KeyboardMapping::replaceAllBindings(const QHash<KeyChord, MappedAction> &bi
 void KeyboardMapping::load() {
     QSettings settings;
     settings.beginGroup("KeyboardMapping");
-    // beginReadArray returns 0 when nothing was saved, which preserves defaults.
+    // Nothing saved keeps the defaults. beginReadArray() returns 0 both when
+    // nothing was saved and for a saved empty mapping; the array's size key,
+    // which save() always writes, tells the two apart.
+    const bool saved = settings.contains("entries/size");
     int n = settings.beginReadArray("entries");
-    if (n <= 0) {
+    if (n <= 0 && !saved) {
         settings.endArray();
         settings.endGroup();
         return;
