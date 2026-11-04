@@ -532,6 +532,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_system_name tests/unit/test_system_name.cpp)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_input_gate tests/unit/test_input_gate.cpp)
+    add_tn5250_test(test_copy_nondisplay tests/unit/test_copy_nondisplay.cpp)
     add_tn5250_test(test_typing_outside_fields tests/unit/test_typing_outside_fields.cpp)
 
     add_tn5250_test(test_paste_input_rules tests/unit/test_paste_input_rules.cpp)
