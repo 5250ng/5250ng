@@ -90,6 +90,16 @@ void SessionSettingsDialog::setupUI() {
 
     connect(applyAllBtn, &QPushButton::clicked, this, &SessionSettingsDialog::onApplyToAll);
     connect(applyBtn, &QPushButton::clicked, this, &SessionSettingsDialog::onApply);
+
+    // Shown instead of the buttons when embedded in SettingsDialog, whose
+    // Save applies the theme to the open sessions only
+    m_embeddedNote = new QLabel(
+        tr("Save applies this theme to the sessions open now only. It is not saved as a "
+           "default: new sessions use the theme set in their profile."),
+        this);
+    m_embeddedNote->setWordWrap(true);
+    m_embeddedNote->setVisible(false);
+    root->addWidget(m_embeddedNote);
 }
 
 QWidget *SessionSettingsDialog::buildThemeSection() {
@@ -1087,6 +1097,8 @@ void SessionSettingsDialog::onApplyToAll() {
 void SessionSettingsDialog::setEmbeddedMode(bool embedded) {
     if (m_buttonBar)
         m_buttonBar->setVisible(!embedded);
+    if (m_embeddedNote)
+        m_embeddedNote->setVisible(embedded);
 }
 
 void SessionSettingsDialog::onMonochromeToggled(bool checked) {

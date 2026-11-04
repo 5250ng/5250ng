@@ -52,7 +52,6 @@ class SettingsDialog : public qt_ui_style::BaseFramelessDialog {
     void setTerminalTheme(const ui::themes::TerminalTheme &theme);
 
   signals:
-    void terminalThemeApplyRequested(const ui::themes::TerminalTheme &theme);
     void terminalThemeApplyToAllRequested(const ui::themes::TerminalTheme &theme);
     void agentConfigChanged();
 
