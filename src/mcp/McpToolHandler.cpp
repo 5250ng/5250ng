@@ -18,6 +18,7 @@
 #include "McpSessionRegistry.h"
 #include "mcp_validation.h"
 #include "script_escape.h"
+#include "script_timeout.h"
 #include "session/manager.h"
 #include "agent/agent_script_runner.h"
 #include "agent/tool_definitions.h"
@@ -786,32 +787,6 @@ QJsonObject McpToolHandler::handleWriteFile(const QJsonObject &args) {
 }
 
 // ---------------------------------------------------------------------------
-// Compute a dynamic MCP timeout for a script.
-// Base of 60 seconds, plus the sum of all WAIT durations and EXPECT_TIMEOUT
-// values found in the script text.
-static int computeScriptTimeout(const QString &script) {
-    static const QRegularExpression waitRe(
-        R"(\bWAIT\s+(\d+))", QRegularExpression::CaseInsensitiveOption);
-    static const QRegularExpression expectTimeoutRe(
-        R"(\bGLOBAL\s+EXPECT_TIMEOUT\s+(\d+))", QRegularExpression::CaseInsensitiveOption);
-
-    int totalMs = 60000; // 60-second base
-
-    auto it = waitRe.globalMatch(script);
-    while (it.hasNext()) {
-        auto m = it.next();
-        totalMs += m.captured(1).toInt();
-    }
-
-    it = expectTimeoutRe.globalMatch(script);
-    while (it.hasNext()) {
-        auto m = it.next();
-        totalMs += m.captured(1).toInt();
-    }
-
-    return totalMs;
-}
-
 // Script tools (require GUI thread for script execution)
 // ---------------------------------------------------------------------------
 
@@ -840,7 +815,7 @@ QJsonObject McpToolHandler::handleRunScript(const QJsonObject &args) {
     // Use QPointer to detect widget destruction during execution.
     QPointer<ui::widgets::Q5250ScreenWidget> widgetGuard = widget;
 
-    int timeoutMs = computeScriptTimeout(script);
+    int timeoutMs = scriptTimeoutMs(script);
 
     auto *runner = new agent::AgentScriptRunner(widget, this);
     QEventLoop loop;

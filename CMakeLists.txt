@@ -873,6 +873,7 @@ if(BUILD_TESTS)
 
     add_tn5250_test(test_script_lexer tests/unit/test_script_lexer.cpp)
     add_tn5250_test(test_script_escape tests/unit/test_script_escape.cpp)
+    add_tn5250_test(test_script_timeout tests/unit/test_script_timeout.cpp)
     add_tn5250_test(test_script_parser tests/unit/test_script_parser.cpp)
 
     # OAuth redirect listener (AgentSources live in the application target)
