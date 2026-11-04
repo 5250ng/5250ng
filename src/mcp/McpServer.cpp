@@ -48,12 +48,28 @@ static QString sanitizeForLog(const QString &s, int maxLen = 80) {
         } else if (ch == '\t') {
             out += QStringLiteral("\\t");
         } else {
-            out += QStringLiteral("\\x") + QString::number(code, 16).rightJustified(2, '0');
+            // \uHHHH above 0xFF, so "\x202e" cannot be read as "\x20" + "2e"
+            if (code > 0xFF)
+                out += QStringLiteral("\\u") + QString::number(code, 16).rightJustified(4, '0');
+            else
+                out += QStringLiteral("\\x") + QString::number(code, 16).rightJustified(2, '0');
         }
         ++count;
     }
     out += '"';
     return out;
+}
+
+/// `s` itself when it is short printable ASCII, otherwise sanitizeForLog(s),
+/// so ordinary method and tool names are logged unchanged.
+static QString logSafe(const QString &s) {
+    if (s.size() > 80)
+        return sanitizeForLog(s);
+    for (const QChar &ch : s) {
+        if (ch.unicode() < 0x20 || ch.unicode() >= 0x7F)
+            return sanitizeForLog(s);
+    }
+    return s;
 }
 
 namespace mcp {
@@ -258,7 +274,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
     auto *parser = reinterpret_cast<McpHttpParser *>(wrapper->property("ptr").value<quintptr>());
     HttpRequest req = parser->request();
 
-    MCP_LOG(QString("HTTP %1 %2").arg(req.method, req.path));
+    MCP_LOG(QString("HTTP %1 %2").arg(logSafe(req.method), logSafe(req.path)));
 
     // Accept requests to /mcp or / (some MCP clients use the root)
     if (req.path != "/mcp" && req.path != "/") {
@@ -276,7 +292,7 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
     // or a foreign Host (DNS rebinding). Any page in the user's browser could
     // otherwise call the tools (files, sessions, typing into IBM i).
     auto refuse = [&](int code, const QString &text, const QString &reason) {
-        MCP_ERROR(QString("Refused %1 request: %2").arg(req.method, reason));
+        MCP_ERROR(QString("Refused %1 request: %2").arg(logSafe(req.method), reason));
         HttpResponse resp;
         resp.statusCode = code;
         resp.statusText = text;
@@ -384,10 +400,11 @@ QJsonObject McpServer::handleJsonRpc(const QJsonObject &request) {
 
     QString ts = QDateTime::currentDateTime().toString("hh:mm:ss");
 
-    // Build log prefix
-    QString logMethod = method;
+    // Build log prefix. The method and tool name come from the client, so
+    // anything but short printable ASCII is escaped before it is logged.
+    QString logMethod = logSafe(method);
     if (method == "tools/call")
-        logMethod += ": " + params.value("name").toString();
+        logMethod += ": " + logSafe(params.value("name").toString());
 
     emit requestLog(QString("[%1] -> %2").arg(ts, logMethod));
 
