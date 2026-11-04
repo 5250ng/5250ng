@@ -94,6 +94,7 @@ QAgentPanelWidget::QAgentPanelWidget(QWidget *parent) : QWidget(parent) {
         m_thinkingBlockPosition = -1;
         if (m_scriptRunner && m_scriptRunner->isRunning())
             m_scriptRunner->stop();
+        disconnectScriptGeneration();
         if (m_scriptGenerator)
             m_scriptGenerator->cancel();
         m_pendingToolCall.reset();
@@ -690,17 +691,30 @@ void QAgentPanelWidget::onGenerateScriptToolCall(const agent::ToolCall &call) {
 
     QString toolCallId = call.id;
 
-    connect(m_scriptGenerator, &agent::ScriptGeneratorSubagent::scriptGenerated,
+    // Exactly one of the two handlers answers this tool call; whichever runs
+    // disconnects both, so the other cannot answer a later generation with
+    // this call's id. It disconnects before answering: the answer can start
+    // the next generation, whose handlers must survive.
+    disconnectScriptGeneration();
+    m_generationConns[0] = connect(m_scriptGenerator, &agent::ScriptGeneratorSubagent::scriptGenerated,
             this, [this, toolCallId](const QString &script) {
+                disconnectScriptGeneration();
                 onScriptGenerated(toolCallId, script);
-            }, Qt::SingleShotConnection);
-
-    connect(m_scriptGenerator, &agent::ScriptGeneratorSubagent::generationError,
+            });
+    m_generationConns[1] = connect(m_scriptGenerator, &agent::ScriptGeneratorSubagent::generationError,
             this, [this, toolCallId](const QString &error) {
+                disconnectScriptGeneration();
                 onScriptGenerationError(toolCallId, error);
-            }, Qt::SingleShotConnection);
+            });
 
     m_scriptGenerator->generate(task, m_screenContext);
+}
+
+void QAgentPanelWidget::disconnectScriptGeneration() {
+    for (QMetaObject::Connection &c : m_generationConns) {
+        QObject::disconnect(c);
+        c = {};
+    }
 }
 
 void QAgentPanelWidget::onScriptGenerated(const QString &toolCallId,
