@@ -16,6 +16,7 @@
 
 #include "../main_window.h"
 #include "ui/dialogs/script_editor_window.h"
+#include "ui/quit_confirmation.h"
 #include <QCloseEvent>
 #include <QtUiStyle/StyledMessageBox.h>
 
@@ -46,6 +47,22 @@ void MainWindow::onOpenScriptEditor() {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+    // Closing drops every connected session, so ask first. A replay tab has
+    // no connection to lose.
+    int connected = 0;
+    for (const Session *s : std::as_const(m_sessions)) {
+        if (!s->connectionStatus || s->config.isReplay())
+            continue;
+        const auto state = s->connectionStatus->state();
+        if (state == tn5250::client::TN5250Client::ConnectionState::Connected ||
+            state == tn5250::client::TN5250Client::ConnectionState::Negotiating)
+            ++connected;
+    }
+    if (!ui::confirmQuitWithConnectedSessions(this, connected)) {
+        event->ignore();
+        return;
+    }
+
     // Give unsaved scripts a chance to be saved before the editor closes
     // along with this window
     if (ScriptEditorWindow *editor = ScriptEditorWindow::existingInstance()) {

@@ -871,6 +871,11 @@ if(BUILD_TESTS)
     add_test(NAME test_connect_dialog_device_size
              COMMAND test_connect_dialog_device_size)
 
+    # Quit confirmation with connected sessions (issue #409)
+    add_executable(test_quit_confirmation tests/unit/test_quit_confirmation.cpp)
+    target_link_libraries(test_quit_confirmation PRIVATE tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_quit_confirmation COMMAND test_quit_confirmation)
+
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),
     # so compile it into the test binary directly.
