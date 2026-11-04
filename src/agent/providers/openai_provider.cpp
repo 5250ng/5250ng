@@ -142,7 +142,10 @@ void OpenAiProvider::handleResponse(QNetworkReply *reply) {
         return;
     }
 
-    QByteArray responseData = reply->readAll();
+    processResponseBody(reply->readAll());
+}
+
+void OpenAiProvider::processResponseBody(const QByteArray &responseData) {
     QJsonDocument doc = QJsonDocument::fromJson(responseData);
     if (!doc.isObject()) {
         emit responseError("Invalid response from OpenAI.");
@@ -177,11 +180,26 @@ void OpenAiProvider::handleResponse(QNetworkReply *reply) {
 
         emit toolCallReceived(toolCall);
     } else {
-        // Regular text response — append to history
-        m_conversationHistory.append(message);
-
+        // tool_calls in a response that stopped for another reason (length)
+        // are cut off: they are not run, and the API rejects every later
+        // request while history holds tool calls without their tool
+        // messages, so they are dropped from the stored message
+        const bool cutOffToolCall = !toolCalls.isEmpty();
+        QJsonObject stored = message;
+        stored.remove("tool_calls");
         QString content = message["content"].toString();
-        if (content.isEmpty()) {
+        // An assistant message without content or tool calls is invalid in
+        // history too (content_filter gives one)
+        if (!content.isEmpty())
+            m_conversationHistory.append(stored);
+
+        if (cutOffToolCall) {
+            if (!content.isEmpty())
+                emit responseReceived(content);
+            emit responseError(QStringLiteral("The response was cut off (%1) before its tool call "
+                                              "was complete; the tool call was not run.")
+                                   .arg(finishReason.isEmpty() ? QStringLiteral("no finish reason") : finishReason));
+        } else if (content.isEmpty()) {
             emit responseError("No response from OpenAI.");
         } else {
             emit responseReceived(content);

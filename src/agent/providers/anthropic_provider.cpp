@@ -141,7 +141,10 @@ void AnthropicProvider::handleResponse(QNetworkReply *reply) {
         return;
     }
 
-    QByteArray responseData = reply->readAll();
+    processResponseBody(reply->readAll());
+}
+
+void AnthropicProvider::processResponseBody(const QByteArray &responseData) {
     QJsonDocument doc = QJsonDocument::fromJson(responseData);
     if (!doc.isObject()) {
         emit responseError("Invalid response from Anthropic.");
@@ -184,13 +187,29 @@ void AnthropicProvider::handleResponse(QNetworkReply *reply) {
 
         emit toolCallReceived(toolCall);
     } else {
-        // Regular text response — append to history
-        QJsonObject assistantMsg;
-        assistantMsg["role"] = "assistant";
-        assistantMsg["content"] = content;
-        m_conversationHistory.append(assistantMsg);
+        // A tool_use block in a response that stopped for another reason
+        // (max_tokens) is cut off: it is not run, and the API rejects every
+        // later request while history holds a tool_use without its
+        // tool_result, so only the text blocks are kept
+        QJsonArray textOnly;
+        for (const QJsonValue &block : content) {
+            if (block.toObject()["type"].toString() != "tool_use")
+                textOnly.append(block);
+        }
+        if (!textOnly.isEmpty()) {
+            QJsonObject assistantMsg;
+            assistantMsg["role"] = "assistant";
+            assistantMsg["content"] = textOnly;
+            m_conversationHistory.append(assistantMsg);
+        }
 
-        if (combinedText.isEmpty()) {
+        if (hasToolUse) {
+            if (!combinedText.isEmpty())
+                emit responseReceived(combinedText);
+            emit responseError(QStringLiteral("The response was cut off (%1) before its tool call "
+                                              "was complete; the tool call was not run.")
+                                   .arg(stopReason.isEmpty() ? QStringLiteral("no stop reason") : stopReason));
+        } else if (combinedText.isEmpty()) {
             emit responseError("No response from Anthropic.");
         } else {
             emit responseReceived(combinedText);

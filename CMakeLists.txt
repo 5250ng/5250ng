@@ -1052,6 +1052,20 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_agent_tool_escaping COMMAND test_agent_tool_escaping)
 
+    # Providers and a tool call cut off by max_tokens (issue #259)
+    add_executable(test_provider_truncated_tool_call
+        tests/unit/test_provider_truncated_tool_call.cpp
+        ${UI_SOURCES}
+        ${AGENT_SOURCES_NO_QRC}
+    )
+    target_link_libraries(test_provider_truncated_tool_call PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_provider_truncated_tool_call PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_provider_truncated_tool_call PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_provider_truncated_tool_call COMMAND test_provider_truncated_tool_call)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.
