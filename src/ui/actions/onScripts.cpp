@@ -143,8 +143,6 @@ void MainWindow::onRecordScript() {
         m_scriptStopAction->setEnabled(true);
         if (s->macroLabel) {
             s->macroLabel->setText("REC");
-            s->macroLabel->setStyleSheet(
-                "color: red; background-color: black; padding: 0px 4px; font-weight: bold;");
         }
     }
 }
@@ -435,8 +433,6 @@ void MainWindow::onRunScript(const QString &path) {
     // Show indicator
     if (s->macroLabel) {
         s->macroLabel->setText("SCRIPT");
-        s->macroLabel->setStyleSheet(
-            "color: #00ccff; background-color: black; padding: 0px 4px; font-weight: bold;");
     }
     m_scriptStopAction->setEnabled(true);
 
@@ -829,8 +825,6 @@ void MainWindow::runStartupScript(Session *s) {
 
     if (s->macroLabel) {
         s->macroLabel->setText("SCRIPT");
-        s->macroLabel->setStyleSheet(
-            "color: #00ccff; background-color: black; padding: 0px 4px; font-weight: bold;");
     }
     if (isActive())
         m_scriptStopAction->setEnabled(true);

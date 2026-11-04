@@ -143,6 +143,7 @@ set(CORE_SOURCES
     src/core/script_library.cpp
     src/core/script_library.h
     src/core/settings_permissions.h
+    src/core/system_name.h
     src/core/command_runner.cpp
     src/core/command_runner.h
     src/core/pcap_replay.cpp
@@ -527,6 +528,8 @@ if(BUILD_TESTS)
     add_tn5250_test(test_screen_buffer tests/unit/test_screen_buffer.cpp)
     add_tn5250_test(test_screen_history_snapshots tests/unit/test_screen_history_snapshots.cpp)
     add_tn5250_test(test_history_view tests/unit/test_history_view.cpp)
+
+    add_tn5250_test(test_system_name tests/unit/test_system_name.cpp)
     add_tn5250_test(test_keyboard_encoder tests/unit/test_keyboard_encoder.cpp)
     add_tn5250_test(test_input_gate tests/unit/test_input_gate.cpp)
     add_tn5250_test(test_typing_outside_fields tests/unit/test_typing_outside_fields.cpp)
