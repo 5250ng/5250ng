@@ -19,6 +19,7 @@
 #include "mcp_request_guard.h"
 #include "logger/logger.h"
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
 #include <QTcpSocket>
@@ -336,23 +337,102 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         return;
     }
 
-    // Parse JSON-RPC request
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(req.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        MCP_ERROR(QString("JSON parse error: %1").arg(parseError.errorString()));
-        QJsonObject err = jsonRpcError(QJsonValue::Null, -32700, "Parse error: " + parseError.errorString());
+    // Answer with a JSON-RPC response: an object, a batch array, or
+    // nothing (only notifications), which is 202 Accepted with no body
+    auto respond = [&](const QJsonDocument &rpc) {
         HttpResponse resp;
         resp.statusCode = 200;
         resp.headers["Content-Type"] = "application/json";
-        resp.body = QJsonDocument(err).toJson(QJsonDocument::Compact);
+        if (!m_sessionId.isEmpty())
+            resp.headers["Mcp-Session-Id"] = m_sessionId;
+        if (!rpc.isNull()) {
+            resp.body = rpc.toJson(QJsonDocument::Compact);
+        } else {
+            resp.statusCode = 202;
+            resp.statusText = "Accepted";
+        }
         socket->write(resp.toBytes());
         socket->flush();
+    };
+
+    // Parse JSON-RPC request
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(req.body, &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        // QJsonDocument refuses a top-level scalar (1, "x", null) as an
+        // illegal value, but that is valid JSON, just not a request
+        QJsonParseError wrappedError;
+        const QJsonDocument wrapped =
+            QJsonDocument::fromJson("[" + req.body + "]", &wrappedError);
+        if (wrappedError.error == QJsonParseError::NoError && wrapped.array().size() == 1) {
+            respond(QJsonDocument(jsonRpcError(
+                QJsonValue::Null, -32600,
+                "Invalid Request: expected a JSON-RPC request object or a non-empty batch array")));
+            return;
+        }
+        MCP_ERROR(QString("JSON parse error: %1").arg(parseError.errorString()));
+        respond(QJsonDocument(
+            jsonRpcError(QJsonValue::Null, -32700, "Parse error: " + parseError.errorString())));
         return;
     }
 
-    QJsonObject rpcRequest = doc.object();
-    QJsonObject rpcResponse = handleJsonRpc(rpcRequest);
+    // A batch (JSON-RPC 2.0 section 6, supported by MCP 2025-03-26):
+    // each member is handled in order, and the responses that are not to
+    // notifications are returned as one array
+    if (doc.isArray() && !doc.array().isEmpty()) {
+        // Each member costs a response, so a body of tiny members would
+        // otherwise make the GUI thread build a response many times its size
+        if (doc.array().size() > kMaxBatchSize) {
+            respond(QJsonDocument(jsonRpcError(
+                QJsonValue::Null, -32600,
+                QString("Invalid Request: a batch may hold at most %1 messages").arg(kMaxBatchSize))));
+            return;
+        }
+        QJsonArray responses;
+        for (const QJsonValue &member : doc.array()) {
+            if (!member.isObject()) {
+                responses.append(jsonRpcError(QJsonValue::Null, -32600,
+                                              "Invalid Request: batch member is not an object"));
+                continue;
+            }
+            const QJsonObject request = member.toObject();
+            // MCP: the initialize request must not be part of a batch
+            if (request.value("method").toString() == QLatin1String("initialize")) {
+                // A notification gets no response, not even an error
+                const QJsonValue id = request.value("id");
+                if (!id.isUndefined() && !id.isNull())
+                    responses.append(jsonRpcError(id, -32600,
+                                                  "Invalid Request: initialize cannot be batched"));
+                continue;
+            }
+            const QJsonObject r = handleJsonRpc(request);
+            // A tool call may run a nested event loop during which the
+            // client disconnects or the server is stopped; no further
+            // member may run then, as for a pipelined request
+            if (socket.isNull()) {
+                MCP_LOG("Client disconnected before response could be sent");
+                return;
+            }
+            if (!m_server->isListening() || socket->state() != QAbstractSocket::ConnectedState) {
+                socket->abort();
+                return;
+            }
+            if (!r.isEmpty())
+                responses.append(r);
+        }
+        respond(responses.isEmpty() ? QJsonDocument() : QJsonDocument(responses));
+        return;
+    }
+
+    // Valid JSON that is neither a request object nor a non-empty batch
+    if (!doc.isObject()) {
+        respond(QJsonDocument(jsonRpcError(
+            QJsonValue::Null, -32600,
+            "Invalid Request: expected a JSON-RPC request object or a non-empty batch array")));
+        return;
+    }
+
+    QJsonObject rpcResponse = handleJsonRpc(doc.object());
 
     // The client may have disconnected while a tool call was running
     // inside a nested event loop (e.g. run_script, create_session).
@@ -361,20 +441,8 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         return;
     }
 
-    HttpResponse resp;
-    resp.statusCode = 200;
-    resp.headers["Content-Type"] = "application/json";
-    if (!m_sessionId.isEmpty())
-        resp.headers["Mcp-Session-Id"] = m_sessionId;
     // Only send body if there is a response (notifications have no response)
-    if (!rpcResponse.isEmpty()) {
-        resp.body = QJsonDocument(rpcResponse).toJson(QJsonDocument::Compact);
-    } else {
-        resp.statusCode = 202;
-        resp.statusText = "Accepted";
-    }
-    socket->write(resp.toBytes());
-    socket->flush();
+    respond(rpcResponse.isEmpty() ? QJsonDocument() : QJsonDocument(rpcResponse));
 }
 
 QJsonObject McpServer::handleJsonRpc(const QJsonObject &request) {
