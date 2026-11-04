@@ -556,6 +556,7 @@ if(BUILD_TESTS)
     add_tn5250_test(test_ibmrseed tests/unit/test_ibmrseed.cpp)
     add_tn5250_test(test_telnet_subnegotiation tests/unit/test_telnet_subnegotiation.cpp)
     add_tn5250_test(test_logger tests/unit/test_logger.cpp)
+    add_tn5250_test(test_session_log_file_names tests/unit/test_session_log_file_names.cpp)
     add_tn5250_test(test_codepage tests/unit/test_codepage.cpp)
     add_tn5250_test(test_codepage_new_environ tests/unit/test_codepage_new_environ.cpp)
 
