@@ -59,11 +59,7 @@ class PasswordEncrypt {
 
   private:
     // DES helpers (reusing the IBMRSEED approach)
-    static QByteArray padPasswordEBCDIC(const QString &password);
     static QByteArray padUserIdEBCDIC(const QString &userId, int len);
-    static QByteArray xorWith55(const QByteArray &data);
-    static QByteArray leftShift1(const QByteArray &data);
-    static QByteArray desEcbEncrypt(const QByteArray &key, const QByteArray &plaintext);
     static QByteArray desCbcEncrypt(const QByteArray &key, const QByteArray &iv,
                                     const QByteArray &plaintext);
     static QByteArray addBigEndian8(const QByteArray &a, const QByteArray &b);

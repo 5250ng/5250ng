@@ -53,18 +53,9 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
         return {};
     }
 
-    // Step 1: Pad password to 8 bytes EBCDIC uppercase
-    QByteArray pwEBCDIC = padPasswordEBCDIC(password, cp);
-
-    // Step 2: XOR each byte with 0x55
-    QByteArray xored = xorWith55(pwEBCDIC);
-
-    // Step 3: Left-shift entire 8-byte value by 1 bit
-    QByteArray shifted = leftShift1(xored);
-
-    // Step 4: DES-ECB encrypt userID with shifted key → PW_TOKEN
-    QByteArray userIdPadded = padUserIdEBCDIC(userId, 8, cp);
-    QByteArray pwToken = desEcbEncrypt(shifted, userIdPadded);
+    // Steps 1-4: PW_TOKEN from the 10-byte user ID and password
+    QByteArray pwToken = passwordToken(padUserIdEBCDIC(userId, 10, cp),
+                                       padPasswordEBCDIC(password, cp));
     if (pwToken.isEmpty()) {
         logger::Logger::instance()->error("[IBMRSEED]: DES-ECB encrypt failed");
         return {};
@@ -79,7 +70,8 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
 
     // Step 7: Build 40-byte block and DES-CBC encrypt
     // Pad userID to 16 bytes (two 8-byte halves) for XOR with RDrSEQ
-    QByteArray userId16 = padUserIdEBCDIC(userId, 16, cp);
+    // (an IBM i user ID has at most 10 characters)
+    QByteArray userId16 = padUserIdEBCDIC(userId.left(10), 16, cp);
     QByteArray userPart1 = userId16.left(8);
     QByteArray userPart2 = userId16.mid(8, 8);
 
@@ -119,6 +111,48 @@ QByteArray IBMRSeed::encryptPassword(const QString &userId,
     return pwSub;
 }
 
+QByteArray IBMRSeed::passwordToken(const QByteArray &userId10, const QByteArray &password10) {
+    if (userId10.size() != 10 || password10.size() != 10)
+        return {};
+    auto blankLength = [](const QByteArray &b) {
+        int n = 0;
+        while (n < b.size() && static_cast<uint8_t>(b[n]) != 0x40)
+            ++n;
+        return n;
+    };
+
+    // Fold user ID characters 9 and 10 into the first eight, two bits each
+    QByteArray user = userId10.left(8);
+    if (blankLength(userId10) > 8) {
+        const uint8_t u8 = static_cast<uint8_t>(userId10[8]);
+        const uint8_t u9 = static_cast<uint8_t>(userId10[9]);
+        const uint8_t fold[8] = {
+            uint8_t(u8 & 0xC0), uint8_t((u8 & 0x30) << 2), uint8_t((u8 & 0x0C) << 4),
+            uint8_t((u8 & 0x03) << 6), uint8_t(u9 & 0xC0), uint8_t((u9 & 0x30) << 2),
+            uint8_t((u9 & 0x0C) << 4), uint8_t((u9 & 0x03) << 6)};
+        for (int i = 0; i < 8; ++i)
+            user[i] = static_cast<char>(static_cast<uint8_t>(user[i]) ^ fold[i]);
+    }
+
+    // One token per 8-byte password half (the second blank padded). The
+    // password ends at its first blank, as in JTOpen's ebcdicStrLen.
+    auto tokenFor = [&user](const QByteArray &half) {
+        return desEcbEncrypt(leftShift1(xorWith55(half)), user);
+    };
+    const int pwLength = blankLength(password10);
+    QByteArray password = password10.left(pwLength);
+    password.append(QByteArray(10 - pwLength, '\x40'));
+    QByteArray token = tokenFor(password.left(8));
+    if (pwLength > 8 && !token.isEmpty()) {
+        const QByteArray second = tokenFor(password.mid(8, 2) + QByteArray(6, '\x40'));
+        if (second.isEmpty())
+            return {};
+        for (int i = 0; i < 8; ++i)
+            token[i] = static_cast<char>(static_cast<uint8_t>(token[i]) ^ static_cast<uint8_t>(second[i]));
+    }
+    return token;
+}
+
 QByteArray IBMRSeed::generateClientSeed() {
     QByteArray seed(8, '\0');
     QRandomGenerator *rng = QRandomGenerator::global();
@@ -153,15 +187,15 @@ QByteArray IBMRSeed::padPasswordEBCDIC(const QString &password) {
 }
 
 QByteArray IBMRSeed::padPasswordEBCDIC(const QString &password, const core::CodePage &cp) {
-    // Convert to uppercase, then to EBCDIC, pad/truncate to 8 bytes with 0x40
+    // Convert to uppercase, then to EBCDIC, pad/truncate to 10 bytes with 0x40
     QString upper = password.toUpper();
     QByteArray ebcdic = cp.fromUnicode(upper);
 
-    // Truncate to 8 or pad with EBCDIC space (0x40)
-    if (ebcdic.size() > 8) {
-        ebcdic.truncate(8);
+    // Truncate to 10 or pad with EBCDIC space (0x40)
+    if (ebcdic.size() > 10) {
+        ebcdic.truncate(10);
     }
-    while (ebcdic.size() < 8) {
+    while (ebcdic.size() < 10) {
         ebcdic.append(static_cast<char>(0x40));
     }
     return ebcdic;
