@@ -15,7 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "network/hostserver/password_encrypt.h"
+#include "network/hostserver/signon_client.h"
 #include <QByteArray>
+#include <QSignalSpy>
 #include <QString>
 #include <QTest>
 
@@ -158,6 +160,40 @@ class TestPasswordEncrypt : public QObject {
         const QByteArray seed = QByteArray::fromHex("0123456789abcdef");
         QVERIFY(PasswordEncrypt::encryptSHA1(QStringLiteral("ABCDEFGHIJK"), QStringLiteral("pw"), seed, seed)
                     .isEmpty());
+    }
+
+    void testEncryptDESRejectsLongUserId() {
+        const QByteArray seed = QByteArray::fromHex("0123456789abcdef");
+        QVERIFY(PasswordEncrypt::encryptDES(QStringLiteral("ABCDEFGHIJK"), QStringLiteral("pw"), seed, seed)
+                    .isEmpty());
+        // Ten characters is the limit, not past it
+        QCOMPARE(PasswordEncrypt::encryptDES(QStringLiteral("ABCDEFGHIJ"), QStringLiteral("pw"), seed, seed)
+                     .size(),
+                 8);
+    }
+
+    void testSignonRejectsLongUserIdBeforeConnecting() {
+        SignonClient client;
+        QSignalSpy errors(&client, &SignonClient::errorOccurred);
+        // A host that would only fail later; the reject must come first
+        client.signon(QStringLiteral("192.0.2.1"), 8476, QStringLiteral("ABCDEFGHIJK"), QStringLiteral("pw"));
+        QCOMPARE(errors.count(), 1);
+        QCOMPARE(errors.at(0).at(0).toString(), QStringLiteral("User ID longer than 10 characters"));
+        QCOMPARE(client.state(), SignonClient::State::Error);
+    }
+
+    void testLongAfterUpperCaseIsRejected() {
+        // Ten characters that upper-case to eleven: "ABCDEFGHIß" -> "ABCDEFGHISS"
+        const QString user = QStringLiteral("ABCDEFGHI") + QChar(0x00DF);
+        QCOMPARE(user.size(), 10);
+        const QByteArray seed = QByteArray::fromHex("0123456789abcdef");
+        QVERIFY(PasswordEncrypt::encryptDES(user, QStringLiteral("pw"), seed, seed).isEmpty());
+        QVERIFY(PasswordEncrypt::encryptSHA1(user, QStringLiteral("pw"), seed, seed).isEmpty());
+        SignonClient client;
+        QSignalSpy errors(&client, &SignonClient::errorOccurred);
+        client.signon(QStringLiteral("192.0.2.1"), 8476, user, QStringLiteral("pw"));
+        QCOMPARE(errors.count(), 1);
+        QCOMPARE(client.state(), SignonClient::State::Error);
     }
 
     void testEncryptAutoSelectDES() {

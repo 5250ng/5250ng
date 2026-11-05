@@ -75,6 +75,12 @@ QByteArray PasswordEncrypt::encryptDES(const QString &userId,
         LOG_ERROR("[PasswordEncrypt]: Invalid seed size for DES");
         return {};
     }
+    // The token takes at most 10 characters; a longer ID would sign on as
+    // its first 10 (see encryptSHA1). Counted upper-cased, as encoded
+    if (userId.toUpper().size() > 10) {
+        LOG_ERROR("[PasswordEncrypt]: User ID longer than 10 characters");
+        return {};
+    }
 
     // PW_TOKEN, including the 9-10 character user ID and password cases
     QByteArray pwToken = tn5250::client::IBMRSeed::passwordToken(padUserIdEBCDIC(userId, 10),
@@ -131,8 +137,9 @@ QByteArray PasswordEncrypt::encryptSHA1(const QString &userId,
     }
     // The user ID sent on the wire is cut to 10 characters, so a longer one
     // would be hashed differently from the one the host checks. JTOpen
-    // rejects it (AS400.java), and so does this
-    if (userId.size() > 10) {
+    // rejects it (AS400.java), and so does this. Counted upper-cased, since
+    // toUpper() can lengthen it (ß -> SS)
+    if (userId.toUpper().size() > 10) {
         LOG_ERROR("[PasswordEncrypt]: User ID longer than 10 characters");
         return {};
     }
