@@ -323,6 +323,8 @@ void TN5250CommandHandler::handleRawScreenData(const QByteArray &data) {
         processDeferredCC2(m_pendingCC2);
         m_pendingCC2 = 0;
     }
+    m_errorCodeAfterCC2 = false;
+    m_errorCodeSetCursor = false;
 }
 
 void TN5250CommandHandler::onClearScreenRequested() {
@@ -472,13 +474,20 @@ void TN5250CommandHandler::processDeferredCC2(uint8_t cc2) {
     }
     // 0x08: Unlock keyboard
     if (cc2 & 0x08) {
-        // Restore cursor visibility after host processing
-        screen->setCursorVisible(true);
-        m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
+        // The unlock takes effect at the end of its WTD (lib5250 applies
+        // CC2 there), so a Write Error Code later in the same record leaves
+        // the keyboard error-locked. Only the cursor placement still
+        // applies, unless the error data placed the cursor itself.
+        const bool errorLocksAfter = m_errorCodeAfterCC2;
+        if (!errorLocksAfter) {
+            // Restore cursor visibility after host processing
+            screen->setCursorVisible(true);
+            m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
+        }
         int icRow = m_displayWidget->icRow();
         int icCol = m_displayWidget->icCol();
         // Move cursor to IC address unless CC2 bit 6 (0x40) says leave it
-        if (!(cc2 & 0x40)) {
+        if (!(cc2 & 0x40) && !(errorLocksAfter && m_errorCodeSetCursor)) {
             bool cursorPlaced = false;
             if (m_displayWidget->hasICAddress()) {
                 screen->setCursorPosition(icRow, icCol);
@@ -562,6 +571,7 @@ void TN5250CommandHandler::onWriteErrorCode(const QByteArray &errorData) {
     }
 
     int col = 0;
+    bool cursorSet = false;
     ui::widgets::CellAttributes errAttr;
     errAttr.color = 12;
     for (int i = 0; i < errorData.size();) {
@@ -571,6 +581,7 @@ void TN5250CommandHandler::onWriteErrorCode(const QByteArray &errorData) {
             int icCol = static_cast<uint8_t>(errorData[i + 2]) - 1;
             if (icRow >= 0 && icRow < screen->rows() && icCol >= 0 && icCol < screen->cols()) {
                 screen->setCursorPosition(icRow, icCol);
+                cursorSet = true;
             }
             i += 3;
             continue;
@@ -586,7 +597,15 @@ void TN5250CommandHandler::onWriteErrorCode(const QByteArray &errorData) {
     }
 
     m_displayWidget->setKeyboardState(ui::widgets::KeyboardState::ErrorLocked);
+    // The error state shows a blinking cursor where the operator resumes
+    // (lib5250 and tn5250j keep it visible); entering ErrorLocked hides it
+    screen->setCursorVisible(true);
     m_displayWidget->setCursorBlinkRate(250);
+    // An earlier WTD's CC2 is applied only at the end of the record
+    if (m_pendingCC2) {
+        m_errorCodeAfterCC2 = true;
+        m_errorCodeSetCursor = m_errorCodeSetCursor || cursorSet;
+    }
     logger::Logger::instance()->debug("CommandHandler: Write Error Code received");
 }
 
