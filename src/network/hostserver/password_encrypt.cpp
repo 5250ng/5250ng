@@ -129,9 +129,19 @@ QByteArray PasswordEncrypt::encryptSHA1(const QString &userId,
         LOG_ERROR("[PasswordEncrypt]: Invalid seed size for SHA-1");
         return {};
     }
+    // The user ID sent on the wire is cut to 10 characters, so a longer one
+    // would be hashed differently from the one the host checks. JTOpen
+    // rejects it (AS400.java), and so does this
+    if (userId.size() > 10) {
+        LOG_ERROR("[PasswordEncrypt]: User ID longer than 10 characters");
+        return {};
+    }
 
-    // Step 1: Generate password token = SHA-1(userID_utf16 + password_utf16)
-    QByteArray userIdUtf16 = HostDataStream::toUtf16BE(userId.toUpper());
+    // Step 1: Generate password token = SHA-1(userID_utf16 + password_utf16).
+    // The user ID is blank-padded to 10 characters first, as in JTOpen
+    // (AS400ImplRemote, 20 bytes of UTF-16)
+    QByteArray userIdUtf16 =
+        HostDataStream::toUtf16BE(userId.toUpper().leftJustified(10, QLatin1Char(' ')));
     QByteArray passwordUtf16 = HostDataStream::toUtf16BE(password);
 
     QByteArray tokenInput;
