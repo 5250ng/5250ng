@@ -139,7 +139,12 @@ void TestIBMRSeed::testJTOpenVectors() {
     // RFC 4777 IBMRSEED (telnet) and the host server sign-on share the DES
     // substitute
     QCOMPARE(IBMRSeed::encryptPassword(user, password, server, client).toHex(), expected);
-    QCOMPARE(hostserver::PasswordEncrypt::encryptDES(user, password, client, server).toHex(), expected);
+    // The host server sign-on rejects an ID past 10 characters instead, as
+    // JTOpen's AS400 does before reaching this primitive (#450)
+    if (user.size() > 10)
+        QVERIFY(hostserver::PasswordEncrypt::encryptDES(user, password, client, server).isEmpty());
+    else
+        QCOMPARE(hostserver::PasswordEncrypt::encryptDES(user, password, client, server).toHex(), expected);
     // Lower case is folded to upper case as the host does at QPWDLVL 0-1
     QCOMPARE(IBMRSeed::encryptPassword(user.toLower(), password.toLower(), server, client).toHex(),
              expected);
