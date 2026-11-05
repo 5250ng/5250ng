@@ -382,7 +382,13 @@ QJsonObject McpToolHandler::handleCreateSession(const QJsonObject &args) {
     }
 
     MCP_LOG(QString("Session created: %1 -> %2:%3").arg(sessionId, hostname).arg(port));
-    return makeResult(QString("session_id: %1\nConnected to %2:%3")
+    // The tab exists now, but its connection is still being opened: say
+    // so instead of claiming a connection that may never succeed
+    return makeResult(QString("session_id: %1\nConnecting to %2:%3. The connection is opened in "
+                              "the background: poll read_screen until the host's screen "
+                              "appears (it is blank until then). If list_sessions still "
+                              "shows connected: no after a few seconds, the connection "
+                              "failed.")
                           .arg(sessionId, hostname).arg(port));
 }
 

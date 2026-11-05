@@ -359,6 +359,8 @@ inline const QString kToolCreateSessionDescription = QStringLiteral(
     "Create a new TN5250 terminal session and connect to an AS/400 host. "
     "Returns a session_id that must be used in subsequent tool calls to "
     "target this session. The session appears as a read-only tab in the UI. "
+    "It returns once the tab exists, while the connection is still being "
+    "opened: poll read_screen until the host's screen appears. "
     "Pass either hostname, or profile with the name of a saved session from "
     "list_saved_sessions: the saved session's settings are used and its "
     "saved credentials sign the session on (encrypted sign-on, or login "

@@ -150,7 +150,7 @@ class Client5250:
             "port": port,
             "useTLS": use_tls,
         })
-        # Response format: "session_id: <uuid>\nConnected to host:port"
+        # Response format: "session_id: <uuid>\nConnecting to host:port. ..."
         for line in text.splitlines():
             if line.startswith("session_id:"):
                 return line.split(":", 1)[1].strip()
