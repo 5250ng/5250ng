@@ -334,6 +334,8 @@ void TN5250CommandHandler::onClearScreenRequested() {
     // an IC order (QSH does this); cursor selection then falls back to the
     // first eligible input field.
     m_displayWidget->clearICAddress();
+    // The format table, and with it the SOH command key mask, is cleared
+    m_displayWidget->setCmdKeyMask(0, 0, 0);
     // Clear Unit (0x40) also selects the 24x80 format (tn5250j
     // CMD_CLEAR_UNIT semantics): the host uses it to leave 132-column
     // mode, so the buffer geometry must follow or the session stays
@@ -720,6 +722,7 @@ void TN5250CommandHandler::onClearScreenAlternateRequested() {
         return;
     }
     m_displayWidget->clearICAddress();
+    m_displayWidget->setCmdKeyMask(0, 0, 0);
     m_displayWidget->setScreenSize(27, 132);
     if (m_displayWidget->screenBuffer()) {
         m_displayWidget->screenBuffer()->clear();
@@ -733,6 +736,7 @@ void TN5250CommandHandler::onClearFormatTableRequested() {
         return;
     }
     m_displayWidget->screenBuffer()->clearFields();
+    m_displayWidget->setCmdKeyMask(0, 0, 0);
     m_displayWidget->setCursorBlinkRate(0);
     logger::Logger::instance()->debug("CommandHandler: Format table cleared");
 }

@@ -895,6 +895,19 @@ void Q5250ScreenWidget::sendAutoEnter() {
     }
 }
 
+bool Q5250ScreenWidget::aidSendsNoFieldData(const uint8_t mask[3], uint8_t aidByte) {
+    int pf = 0;
+    if (aidByte >= 0x31 && aidByte <= 0x3C)
+        pf = aidByte - 0x31 + 1;       // PF1-PF12
+    else if (aidByte >= 0xB1 && aidByte <= 0xBC)
+        pf = aidByte - 0xB1 + 13;      // PF13-PF24
+    else
+        return false;                  // Enter, Roll, Help, ... always send data
+    const int byte = 2 - (pf - 1) / 8;
+    const uint8_t bit = uint8_t(1u << ((pf - 1) % 8));
+    return (mask[byte] & bit) != 0;
+}
+
 QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     QByteArray response;
 
@@ -910,6 +923,14 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
     response.append(static_cast<char>(cursor.y() + 1));
     response.append(static_cast<char>(cursor.x() + 1));
     response.append(static_cast<char>(aidByte));
+
+    // A PF key the host's SOH defined as a command attention key sends
+    // only the cursor address and the AID
+    if (aidSendsNoFieldData(m_cmdKeyMask, aidByte)) {
+        LOG_DEBUG(QString("[Q5250Widget] buildAIDResponse: aid=0x%1 sends no field data (SOH key mask)")
+            .arg(aidByte, 2, 16, QChar('0')));
+        return response;
+    }
 
     // Append fields: SBA(0x11) + row(1-based) + col(1-based) + field data
     // SBA address points to the field attribute byte position (one cell before

@@ -168,6 +168,11 @@ class Q5250ScreenWidget : public QWidget {
     void setErrorLineRow(int row) { m_errorLineRow = row; }
     const uint8_t *cmdKeyMask() const { return m_cmdKeyMask; }
     void setCmdKeyMask(uint8_t m1, uint8_t m2, uint8_t m3) { m_cmdKeyMask[0]=m1; m_cmdKeyMask[1]=m2; m_cmdKeyMask[2]=m3; }
+    // True when the SOH command key switches mark this PF key's AID as one
+    // sent without field data (a command attention key). The three mask
+    // bytes cover PF24-PF17, PF16-PF9 and PF8-PF1, low bit first: PF1 is
+    // bit 0x01 of the third byte (lib5250 tn5250_dbuffer_send_data_for_aid_key).
+    static bool aidSendsNoFieldData(const uint8_t mask[3], uint8_t aidByte);
     void setSavedErrorLine(const QVector<ScreenCell> &line) { m_savedErrorLine = line; }
 
   public slots:
