@@ -121,6 +121,10 @@ class TN5250CommandHandler : public QObject {
     SendToHostFn m_sendToHost;
     SendGDSFn m_sendGDS;
     uint8_t m_pendingCC2 = 0;
+    // A Write Error Code arrived after the WTD whose CC2 is still pending:
+    // that CC2 belongs before it and must not unlock the keyboard again
+    bool m_errorCodeAfterCC2 = false;
+    bool m_errorCodeSetCursor = false; // its data held an Insert Cursor
     uint8_t m_readType = 0; // 0x52=READ_MDT, 0x42=READ_INPUT
     core::CommandRunner *m_commandRunner = nullptr;
     core::CodePage::ID m_codePageId = core::CodePage::ID::CP037;
