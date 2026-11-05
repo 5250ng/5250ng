@@ -315,8 +315,22 @@ void McpServer::handleHttpRequest(QTcpSocket *sock) {
         return;
     }
 
-    // Handle GET (health check / SSE endpoint)
+    // Handle GET (health check). There is no server-to-client SSE stream,
+    // so a Streamable HTTP client asking for one gets 405, as the MCP
+    // transport specifies for a server that does not offer it.
     if (req.method == "GET") {
+        if (req.headers.value("accept").contains(QLatin1String("text/event-stream"),
+                                                 Qt::CaseInsensitive)) {
+            HttpResponse resp;
+            resp.statusCode = 405;
+            resp.statusText = "Method Not Allowed";
+            // GET stays allowed: without an event-stream Accept it is
+            // the health check
+            resp.headers["Allow"] = "GET, POST, DELETE";
+            socket->write(resp.toBytes());
+            socket->flush();
+            return;
+        }
         HttpResponse resp;
         resp.statusCode = 200;
         resp.headers["Content-Type"] = "application/json";
