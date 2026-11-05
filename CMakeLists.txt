@@ -1177,6 +1177,18 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_provider_truncated_tool_call COMMAND test_provider_truncated_tool_call)
 
+    # move_cursor row/column bounds (issue #402)
+    add_executable(test_move_cursor_bounds
+        tests/unit/test_move_cursor_bounds.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_move_cursor_bounds PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_move_cursor_bounds COMMAND test_move_cursor_bounds)
+
     # Command-line validation: each invalid invocation must exit with an
     # error on stderr instead of starting the GUI. A GUI app on Windows has
     # no stderr for CTest to read, so these run elsewhere only.

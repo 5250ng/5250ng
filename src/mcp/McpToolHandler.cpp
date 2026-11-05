@@ -1066,6 +1066,16 @@ QJsonObject McpToolHandler::handleMoveCursor(const QJsonObject &args) {
 
     if (rows == 0 && cols == 0)
         return makeResult("No movement specified.", true);
+    // One script line is built per row and column moved: bound the counts by
+    // the screen (compared without negating, so INT_MIN cannot overflow)
+    const auto *buf = widget->screenBuffer();
+    const int maxRows = buf ? buf->rows() - 1 : 26;
+    // Left and right wrap from row to row, so a column count can usefully
+    // reach every cell; up and down stop at the edge
+    const int maxCols = buf ? buf->rows() * buf->cols() - 1 : 27 * 132 - 1;
+    if (rows < -maxRows || rows > maxRows || cols < -maxCols || cols > maxCols)
+        return makeResult(QString("Movement out of range: rows must be within +/-%1 and cols "
+                                  "within +/-%2 on this screen.").arg(maxRows).arg(maxCols), true);
 
     QStringList scriptLines;
     if (rows > 0) {
