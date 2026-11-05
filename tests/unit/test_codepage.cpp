@@ -43,6 +43,7 @@ class TestCodePage : public QObject {
     void testBulkEmpty();
 
     // Edge cases
+    void testNothingMapsToControlRange();
     void testUnmappableUnicode();
     void testReplacementChar();
 
@@ -205,6 +206,30 @@ void TestCodePage::testBulkEmpty() {
 
     QCOMPARE(cp.toUnicode(QByteArray()), QString());
     QCOMPARE(cp.fromUnicode(QString()), QByteArray());
+}
+
+void TestCodePage::testNothingMapsToControlRange() {
+    // Issue #267: no Unicode character other than NUL may encode to a 5250
+    // order or control byte (0x01-0x3F), in any code page. The reported
+    // case: '#' and '$' on CP273 were sent as 0x23 and 0x24
+    CodePage cp273(CodePage::ID::CP273);
+    QVERIFY(cp273.fromUnicode(QChar('#')) >= 0x40);
+    QVERIFY(cp273.fromUnicode(QChar('$')) >= 0x40);
+    for (auto id : CodePage::supportedCodePages()) {
+        CodePage cp(id);
+        for (int u = 1; u < 0x10000; ++u) {
+            const uint8_t b = cp.fromUnicode(QChar(static_cast<char16_t>(u)));
+            if (b < 0x40) {
+                QFAIL(qPrintable(QString("code page %1 encodes U+%2 as control byte 0x%3")
+                                     .arg(static_cast<int>(id))
+                                     .arg(u, 4, 16, QChar('0'))
+                                     .arg(b, 2, 16, QChar('0'))));
+            }
+        }
+    }
+    CodePage cp(CodePage::ID::CP037);
+    QCOMPARE(cp.fromUnicode(QChar(0x0000)), static_cast<uint8_t>(0x00));
+    QCOMPARE(cp.fromUnicode(QChar(0x0001)), static_cast<uint8_t>(0x40));
 }
 
 void TestCodePage::testUnmappableUnicode() {
