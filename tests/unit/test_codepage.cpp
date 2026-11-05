@@ -44,6 +44,11 @@ class TestCodePage : public QObject {
 
     // Edge cases
     void testNothingMapsToControlRange();
+    void testIbmAnchors_data();
+    void testIbmAnchors();
+    void testGraphicRangeRoundTrips();
+    void testThaiToneMarksEncodeLikeIbm();
+    void testNulEncodesToNul();
     void testUnmappableUnicode();
     void testReplacementChar();
 
@@ -230,6 +235,118 @@ void TestCodePage::testNothingMapsToControlRange() {
     CodePage cp(CodePage::ID::CP037);
     QCOMPARE(cp.fromUnicode(QChar(0x0000)), static_cast<uint8_t>(0x00));
     QCOMPARE(cp.fromUnicode(QChar(0x0001)), static_cast<uint8_t>(0x40));
+}
+
+// Issue #266: bytes the hand-written tables had wrong. Expected values come
+// from Python's codecs where it has the code page and from IBM's Java
+// charsets (IBM2xx, IBM-Thai) otherwise, not from ICU, which the tables are
+// generated from (tools/gen_codepage_tables.py)
+void TestCodePage::testIbmAnchors_data() {
+    QTest::addColumn<CodePage::ID>("id");
+    QTest::addColumn<int>("byte");
+    QTest::addColumn<int>("unicode");
+    QTest::newRow("CP037 0x5F") << CodePage::ID::CP037 << 0x5F << 0x00AC; // Python cp037
+    QTest::newRow("CP037 0xAD") << CodePage::ID::CP037 << 0xAD << 0x00DD; // Python cp037
+    QTest::newRow("CP037 0xBA") << CodePage::ID::CP037 << 0xBA << 0x005B; // Python cp037
+    QTest::newRow("CP037 0xBD") << CodePage::ID::CP037 << 0xBD << 0x00A8; // Python cp037
+    QTest::newRow("CP037 0xBB") << CodePage::ID::CP037 << 0xBB << 0x005D; // Python cp037
+    QTest::newRow("CP273 0x43") << CodePage::ID::CP273 << 0x43 << 0x007B; // Python cp273
+    QTest::newRow("CP273 0x59") << CodePage::ID::CP273 << 0x59 << 0x007E; // Python cp273
+    QTest::newRow("CP273 0xB0") << CodePage::ID::CP273 << 0xB0 << 0x00A2; // Python cp273
+    QTest::newRow("CP273 0xFC") << CodePage::ID::CP273 << 0xFC << 0x005D; // Python cp273
+    QTest::newRow("CP273 0x7B") << CodePage::ID::CP273 << 0x7B << 0x0023; // Python cp273
+    QTest::newRow("CP273 0x5B") << CodePage::ID::CP273 << 0x5B << 0x0024; // Python cp273
+    QTest::newRow("CP277 0x47") << CodePage::ID::CP277 << 0x47 << 0x007D; // Java
+    QTest::newRow("CP277 0x4F") << CodePage::ID::CP277 << 0x4F << 0x0021; // Java
+    QTest::newRow("CP277 0x9C") << CodePage::ID::CP277 << 0x9C << 0x007B; // Java
+    QTest::newRow("CP277 0xDC") << CodePage::ID::CP277 << 0xDC << 0x007E; // Java
+    QTest::newRow("CP278 0x43") << CodePage::ID::CP278 << 0x43 << 0x007B; // Java
+    QTest::newRow("CP278 0x47") << CodePage::ID::CP278 << 0x47 << 0x007D; // Java
+    QTest::newRow("CP278 0x9F") << CodePage::ID::CP278 << 0x9F << 0x005D; // Java
+    QTest::newRow("CP278 0xEC") << CodePage::ID::CP278 << 0xEC << 0x0040; // Java
+    QTest::newRow("CP280 0x44") << CodePage::ID::CP280 << 0x44 << 0x007B; // Java
+    QTest::newRow("CP280 0x48") << CodePage::ID::CP280 << 0x48 << 0x005C; // Java
+    QTest::newRow("CP280 0xA1") << CodePage::ID::CP280 << 0xA1 << 0x00EC; // Java
+    QTest::newRow("CP280 0xE0") << CodePage::ID::CP280 << 0xE0 << 0x00E7; // Java
+    QTest::newRow("CP284 0x49") << CodePage::ID::CP284 << 0x49 << 0x00A6; // Java
+    QTest::newRow("CP284 0x4A") << CodePage::ID::CP284 << 0x4A << 0x005B; // Java
+    QTest::newRow("CP284 0x7B") << CodePage::ID::CP284 << 0x7B << 0x00D1; // Java
+    QTest::newRow("CP284 0xBD") << CodePage::ID::CP284 << 0xBD << 0x007E; // Java
+    QTest::newRow("CP285 0x5F") << CodePage::ID::CP285 << 0x5F << 0x00AC; // Java
+    QTest::newRow("CP285 0x7B") << CodePage::ID::CP285 << 0x7B << 0x0023; // Java
+    QTest::newRow("CP285 0xB1") << CodePage::ID::CP285 << 0xB1 << 0x005B; // Java
+    QTest::newRow("CP285 0xBD") << CodePage::ID::CP285 << 0xBD << 0x00A8; // Java
+    QTest::newRow("CP297 0x44") << CodePage::ID::CP297 << 0x44 << 0x0040; // Java
+    QTest::newRow("CP297 0x48") << CodePage::ID::CP297 << 0x48 << 0x005C; // Java
+    QTest::newRow("CP297 0xA0") << CodePage::ID::CP297 << 0xA0 << 0x0060; // Java
+    QTest::newRow("CP297 0xE0") << CodePage::ID::CP297 << 0xE0 << 0x00E7; // Java
+    QTest::newRow("CP500 0xAD") << CodePage::ID::CP500 << 0xAD << 0x00DD; // Python cp500
+    QTest::newRow("CP500 0xB0") << CodePage::ID::CP500 << 0xB0 << 0x00A2; // Python cp500
+    QTest::newRow("CP500 0xBA") << CodePage::ID::CP500 << 0xBA << 0x00AC; // Python cp500
+    QTest::newRow("CP500 0xBD") << CodePage::ID::CP500 << 0xBD << 0x00A8; // Python cp500
+    QTest::newRow("CP870 0x44") << CodePage::ID::CP870 << 0x44 << 0x0163; // Java
+    QTest::newRow("CP870 0x64") << CodePage::ID::CP870 << 0x64 << 0x02DD; // Java
+    QTest::newRow("CP870 0xB3") << CodePage::ID::CP870 << 0xB3 << 0x0162; // Java
+    QTest::newRow("CP870 0xFE") << CodePage::ID::CP870 << 0xFE << 0x00DA; // Java
+    QTest::newRow("CP420 0x42") << CodePage::ID::CP420 << 0x42 << 0x0651; // Java
+    QTest::newRow("CP420 0x43") << CodePage::ID::CP420 << 0x43 << 0xFE7D; // Java
+    QTest::newRow("CP420 0x9D") << CodePage::ID::CP420 << 0x9D << 0xFECC; // Java
+    QTest::newRow("CP420 0xFE") << CodePage::ID::CP420 << 0xFE << 0x0669; // Java
+    QTest::newRow("CP424 0x71") << CodePage::ID::CP424 << 0x71 << 0x05EA; // Python cp424
+    QTest::newRow("CP424 0x74") << CodePage::ID::CP424 << 0x74 << 0x00A0; // Python cp424
+    QTest::newRow("CP424 0xB5") << CodePage::ID::CP424 << 0xB5 << 0x00A7; // Python cp424
+    QTest::newRow("CP424 0xFA") << CodePage::ID::CP424 << 0xFA << 0x00B3; // Python cp424
+    QTest::newRow("CP838 0x41") << CodePage::ID::CP838 << 0x41 << 0x00A0; // Java
+    QTest::newRow("CP838 0x42") << CodePage::ID::CP838 << 0x42 << 0x0E01; // Java
+    QTest::newRow("CP838 0x90") << CodePage::ID::CP838 << 0x90 << 0x0E5A; // Java
+    QTest::newRow("CP838 0xFB") << CodePage::ID::CP838 << 0xFB << 0x0E4C; // Java
+}
+
+void TestCodePage::testIbmAnchors() {
+    QFETCH(CodePage::ID, id);
+    QFETCH(int, byte);
+    QFETCH(int, unicode);
+    CodePage cp(id);
+    QCOMPARE(int(cp.toUnicode(static_cast<uint8_t>(byte)).unicode()), unicode);
+    QCOMPARE(int(cp.fromUnicode(QChar(static_cast<char16_t>(unicode)))), byte);
+}
+
+// Every mapped graphic byte encodes back to a byte showing the same
+// character (CP838 has five Thai marks at two bytes each)
+void TestCodePage::testGraphicRangeRoundTrips() {
+    for (auto id : CodePage::supportedCodePages()) {
+        CodePage cp(id);
+        for (int b = 0x40; b < 0x100; ++b) {
+            const QChar ch = cp.toUnicode(static_cast<uint8_t>(b));
+            if (ch == QChar(0xFFFD)) continue;
+            const uint8_t back = cp.fromUnicode(ch);
+            QVERIFY2(cp.toUnicode(back) == ch,
+                     qPrintable(QString("code page %1: 0x%2 -> U+%3 -> 0x%4")
+                                    .arg(static_cast<int>(id))
+                                    .arg(b, 2, 16, QChar('0'))
+                                    .arg(int(ch.unicode()), 4, 16, QChar('0'))
+                                    .arg(back, 2, 16, QChar('0'))));
+        }
+    }
+}
+
+// The five CP838 tone marks sit at two bytes each; IBM's tables pick one
+// encoding per mark (expected values from Java's IBM-Thai encoder)
+void TestCodePage::testThaiToneMarksEncodeLikeIbm() {
+    CodePage cp(CodePage::ID::CP838);
+    QCOMPARE(int(cp.fromUnicode(QChar(0x0E48))), 0xED);
+    QCOMPARE(int(cp.fromUnicode(QChar(0x0E49))), 0xEE);
+    QCOMPARE(int(cp.fromUnicode(QChar(0x0E4A))), 0xEF);
+    QCOMPARE(int(cp.fromUnicode(QChar(0x0E4B))), 0xFA);
+    QCOMPARE(int(cp.fromUnicode(QChar(0x0E4C))), 0xFB);
+}
+
+// Unmapped graphic bytes must not become the encoding of NUL
+void TestCodePage::testNulEncodesToNul() {
+    for (auto id : CodePage::supportedCodePages()) {
+        CodePage cp(id);
+        QCOMPARE(int(cp.fromUnicode(QChar(0x0000))), 0x00);
+    }
 }
 
 void TestCodePage::testUnmappableUnicode() {

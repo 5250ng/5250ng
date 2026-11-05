@@ -935,7 +935,7 @@ void TN5250CommandHandler::onStrpccmdRequested(bool noWait,
     command.reserve(commandBytes.size());
     for (auto rawByte : commandBytes) {
         QChar c = cp.toUnicode(static_cast<uint8_t>(rawByte));
-        if (c.isNull() || c.category() == QChar::Other_Control) {
+        if (c.isNull() || c == QChar(0xFFFD) || c.category() == QChar::Other_Control) {
             c = QChar(' ');
         }
         command.append(c);
