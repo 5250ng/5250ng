@@ -81,19 +81,7 @@ class CodePage {
     mutable std::array<uint8_t, 65536> m_fromUnicodeTable;
     void buildReverseTable() const;
 
-    void initCP037();
-    void initCP273();
-    void initCP277();
-    void initCP278();
-    void initCP280();
-    void initCP284();
-    void initCP285();
-    void initCP297();
-    void initCP500();
-    void initCP870();
-    void initCP420();
-    void initCP424();
-    void initCP838();
+    void loadGraphicRange(const uint16_t *table);
 };
 
 } // namespace core
