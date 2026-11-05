@@ -830,6 +830,14 @@ if(BUILD_TESTS)
     target_link_libraries(test_log_viewer PRIVATE tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_log_viewer COMMAND test_log_viewer)
 
+    # Session > View Session Logs shows the tab's own log (issue #352)
+    add_executable(test_session_log_view
+        tests/unit/test_session_log_view.cpp
+        src/ui/dialogs/log_viewer.cpp
+    )
+    target_link_libraries(test_session_log_view PRIVATE tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_session_log_view COMMAND test_session_log_view)
+
     # Script saves must not commit a truncated file
     add_executable(test_script_save_flush
         tests/unit/test_script_save_flush.cpp

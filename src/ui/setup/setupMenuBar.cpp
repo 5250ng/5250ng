@@ -218,7 +218,7 @@ void MainWindow::setupMenuBar() {
         helpMenu->addAction("Enable &Debug Logging", this, &MainWindow::onToggleDebugLogging);
     m_debugLoggingAction->setCheckable(true);
     m_debugLoggingAction->setChecked(logger::Logger::instance()->isDebugLogging());
-    helpMenu->addAction("View &Logs...", this, &MainWindow::onViewSessionLogs);
+    helpMenu->addAction("View &Logs...", this, &MainWindow::onViewApplicationLog);
     helpMenu->addAction("&Save Diagnostic Log...", this, &MainWindow::onSaveDiagnosticLog);
     helpMenu->addAction("Show Log &Folder", this, &MainWindow::onShowLogFolder);
     helpMenu->addSeparator();

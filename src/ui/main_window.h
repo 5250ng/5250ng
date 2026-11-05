@@ -153,6 +153,7 @@ class MainWindow : public MainWindowBase {
     void onMcpToggleEnabled();
     void onMcpShowLogs();
     void onViewSessionLogs();
+    void onViewApplicationLog();
     void onToggleDebugLogging();
     void onSaveDiagnosticLog();
     void onShowLogFolder();
