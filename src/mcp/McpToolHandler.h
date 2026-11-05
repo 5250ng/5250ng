@@ -39,6 +39,13 @@ class McpToolHandler : public QObject {
     /// Returns MCP-formatted tool list for tools/list response.
     QJsonArray listTools() const;
 
+    /// True when `name` is one of the tools listTools() advertises.
+    bool hasTool(const QString &name) const;
+
+    /// Why tools/call cannot run `name`: unknown, or a tool that was
+    /// removed or is not offered over MCP.
+    static QString unknownToolMessage(const QString &name);
+
     /// Execute a tool and return the MCP tools/call result object.
     QJsonObject callTool(const QString &name, const QJsonObject &arguments);
 
