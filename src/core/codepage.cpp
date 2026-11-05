@@ -142,7 +142,11 @@ QByteArray CodePage::fromUnicode(const QString &str) const {
 
 void CodePage::buildReverseTable() const {
     m_fromUnicodeTable.fill(0x00);
-    for (int i = 0; i < 256; ++i) {
+    // Only the graphic range: 0x00-0x3F are 5250 orders and control codes,
+    // and their identity entries would turn any character the national
+    // table does not map (such as '#' or '$') into a control byte in the
+    // field data. Such characters fall back to a space in fromUnicode().
+    for (int i = 0x40; i < 256; ++i) {
         uint16_t u = m_toUnicode[i];
         m_fromUnicodeTable[u] = static_cast<uint8_t>(i);
     }
