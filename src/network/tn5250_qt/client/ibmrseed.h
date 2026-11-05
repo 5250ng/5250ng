@@ -41,6 +41,13 @@ class IBMRSeed {
                                       const QByteArray &clientSeed,
                                       const core::CodePage &cp);
 
+    // PW_TOKEN, steps 1-4 of the substitute: DES of the user ID keyed by
+    // the shifted password. Both arguments are 10 EBCDIC bytes, blank
+    // (0x40) padded. A 9-10 character user ID is folded into 8 bytes, and
+    // a 9-10 character password gives the XOR of two tokens, one per
+    // password half (JTOpen AS400ImplRemote.generateToken).
+    static QByteArray passwordToken(const QByteArray &userId10, const QByteArray &password10);
+
     // Generate a random 8-byte client seed
     static QByteArray generateClientSeed();
 
@@ -50,7 +57,7 @@ class IBMRSeed {
     static QByteArray escapeNewEnviron(const QByteArray &data);
 
   private:
-    // Step 1: Convert password to 8-byte EBCDIC uppercase, padded with 0x40
+    // Step 1: Convert password to 10-byte EBCDIC uppercase, padded with 0x40
     static QByteArray padPasswordEBCDIC(const QString &password);
     static QByteArray padPasswordEBCDIC(const QString &password, const core::CodePage &cp);
 

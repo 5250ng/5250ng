@@ -17,6 +17,7 @@
 #include "password_encrypt.h"
 #include "core/codepage.h"
 #include "host_data_stream.h"
+#include "network/tn5250_qt/client/ibmrseed.h"
 #include "logger/logger.h"
 #include <QRandomGenerator>
 #include <openssl/evp.h>
@@ -64,7 +65,7 @@ QByteArray PasswordEncrypt::encrypt(const QString &userId,
 }
 
 // ---- DES encryption (QPWDLVL 0-1) ----
-// Identical algorithm to IBMRSeed but self-contained here
+// The same algorithm as IBMRSeed, whose passwordToken() it shares
 
 QByteArray PasswordEncrypt::encryptDES(const QString &userId,
                                        const QString &password,
@@ -75,12 +76,9 @@ QByteArray PasswordEncrypt::encryptDES(const QString &userId,
         return {};
     }
 
-    QByteArray pwEBCDIC = padPasswordEBCDIC(password);
-    QByteArray xored = xorWith55(pwEBCDIC);
-    QByteArray shifted = leftShift1(xored);
-
-    QByteArray userIdPadded = padUserIdEBCDIC(userId, 8);
-    QByteArray pwToken = desEcbEncrypt(shifted, userIdPadded);
+    // PW_TOKEN, including the 9-10 character user ID and password cases
+    QByteArray pwToken = tn5250::client::IBMRSeed::passwordToken(padUserIdEBCDIC(userId, 10),
+                                                                  padUserIdEBCDIC(password, 10));
     if (pwToken.isEmpty()) {
         LOG_ERROR("[PasswordEncrypt]: DES-ECB encrypt failed");
         return {};
@@ -91,7 +89,7 @@ QByteArray PasswordEncrypt::encryptDES(const QString &userId,
 
     QByteArray rdrseq = addBigEndian8(serverSeed, pwseqs);
 
-    QByteArray userId16 = padUserIdEBCDIC(userId, 16);
+    QByteArray userId16 = padUserIdEBCDIC(userId.left(10), 16);
     QByteArray userPart1 = userId16.left(8);
     QByteArray userPart2 = userId16.mid(8, 8);
 
@@ -161,15 +159,6 @@ QByteArray PasswordEncrypt::encryptSHA1(const QString &userId,
 
 // ---- Private helpers ----
 
-QByteArray PasswordEncrypt::padPasswordEBCDIC(const QString &password) {
-    core::CodePage cp(core::CodePage::ID::CP037);
-    QString upper = password.toUpper();
-    QByteArray ebcdic = cp.fromUnicode(upper);
-    if (ebcdic.size() > 8) ebcdic.truncate(8);
-    while (ebcdic.size() < 8) ebcdic.append(static_cast<char>(0x40));
-    return ebcdic;
-}
-
 QByteArray PasswordEncrypt::padUserIdEBCDIC(const QString &userId, int len) {
     core::CodePage cp(core::CodePage::ID::CP037);
     QString upper = userId.toUpper();
@@ -177,65 +166,6 @@ QByteArray PasswordEncrypt::padUserIdEBCDIC(const QString &userId, int len) {
     if (ebcdic.size() > len) ebcdic.truncate(len);
     while (ebcdic.size() < len) ebcdic.append(static_cast<char>(0x40));
     return ebcdic;
-}
-
-QByteArray PasswordEncrypt::xorWith55(const QByteArray &data) {
-    QByteArray result(data.size(), '\0');
-    for (int i = 0; i < data.size(); ++i) {
-        result[i] = static_cast<char>(static_cast<uint8_t>(data[i]) ^ 0x55);
-    }
-    return result;
-}
-
-QByteArray PasswordEncrypt::leftShift1(const QByteArray &data) {
-    if (data.size() != 8) return data;
-    QByteArray result(8, '\0');
-    for (int i = 0; i < 7; ++i) {
-        result[i] = static_cast<char>(
-            (static_cast<uint8_t>(data[i]) << 1) |
-            (static_cast<uint8_t>(data[i + 1]) >> 7));
-    }
-    result[7] = static_cast<char>(static_cast<uint8_t>(data[7]) << 1);
-    return result;
-}
-
-QByteArray PasswordEncrypt::desEcbEncrypt(const QByteArray &key,
-                                          const QByteArray &plaintext) {
-    if (key.size() != 8 || plaintext.size() != 8) return {};
-    ensureLegacyProvider();
-
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) return {};
-
-    QByteArray out(16, '\0');
-    int outLen = 0, finalLen = 0;
-
-    if (EVP_EncryptInit_ex(ctx, EVP_des_ecb(), nullptr,
-                           reinterpret_cast<const unsigned char *>(key.constData()),
-                           nullptr) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return {};
-    }
-    EVP_CIPHER_CTX_set_padding(ctx, 0);
-
-    if (EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char *>(out.data()),
-                          &outLen,
-                          reinterpret_cast<const unsigned char *>(plaintext.constData()),
-                          8) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return {};
-    }
-
-    if (EVP_EncryptFinal_ex(ctx,
-                            reinterpret_cast<unsigned char *>(out.data()) + outLen,
-                            &finalLen) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return {};
-    }
-
-    EVP_CIPHER_CTX_free(ctx);
-    out.truncate(outLen + finalLen);
-    return out;
 }
 
 QByteArray PasswordEncrypt::desCbcEncrypt(const QByteArray &key,
