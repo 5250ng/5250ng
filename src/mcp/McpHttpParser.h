@@ -17,6 +17,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QList>
 #include <QMap>
 #include <QString>
 
@@ -47,7 +48,7 @@ struct HttpResponse {
 /// Minimal HTTP/1.1 request parser for MCP transport.
 class McpHttpParser {
   public:
-    /// Maximum bytes accepted before `\r\n\r\n` is seen.
+    /// Maximum bytes accepted before the blank line that ends the headers.
     static constexpr int kMaxHeaderSize = 64 * 1024;
     /// Maximum body bytes accepted, both by Content-Length and by actual
     /// buffered payload.
@@ -77,7 +78,15 @@ class McpHttpParser {
     int errorStatusCode() const { return m_error ? m_errorStatus : 0; }
 
   private:
+    // Offset of the first body byte, or -1 while the header block is
+    // incomplete. Appends the lines found to m_headerLines.
+    int scanHeaderLines();
+    // Enter the error state with `status`; always returns false
+    bool fail(int status, const QString &message);
+
     QByteArray m_buffer;
+    QList<QByteArray> m_headerLines; // request line and header lines so far
+    int m_scanPos = 0;               // where scanHeaderLines() resumes
     HttpRequest m_request;
     bool m_headersParsed = false;
     int m_contentLength = 0;

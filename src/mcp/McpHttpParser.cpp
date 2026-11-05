@@ -30,12 +30,55 @@ bool HttpRequest::wantsClose() const {
     return close || (version == QLatin1String("HTTP/1.0") && !keepAlive);
 }
 
+int McpHttpParser::scanHeaderLines() {
+    // A line ends with CRLF or a bare LF (RFC 9112 section 2.2 lets a
+    // recipient accept LF alone). Empty lines before the request line are
+    // skipped, as that section recommends. The scan resumes where the last
+    // feed() stopped, so a client sending one byte at a time costs linear
+    // time, not a rescan of the whole buffer per byte.
+    while (true) {
+        const int newline = m_buffer.indexOf('\n', m_scanPos);
+        if (newline < 0)
+            return -1;
+        QByteArray line = m_buffer.mid(m_scanPos, newline - m_scanPos);
+        if (line.endsWith('\r'))
+            line.chop(1);
+        m_scanPos = newline + 1;
+        if (line.isEmpty()) {
+            if (m_headerLines.isEmpty())
+                continue;
+            return m_scanPos;
+        }
+        m_headerLines.append(line);
+    }
+}
+
+// Strip optional whitespace, which is only SP and HTAB (RFC 9110 5.6.3);
+// QString::trimmed() would also drop VT, FF, NBSP and NEL
+static QByteArray trimOws(const QByteArray &value) {
+    int begin = 0;
+    int end = value.size();
+    while (begin < end && (value[begin] == ' ' || value[begin] == '\t'))
+        ++begin;
+    while (end > begin && (value[end - 1] == ' ' || value[end - 1] == '\t'))
+        --end;
+    return value.mid(begin, end - begin);
+}
+
+bool McpHttpParser::fail(int status, const QString &message) {
+    m_error = true;
+    m_errorStatus = status;
+    m_errorMessage = message;
+    return false;
+}
+
 bool McpHttpParser::feed(const QByteArray &data) {
     if (m_error) return false;
     m_buffer.append(data);
 
     if (!m_headersParsed) {
-        int headerEnd = m_buffer.indexOf("\r\n\r\n");
+        const int headerEnd = scanHeaderLines();
+        const QList<QByteArray> &lines = m_headerLines;
         if (headerEnd < 0) {
             if (m_buffer.size() > kMaxHeaderSize) {
                 m_error = true;
@@ -50,12 +93,17 @@ bool McpHttpParser::feed(const QByteArray &data) {
             return false;
         }
 
-        m_bodyStart = headerEnd + 4;
+        m_bodyStart = headerEnd;
+
+        // A bare CR is not a line terminator (RFC 9112 section 2.2). Taking
+        // it as data would let another HTTP hop split the line differently.
+        for (const QByteArray &line : std::as_const(lines)) {
+            if (line.contains('\r'))
+                return fail(400, QStringLiteral("Bare CR in request header"));
+        }
 
         // Parse request line
-        int firstLine = m_buffer.indexOf("\r\n");
-        QByteArray requestLine = m_buffer.left(firstLine);
-        QList<QByteArray> parts = requestLine.split(' ');
+        QList<QByteArray> parts = lines.first().split(' ');
         if (parts.size() >= 2) {
             m_request.method = QString::fromLatin1(parts[0]);
             m_request.path = QString::fromLatin1(parts[1]);
@@ -63,16 +111,23 @@ bool McpHttpParser::feed(const QByteArray &data) {
         if (parts.size() >= 3)
             m_request.version = QString::fromLatin1(parts[2]);
 
-        // Parse headers
-        QByteArray headerBlock = m_buffer.mid(firstLine + 2, headerEnd - firstLine - 2);
-        for (const QByteArray &line : headerBlock.split('\n')) {
-            QByteArray trimmed = line.trimmed();
-            int colon = trimmed.indexOf(':');
-            if (colon > 0) {
-                QString key = QString::fromLatin1(trimmed.left(colon)).trimmed().toLower();
-                QString value = QString::fromLatin1(trimmed.mid(colon + 1)).trimmed();
-                m_request.headers[key] = value;
-            }
+        // Parse headers. Anything that another HTTP hop could read as a
+        // different header block is refused (RFC 9112 sections 5.1, 5.2).
+        for (int i = 1; i < lines.size(); ++i) {
+            const QByteArray &line = lines[i];
+            if (line.startsWith(' ') || line.startsWith('\t'))
+                return fail(400, QStringLiteral("Folded header lines are not supported"));
+            const int colon = line.indexOf(':');
+            if (colon <= 0)
+                return fail(400, QStringLiteral("Malformed header line"));
+            const QByteArray name = line.left(colon);
+            if (name.contains(' ') || name.contains('\t'))
+                return fail(400, QStringLiteral("Whitespace before a header colon"));
+            const QString key = QString::fromLatin1(name).toLower();
+            const QString value = QString::fromLatin1(trimOws(line.mid(colon + 1)));
+            if (key == QLatin1String("content-length") && m_request.headers.contains(key))
+                return fail(400, QStringLiteral("Repeated Content-Length header"));
+            m_request.headers[key] = value;
         }
 
         // Only Content-Length framing is implemented. A chunked (or any
@@ -86,15 +141,18 @@ bool McpHttpParser::feed(const QByteArray &data) {
             return false;
         }
 
-        bool lengthOk = false;
+        // Content-Length is 1*DIGIT: no sign, no list, no spaces inside
         const QString lengthHeader = m_request.headers.value("content-length", "0");
-        m_contentLength = lengthHeader.toInt(&lengthOk);
-        if (!lengthOk || m_contentLength < 0 || m_contentLength > kMaxBodySize) {
-            m_error = true;
-            m_errorStatus = (lengthOk && m_contentLength > kMaxBodySize) ? 413 : 400;
-            m_errorMessage = QStringLiteral("Invalid or oversized Content-Length");
-            return false;
-        }
+        bool digitsOnly = !lengthHeader.isEmpty();
+        for (const QChar c : lengthHeader)
+            digitsOnly = digitsOnly && c >= QLatin1Char('0') && c <= QLatin1Char('9');
+        if (!digitsOnly)
+            return fail(400, QStringLiteral("Invalid Content-Length"));
+        bool lengthOk = false;
+        const qint64 length = lengthHeader.toLongLong(&lengthOk);
+        if (!lengthOk || length > kMaxBodySize)
+            return fail(413, QStringLiteral("Content-Length exceeds maximum size"));
+        m_contentLength = int(length);
         m_headersParsed = true;
     }
 
@@ -134,6 +192,8 @@ void McpHttpParser::reset() {
         m_buffer.clear();
     }
     m_request = {};
+    m_headerLines.clear();
+    m_scanPos = 0;
     m_headersParsed = false;
     m_contentLength = 0;
     m_bodyStart = -1;
