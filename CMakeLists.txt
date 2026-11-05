@@ -934,6 +934,20 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_request_guard COMMAND test_mcp_request_guard)
 
+    # MCP JSON-RPC batches and non-object bodies (issue #427)
+    add_executable(test_mcp_jsonrpc_batch
+        tests/unit/test_mcp_jsonrpc_batch.cpp
+        src/mcp/McpServer.cpp
+        src/mcp/McpHttpParser.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_jsonrpc_batch PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_jsonrpc_batch COMMAND test_mcp_jsonrpc_batch)
+
     # Scripting tests
     # AI secrets in the settings file (AgentConfig lives in the application target)
     add_executable(test_secret_settings_permissions

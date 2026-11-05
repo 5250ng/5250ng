@@ -32,6 +32,9 @@ class McpServer : public QObject {
   public:
     explicit McpServer(QObject *parent = nullptr);
 
+    /// Most messages accepted in one JSON-RPC batch
+    static constexpr int kMaxBatchSize = 1000;
+
     bool start(quint16 port = 9250);
     void stop();
     bool isRunning() const;
