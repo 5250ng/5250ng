@@ -994,73 +994,52 @@ void TN5250CommandHandler::onStrpccmdRequested(bool noWait,
 }
 
 QByteArray TN5250CommandHandler::buildQueryResponse() {
-    // Build 5250 Query Response per SA21-9247-6 section 15.26.1.
-    // Total GDS payload is 64 bytes:
-    //   cursor_row(1) + cursor_col(1) + WSF_AID(1) + SF_data(61)
-    // Sent with GDS opcode 0x00 (NOP).
-    QByteArray resp;
-    resp.resize(64, '\0');
+    // 5250 Query reply (5494 Functions Reference, 5250 QUERY command):
+    //   cursor row, cursor column, inbound WSF AID, then a 58-byte
+    //   structured field whose length field counts itself.
+    // The layout and length follow lib5250's non-enhanced reply
+    // (tn5250_session_query_reply); the device type 5251-011, serial
+    // number, field count and capability bytes 49-50 are tn5250j's
+    // (sendQueryResponse). Bytes 53-54 announce no enhanced user interface
+    // level (lib5250's non-enhanced value; tn5250j sends 0x08, level 3, at
+    // 54): 5250ng does not support the windows and selection-field WDSFs
+    // those levels imply (#250).
+    QByteArray resp(kQueryReplySize, '\0');
 
-    // Inbound WSF header (3 bytes)
     resp[0] = 0x00;                           // Cursor row
-    resp[1] = 0x00;                           // Cursor col
-    resp[2] = static_cast<char>(0x88);        // Inbound WSF AID
+    resp[1] = 0x00;                           // Cursor column
+    resp[2] = static_cast<char>(0x88);        // Inbound Write Structured Field AID
 
-    // Structured field data (starts at offset 3, 61 bytes)
-    resp[3]  = 0x00;                          // SF length high
-    resp[4]  = 0x40;                          // SF length low (0x0040 = 64, covers offset 3..66 conceptually)
-    resp[5]  = static_cast<char>(0xD9);       // Class: 5250 Terminal
-    resp[6]  = 0x70;                          // Type: Query Response
-    resp[7]  = static_cast<char>(0x80);       // Flag: response to query
+    // Structured field: length 0x003A covers offsets 3..60
+    resp[3] = static_cast<char>((kQueryReplySize - 3) >> 8);
+    resp[4] = static_cast<char>((kQueryReplySize - 3) & 0xFF);
+    resp[5] = static_cast<char>(0xD9);        // Class: 5250
+    resp[6] = 0x70;                           // Type: Query
+    resp[7] = static_cast<char>(0x80);        // Flag: query reply
 
-    // Controller hardware class (1 byte)
-    resp[8]  = 0x06;                          // Remote controller
-
-    // Controller code level (3 bytes)
-    resp[9]  = 0x00;
-    resp[10] = 0x01;
+    resp[8] = 0x06;                           // Controller hardware class 0x0600:
+    resp[9] = 0x00;                           //   another 5250 emulator
+    resp[10] = 0x01;                          // Controller code level
     resp[11] = 0x01;
+    resp[12] = 0x00;
+    // 13..28 reserved
 
-    // Reserved (20 bytes: offsets 12-31) — already zeroed by resize
-
-    // Machine type qualifier
-    resp[30] = 0x01;
-
-    // Device type (7 EBCDIC bytes: "5251011")
-    resp[31] = static_cast<char>(0xF5);       // '5'
-    resp[32] = static_cast<char>(0xF2);       // '2'
-    resp[33] = static_cast<char>(0xF5);       // '5'
-    resp[34] = static_cast<char>(0xF1);       // '1'
-    resp[35] = static_cast<char>(0xF0);       // '0'
-    resp[36] = static_cast<char>(0xF1);       // '1'
-    resp[37] = static_cast<char>(0xF1);       // '1'
-
-    // Keyboard ID
-    resp[38] = 0x02;                          // Standard keyboard
-
-    // Extended keyboard ID + reserved (offsets 39-41) — zeroed
-
-    // Display serial number (2 bytes)
+    resp[29] = 0x01;                          // Display emulation
+    // Device type and model, 7 EBCDIC characters: 5251-011
+    const char deviceType[] = {'\xF5', '\xF2', '\xF5', '\xF1', '\xF0', '\xF1', '\xF1'};
+    for (int i = 0; i < 7; ++i)
+        resp[30 + i] = deviceType[i];
+    resp[37] = 0x02;                          // Keyboard ID: standard keyboard
+    // 38 extended keyboard ID, 39 reserved
+    resp[41] = 0x24;                          // Display serial number (40..43)
     resp[42] = 0x24;
-    resp[43] = 0x24;
-
-    // Maximum number of input fields (2 bytes)
-    resp[44] = 0x00;
-    resp[45] = 0x01;
-
-    // Device capabilities + reserved (offsets 45-49) — zeroed
-
-    // Workstation capabilities (2 bytes)
-    resp[50] = 0x01;                          // Read screen, extended attributes
-    resp[51] = 0x11;                          // GUI-like characters, SBA on read
-
-    // Reserved (offsets 52-53) — zeroed
-
-    // Additional capability bytes (2 bytes)
-    resp[54] = 0x07;                          // DBCS, save/restore screen
-    resp[55] = 0x08;                          // Max transmission size indicator
-
-    // Remaining bytes (offsets 56-63) — zeroed by resize
+    resp[44] = 0x01;                          // Maximum number of input fields:
+    resp[45] = 0x00;                          //   256
+    // 46..48 reserved
+    resp[49] = 0x01;                          // Controller/display capability
+    resp[50] = 0x11;
+    // 51..52 reserved; 53..54 enhanced user interface levels: none;
+    // 55..60 reserved
 
     return resp;
 }

@@ -98,6 +98,9 @@ class TN5250CommandHandler : public QObject {
     QByteArray buildFieldResponse(uint8_t aidByte, bool includeModifiedFields = true);
     QByteArray buildReadScreenResponse(bool includeAttributes);
     QByteArray buildQueryResponse();
+    // Bytes in the Query reply: cursor address and AID, then a 58-byte
+    // structured field
+    static constexpr int kQueryReplySize = 61;
     QByteArray buildSaveScreenResponse();
 
     // Inject runtime context for STRPCCMD handling. The runner owns the
