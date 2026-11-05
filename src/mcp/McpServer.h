@@ -50,6 +50,14 @@ class McpServer : public QObject {
     /// Called by MainWindow when an MCP session's connection state changes.
     void updateSessionStatus(const QString &sessionId, bool connected);
 
+    /// Connections are persistent (HTTP/1.1). One with no request in
+    /// flight is closed after this long without a new request.
+    static constexpr int kDefaultIdleTimeoutMs = 60000;
+    /// 0 selects kDefaultIdleTimeoutMs and a negative value disables the
+    /// idle timeout. Applies to connections accepted afterwards.
+    void setIdleTimeoutMs(int ms) { m_idleTimeoutMs = ms; }
+    int idleTimeoutMs() const { return m_idleTimeoutMs == 0 ? kDefaultIdleTimeoutMs : m_idleTimeoutMs; }
+
     /// Installs the GUI prompt login uses when the client omits the password.
     void setPasswordPrompt(McpToolHandler::PasswordPrompt prompt);
 
@@ -82,6 +90,7 @@ class McpServer : public QObject {
     McpToolHandler *m_toolHandler = nullptr;
     QString m_sessionId; // JSON-RPC session ID (MCP protocol level)
     bool m_initialized = false;
+    int m_idleTimeoutMs = 0;
 };
 
 } // namespace mcp
