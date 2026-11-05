@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "host_data_stream.h"
-#include "core/codepage.h"
 
 namespace hostserver {
 
@@ -154,17 +153,79 @@ QString HostDataStream::fromUtf16BE(const QByteArray &data) {
     return result;
 }
 
+// The byte JTOpen's SignonConverter gives each character it accepts in a
+// user ID or password, or -1. The national characters share the bytes of
+// $ # @, which is how the host stores them in names
+static int signonByte(char16_t c) {
+    static constexpr char kPunct[] = "\"#$%&'()*+,-./0123456789:;<=>?@";
+    static constexpr uint8_t kPunctBytes[] = {0x7F, 0x7B, 0x5B, 0x6C, 0x50, 0x7D, 0x4D, 0x5D, 0x5C, 0x4E, 0x6B,
+                                              0x60, 0x4B, 0x61, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7,
+                                              0xF8, 0xF9, 0x7A, 0x5E, 0x4C, 0x7E, 0x6E, 0x6F, 0x7C};
+    for (int i = 0; kPunct[i]; ++i)
+        if (c == static_cast<char16_t>(kPunct[i])) return kPunctBytes[i];
+    if (c >= u'A' && c <= u'I') return 0xC1 + (c - u'A');
+    if (c >= u'J' && c <= u'R') return 0xD1 + (c - u'J');
+    if (c >= u'S' && c <= u'Z') return 0xE2 + (c - u'S');
+    if (c >= u'a' && c <= u'i') return 0x81 + (c - u'a');
+    if (c >= u'j' && c <= u'r') return 0x91 + (c - u'j');
+    if (c >= u's' && c <= u'z') return 0xA2 + (c - u's');
+    switch (c) {
+    case u'!': return 0x5A;
+    case u'_': return 0x6D;
+    case 0x00A3: return 0x7B; // pound sign (CCSID 297)
+    case 0x00A5: return 0x5B; // yen sign (CCSID 281)
+    case 0x00A7: return 0x7C; // section sign (CCSID 273)
+    case 0x00C4: return 0x7B; // A diaeresis (CCSID 278)
+    case 0x00C5: return 0x5B; // A ring (CCSID 277)
+    case 0x00C6: return 0x7B; // AE (CCSID 277)
+    case 0x00D0: return 0x7C; // Eth (CCSID 871)
+    case 0x00D1: return 0x7B; // N tilde (CCSID 284)
+    case 0x00D6: return 0x7C; // O diaeresis (CCSID 278)
+    case 0x00D8: return 0x7C; // O stroke (CCSID 277)
+    case 0x00E0: return 0x7C; // a grave (CCSID 297)
+    case 0x0130: return 0x5B; // I dot (CCSID 905)
+    case 0x015E: return 0x7C; // S cedilla (CCSID 905)
+    default: return -1;
+    }
+}
+
+QString HostDataStream::userIdError(const QString &userId) {
+    // Counted upper-cased, as sent: toUpper() can lengthen it (ß -> SS)
+    const QString upper = userId.toUpper();
+    if (upper.size() > 10) return QStringLiteral("User ID longer than 10 characters");
+    for (QChar ch : upper) {
+        if (signonByte(ch.unicode()) < 0)
+            return QStringLiteral("User ID character U+%1 is not valid")
+                .arg(QString::number(ch.unicode(), 16).toUpper().rightJustified(4, QLatin1Char('0')));
+    }
+    return {};
+}
+
 QByteArray HostDataStream::encodeUserId(const QString &userId) {
-    core::CodePage cp(core::CodePage::ID::CP037);
-    QString upper = userId.toUpper();
-    QByteArray ebcdic = cp.fromUnicode(upper);
-    if (ebcdic.size() > 10) {
-        ebcdic.truncate(10);
+    if (!userIdError(userId).isEmpty()) return {};
+    QByteArray ebcdic;
+    for (QChar ch : userId.toUpper()) ebcdic.append(static_cast<char>(signonByte(ch.unicode())));
+    return ebcdic.leftJustified(10, static_cast<char>(0x40));
+}
+
+QString HostDataStream::decodeUserId(const QByteArray &ebcdic) {
+    // JTOpen's SignonConverter.byteArrayToCharArray: blank, $ _ # @, A-Z
+    // and 0-9; any other byte fails
+    QString result;
+    for (char b : ebcdic) {
+        const uint8_t c = static_cast<uint8_t>(b);
+        if (c == 0x40) result.append(QLatin1Char(' '));
+        else if (c == 0x5B) result.append(QLatin1Char('$'));
+        else if (c == 0x6D) result.append(QLatin1Char('_'));
+        else if (c == 0x7B) result.append(QLatin1Char('#'));
+        else if (c == 0x7C) result.append(QLatin1Char('@'));
+        else if (c >= 0xC1 && c <= 0xC9) result.append(QChar(u'A' + (c - 0xC1)));
+        else if (c >= 0xD1 && c <= 0xD9) result.append(QChar(u'J' + (c - 0xD1)));
+        else if (c >= 0xE2 && c <= 0xE9) result.append(QChar(u'S' + (c - 0xE2)));
+        else if (c >= 0xF0 && c <= 0xF9) result.append(QChar(u'0' + (c - 0xF0)));
+        else return {};
     }
-    while (ebcdic.size() < 10) {
-        ebcdic.append(static_cast<char>(0x40));
-    }
-    return ebcdic;
+    return result;
 }
 
 } // namespace hostserver

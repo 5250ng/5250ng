@@ -54,13 +54,14 @@ void SignonClient::signon(const QString &hostname,
 
 void SignonClient::signon(const QString &hostname, uint16_t port,
                           const QString &userId, const QString &password) {
-    // An IBM i user ID has at most 10 characters. The ID on the wire is cut
-    // to 10, so a longer one would sign on as another profile; JTOpen
-    // rejects it before connecting (AS400.java), and so does this. It is
-    // counted upper-cased, as sent: toUpper() can lengthen it (ß -> SS)
-    if (userId.toUpper().size() > 10) {
+    // An ID longer than 10 characters, or with a character the sign-on
+    // cannot encode, would reach the host as another profile; JTOpen
+    // rejects it before connecting (AS400.java, SignonConverter), and so
+    // does this
+    const QString idError = HostDataStream::userIdError(userId);
+    if (!idError.isEmpty()) {
         setState(State::Error);
-        emit errorOccurred("User ID longer than 10 characters");
+        emit errorOccurred(idError);
         return;
     }
 

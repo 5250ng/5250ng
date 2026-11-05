@@ -93,8 +93,18 @@ class HostDataStream {
     // Decode UTF-16BE bytes to QString
     static QString fromUtf16BE(const QByteArray &data);
 
-    // Encode a user ID to 10-byte EBCDIC (CCSID 37), uppercase, padded with 0x40
+    // Why a user ID cannot be sent at sign-on (longer than 10 characters, or
+    // a character JTOpen's SignonConverter rejects), or an empty string
+    static QString userIdError(const QString &userId);
+
+    // Encode a user ID to 10-byte EBCDIC as JTOpen does, uppercase, padded
+    // with 0x40; empty if userIdError() reports it
     static QByteArray encodeUserId(const QString &userId);
+
+    // The user ID JTOpen hashes at QPWDLVL 2-3: encodeUserId()'s bytes read
+    // back as text, so a national character becomes the $ # @ it is stored
+    // as. Empty if a byte has no character there (JTOpen rejects A.B)
+    static QString decodeUserId(const QByteArray &ebcdic);
 };
 
 } // namespace hostserver

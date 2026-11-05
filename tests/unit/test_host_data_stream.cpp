@@ -208,10 +208,52 @@ class TestHostDataStream : public QObject {
         QCOMPARE(static_cast<uint8_t>(encoded[9]), static_cast<uint8_t>(0x40));
     }
 
-    void testEncodeUserIdTruncation() {
-        QByteArray encoded = HostDataStream::encodeUserId(
-            QStringLiteral("VERYLONGUSERNAME"));
-        QCOMPARE(encoded.size(), 10); // Truncated to 10
+    void testEncodeUserIdRejectsLong() {
+        // Cutting it to 10 would sign on as another profile (#450)
+        QVERIFY(HostDataStream::encodeUserId(QStringLiteral("VERYLONGUSERNAME")).isEmpty());
+        QCOMPARE(HostDataStream::userIdError(QStringLiteral("VERYLONGUSERNAME")),
+                 QStringLiteral("User ID longer than 10 characters"));
+    }
+
+    // Expected bytes come from IBM JTOpen's SignonConverter.stringToByteArray
+    // (jt400 21.0.7, called by reflection on the upper-cased ID, as
+    // AS400.java does). An empty expectation is a SIGNON_CHAR_NOT_VALID
+    void testEncodeUserIdMatchesJTOpen_data() {
+        QTest::addColumn<QString>("userId");
+        QTest::addColumn<QByteArray>("expected");
+        QTest::addColumn<QString>("error");
+        auto s = [](std::initializer_list<char16_t> cs) {
+            QString r;
+            for (char16_t c : cs) r.append(QChar(c));
+            return r;
+        };
+        QTest::newRow("plain") << QStringLiteral("QSECOFR") << QByteArray("d8e2c5c3d6c6d9404040") << QString();
+        QTest::newRow("_ # digit") << QStringLiteral("my_user#1") << QByteArray("d4e86de4e2c5d97bf140") << QString();
+        QTest::newRow("$ @") << QStringLiteral("A$B@C") << QByteArray("c15bc27cc34040404040") << QString();
+        QTest::newRow("punctuation") << QStringLiteral("ABC!%&*+,") << QByteArray("c1c2c35a6c505c4e6b40") << QString();
+        // National characters share the bytes of $ # @
+        QTest::newRow("A diaeresis") << s({0x00C4, u'B', u'C'}) << QByteArray("7bc2c340404040404040") << QString();
+        QTest::newRow("pound") << s({0x00A3, u'X'}) << QByteArray("7be74040404040404040") << QString();
+        QTest::newRow("Turkish") << s({0x0130, 0x015E}) << QByteArray("5b7c4040404040404040") << QString();
+        QTest::newRow("sharp s") << s({0x00DF, u'X'}) << QByteArray("e2e2e740404040404040") << QString();
+        // CP037 turned these into blanks, so QSECOFR + 3 x U+4E00 signed on
+        // as QSECOFR (#456)
+        QTest::newRow("CJK") << s({u'Q', u'S', u'E', u'C', u'O', u'F', u'R', 0x4E00, 0x4E00, 0x4E00}) << QByteArray()
+                             << QStringLiteral("User ID character U+4E00 is not valid");
+        QTest::newRow("euro") << s({u'Q', u'S', u'E', u'C', u'O', u'F', u'R', 0x20AC}) << QByteArray()
+                              << QStringLiteral("User ID character U+20AC is not valid");
+        QTest::newRow("space") << QStringLiteral("QSEC OFR") << QByteArray()
+                               << QStringLiteral("User ID character U+0020 is not valid");
+        QTest::newRow("A grave") << s({0x00C0, u'B'}) << QByteArray()
+                                 << QStringLiteral("User ID character U+00C0 is not valid");
+    }
+
+    void testEncodeUserIdMatchesJTOpen() {
+        QFETCH(QString, userId);
+        QFETCH(QByteArray, expected);
+        QFETCH(QString, error);
+        QCOMPARE(HostDataStream::encodeUserId(userId).toHex(), expected);
+        QCOMPARE(HostDataStream::userIdError(userId), error);
     }
 
     void testServerIDs() {

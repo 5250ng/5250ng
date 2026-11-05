@@ -75,15 +75,16 @@ QByteArray PasswordEncrypt::encryptDES(const QString &userId,
         LOG_ERROR("[PasswordEncrypt]: Invalid seed size for DES");
         return {};
     }
-    // The token takes at most 10 characters; a longer ID would sign on as
-    // its first 10 (see encryptSHA1). Counted upper-cased, as encoded
-    if (userId.toUpper().size() > 10) {
-        LOG_ERROR("[PasswordEncrypt]: User ID longer than 10 characters");
+    // The ID as sent on the wire: a longer one, or one with a character
+    // turned into a blank, would sign on as another profile
+    const QByteArray userId10 = HostDataStream::encodeUserId(userId);
+    if (userId10.isEmpty()) {
+        LOG_ERROR("[PasswordEncrypt]: " + HostDataStream::userIdError(userId));
         return {};
     }
 
     // PW_TOKEN, including the 9-10 character user ID and password cases
-    QByteArray pwToken = tn5250::client::IBMRSeed::passwordToken(padUserIdEBCDIC(userId, 10),
+    QByteArray pwToken = tn5250::client::IBMRSeed::passwordToken(userId10,
                                                                   padUserIdEBCDIC(password, 10));
     if (pwToken.isEmpty()) {
         LOG_ERROR("[PasswordEncrypt]: DES-ECB encrypt failed");
@@ -95,7 +96,7 @@ QByteArray PasswordEncrypt::encryptDES(const QString &userId,
 
     QByteArray rdrseq = addBigEndian8(serverSeed, pwseqs);
 
-    QByteArray userId16 = padUserIdEBCDIC(userId.left(10), 16);
+    QByteArray userId16 = userId10.leftJustified(16, static_cast<char>(0x40));
     QByteArray userPart1 = userId16.left(8);
     QByteArray userPart2 = userId16.mid(8, 8);
 
@@ -135,20 +136,25 @@ QByteArray PasswordEncrypt::encryptSHA1(const QString &userId,
         LOG_ERROR("[PasswordEncrypt]: Invalid seed size for SHA-1");
         return {};
     }
-    // The user ID sent on the wire is cut to 10 characters, so a longer one
-    // would be hashed differently from the one the host checks. JTOpen
-    // rejects it (AS400.java), and so does this. Counted upper-cased, since
-    // toUpper() can lengthen it (ß -> SS)
-    if (userId.toUpper().size() > 10) {
-        LOG_ERROR("[PasswordEncrypt]: User ID longer than 10 characters");
+    // The ID sent on the wire is HostDataStream::encodeUserId(), so one it
+    // cannot encode would be hashed differently from the one the host
+    // checks. JTOpen rejects it (AS400.java, SignonConverter), and so does this
+    const QString idError = HostDataStream::userIdError(userId);
+    if (!idError.isEmpty()) {
+        LOG_ERROR("[PasswordEncrypt]: " + idError);
+        return {};
+    }
+    // JTOpen hashes the wire bytes read back as text, blank-padded to 10
+    // characters (AS400ImplRemote): ÄBC is hashed as #BC
+    const QString hashedId = HostDataStream::decodeUserId(HostDataStream::encodeUserId(userId));
+    if (hashedId.isEmpty()) {
+        LOG_ERROR("[PasswordEncrypt]: User ID has a character not valid at password level 2-3");
         return {};
     }
 
-    // Step 1: Generate password token = SHA-1(userID_utf16 + password_utf16).
-    // The user ID is blank-padded to 10 characters first, as in JTOpen
-    // (AS400ImplRemote, 20 bytes of UTF-16)
-    QByteArray userIdUtf16 =
-        HostDataStream::toUtf16BE(userId.toUpper().leftJustified(10, QLatin1Char(' ')));
+    // Step 1: Generate password token = SHA-1(userID_utf16 + password_utf16),
+    // 20 bytes of UTF-16 for the user ID
+    QByteArray userIdUtf16 = HostDataStream::toUtf16BE(hashedId);
     QByteArray passwordUtf16 = HostDataStream::toUtf16BE(password);
 
     QByteArray tokenInput;

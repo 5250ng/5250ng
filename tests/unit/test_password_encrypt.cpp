@@ -127,7 +127,8 @@ class TestPasswordEncrypt : public QObject {
 
     // Vectors from IBM JTOpen 21.0.7 (AS400ImplRemote.generateShaToken and
     // generateShaSubstitute, with the user ID built as JTOpen builds it:
-    // blank-padded to 10 characters, UTF-16BE). Issue #444.
+    // SignonConverter's bytes read back, blank-padded to 10 characters,
+    // UTF-16BE). Issues #444, #456.
     void testEncryptSHA1JTOpenVectors_data() {
         QTest::addColumn<QString>("userId");
         QTest::addColumn<QString>("password");
@@ -144,6 +145,20 @@ class TestPasswordEncrypt : public QObject {
             << "USER" << "LongPassword123" << QByteArray::fromHex("273d6f34359ed19fdd50da8ef9b71cd8ec979d0d");
         QTest::newRow("lower-case ID") << "qsecofr" << "QSECOFR0"
                                        << QByteArray::fromHex("b14f1aa9bb3ff62cb6d22af3c0498692de58fd9e");
+        // JTOpen hashes the wire bytes read back as text: A diaeresis is
+        // sent as 0x7B and hashed as # (SignonConverter.byteArrayToCharArray)
+        QTest::newRow("national ID") << QString(QChar(0x00C4)) + "BC" << "pw"
+                                     << QByteArray::fromHex("0a936870e162c3bec25278316e78af8eb7c34b30");
+        QTest::newRow("same as #") << "#BC" << "pw" << QByteArray::fromHex("0a936870e162c3bec25278316e78af8eb7c34b30");
+        QTest::newRow("Turkish ID") << QString(QChar(0x0130)) + QChar(0x015E) << "pw"
+                                    << QByteArray::fromHex("c7edff18dab181de7b3ca894d6f61bc1d0eabbaf");
+        QTest::newRow("_ # digit") << "MY_USER#1" << "pw"
+                                   << QByteArray::fromHex("21331a1c33b8e5f91cfb9b56a702daf4ae047a8f");
+        QTest::newRow("QSECOFR pw") << "QSECOFR" << "pw"
+                                    << QByteArray::fromHex("d6160531e41424a1fa3c35331de3a909590ad12c");
+        // JTOpen rejects these at SHA-1 (no character for 0x4B or 0x5A)
+        QTest::newRow("period") << "A.B" << "pw" << QByteArray();
+        QTest::newRow("exclamation") << "A!B" << "pw" << QByteArray();
     }
 
     void testEncryptSHA1JTOpenVectors() {
@@ -193,6 +208,20 @@ class TestPasswordEncrypt : public QObject {
         QSignalSpy errors(&client, &SignonClient::errorOccurred);
         client.signon(QStringLiteral("192.0.2.1"), 8476, user, QStringLiteral("pw"));
         QCOMPARE(errors.count(), 1);
+        QCOMPARE(client.state(), SignonClient::State::Error);
+    }
+
+    void testUnencodableUserIdIsRejected() {
+        // CP037 turned U+4E00 into a blank, so this signed on as QSECOFR (#456)
+        const QString user = QStringLiteral("QSECOFR") + QString(3, QChar(0x4E00));
+        const QByteArray seed = QByteArray::fromHex("0123456789abcdef");
+        QVERIFY(PasswordEncrypt::encryptDES(user, QStringLiteral("pw"), seed, seed).isEmpty());
+        QVERIFY(PasswordEncrypt::encryptSHA1(user, QStringLiteral("pw"), seed, seed).isEmpty());
+        SignonClient client;
+        QSignalSpy errors(&client, &SignonClient::errorOccurred);
+        client.signon(QStringLiteral("192.0.2.1"), 8476, user, QStringLiteral("pw"));
+        QCOMPARE(errors.count(), 1);
+        QCOMPARE(errors.at(0).at(0).toString(), QStringLiteral("User ID character U+4E00 is not valid"));
         QCOMPARE(client.state(), SignonClient::State::Error);
     }
 
