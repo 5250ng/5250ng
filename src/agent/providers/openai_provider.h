@@ -43,6 +43,10 @@ class OpenAiProvider : public Provider {
     QString apiKey() const override { return m_apiKey; }
     QString model() const override { return m_model; }
 
+    // Handles a successful Chat Completions response body (split out of
+    // the network reply handling so it can be tested)
+    void processResponseBody(const QByteArray &responseData);
+
   private:
     void sendRequest();
     void handleResponse(QNetworkReply *reply);
