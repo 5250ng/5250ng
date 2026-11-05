@@ -48,6 +48,7 @@ class TestMcpLogin : public QObject {
     void testCreateSessionRejectsUnavailableProfile_data();
     void testCreateSessionRejectsUnavailableProfile();
     void testCreateSessionFromProfileUsesSavedSettings();
+    void testCreateSessionDoesNotClaimConnection();
     void testLoginUsesSavedCredentials();
     void testLoginAsOtherUserPrompts();
     void testExplicitCredentialsOverrideSavedOnes();
@@ -290,6 +291,19 @@ void TestMcpLogin::testCreateSessionRejectsUnavailableProfile() {
     QJsonObject result = createSession(args);
     QVERIFY(result.value("isError").toBool());
     QCOMPARE(m_createRequests, 0);
+}
+
+// Issue #432: create_session returns once the tab exists, before the
+// connection is opened, so its reply must not say "Connected"
+void TestMcpLogin::testCreateSessionDoesNotClaimConnection() {
+    QString sessionId;
+    const QJsonObject result =
+        createSession(QJsonObject{{"hostname", "192.0.2.1"}}, &sessionId);
+    QVERIFY(!result.value("isError").toBool());
+    QVERIFY(!sessionId.isEmpty());
+    const QString text = resultText(result);
+    QVERIFY2(!text.contains(QStringLiteral("Connected to")), qPrintable(text));
+    QVERIFY2(text.contains(QStringLiteral("Connecting to 192.0.2.1:23")), qPrintable(text));
 }
 
 // The tab is opened with the saved session's settings, credentials
