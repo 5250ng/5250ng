@@ -21,6 +21,7 @@
 #include "network/tn5250_qt/telnet/options.h"
 #include <QByteArray>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QThread>
 #include <QTimer>
@@ -149,6 +150,9 @@ class TN5250Client : public QObject {
     // record's actual size. Returns the record unchanged when they already do.
     static QByteArray repairGdsRecordLength(const QByteArray &record);
     void sendTelnetCommand(telnet::TelnetCommand cmd, telnet::TelnetOption opt);
+    // Agree to the server's WILL (reply DO) or DO (reply WILL) and record
+    // the option as enabled, so a repeat is not acknowledged again
+    void acceptOption(telnet::TelnetCommand reply, telnet::TelnetOption opt);
     void handleTelnetCommand(uint8_t cmd, uint8_t opt);
     void handleSubnegotiation(telnet::TelnetOption opt, const QByteArray &data);
 
@@ -187,6 +191,9 @@ class TN5250Client : public QObject {
     quint16 m_port;
     QString m_deviceName;
     bool m_deviceNameSent = false; // Track if we already sent DEVNAME
+    // Options enabled on the server side (it WILL) and on ours (we WILL)
+    QSet<uint8_t> m_optionsHim;
+    QSet<uint8_t> m_optionsUs;
     QString m_terminalType = QStringLiteral("IBM-3179-2");
     QString m_username;
     QString m_password;

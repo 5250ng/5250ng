@@ -265,6 +265,16 @@ void TN5250Client::sendTelnetCommand(TelnetCommand cmd, TelnetOption opt) {
     );
 }
 
+void TN5250Client::acceptOption(TelnetCommand reply, TelnetOption opt) {
+    // The first WILL/DO is acknowledged even when it answers the client's
+    // own opening request: the IBM i telnet server sends its own WILL and
+    // DO for BINARY and EOR after the terminal type and waits for the
+    // acknowledgement before the first screen. Repeats are not answered
+    // (see handleTelnetCommand), which ends any acknowledgement loop.
+    sendTelnetCommand(reply, opt);
+    (reply == TelnetCommand::DO ? m_optionsHim : m_optionsUs).insert(static_cast<uint8_t>(opt));
+}
+
 void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
     TelnetCommand command = static_cast<TelnetCommand>(cmd);
     TelnetOption option = static_cast<TelnetOption>(opt);
@@ -280,32 +290,42 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
             .arg(opt, 2, 16, QChar('0'))
     );
 
+    // RFC 854: do not acknowledge a request for a mode already in effect;
+    // against a peer that does the same, negotiation would loop
+    if ((command == TelnetCommand::WILL && m_optionsHim.contains(opt)) ||
+        (command == TelnetCommand::DO && m_optionsUs.contains(opt))) {
+        logger::Logger::instance()->debug(
+            QString("[TN5250->Client]: Option %1 already enabled, not acknowledged again")
+                .arg(telnetOptionToString(option)));
+        return;
+    }
+
     switch (command) {
     case TelnetCommand::WILL:
         // Server wants to enable an option
         if (option == TelnetOption::TRANSMIT_BINARY) {
             // Server is responding to our DO BINARY or offering binary mode
-            sendTelnetCommand(TelnetCommand::DO, TelnetOption::TRANSMIT_BINARY);
+            acceptOption(TelnetCommand::DO, TelnetOption::TRANSMIT_BINARY);
             m_binaryNegotiated = true;
             logger::Logger::instance()->debug(
                 "[TN5250->Client]: Binary mode negotiated (server WILL)"
             );
             checkHandshakeComplete();
         } else if (option == TelnetOption::END_OF_RECORD) {
-            sendTelnetCommand(TelnetCommand::DO, TelnetOption::END_OF_RECORD);
+            acceptOption(TelnetCommand::DO, TelnetOption::END_OF_RECORD);
             m_eorNegotiated = true;
             logger::Logger::instance()->debug("[TN5250->Client]: EOR negotiated");
             checkHandshakeComplete();
         } else if (option == TelnetOption::ECHO) {
             // RFC 1205: WILL ECHO signals the server is ready for 5250 data stream.
             // The client MUST accept with DO ECHO.
-            sendTelnetCommand(TelnetCommand::DO, TelnetOption::ECHO);
+            acceptOption(TelnetCommand::DO, TelnetOption::ECHO);
             logger::Logger::instance()->debug(
                 "[TN5250->Client]: Accepted ECHO (server enters 5250 data stream mode)"
             );
         } else if (option == TelnetOption::SUPPRESS_GO_AHEAD) {
             // RFC 1205: WILL SGA is part of 5250E negotiation - accept it.
-            sendTelnetCommand(TelnetCommand::DO, TelnetOption::SUPPRESS_GO_AHEAD);
+            acceptOption(TelnetCommand::DO, TelnetOption::SUPPRESS_GO_AHEAD);
             logger::Logger::instance()->debug(
                 "[TN5250->Client]: Accepted SUPPRESS_GO_AHEAD"
             );
@@ -317,6 +337,9 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
         break;
 
     case TelnetCommand::WONT:
+        // Acknowledge only a change (RFC 854)
+        if (m_optionsHim.remove(opt))
+            sendTelnetCommand(TelnetCommand::DONT, option);
         // Server refuses an option
         if (option == TelnetOption::TRANSMIT_BINARY ||
             option == TelnetOption::END_OF_RECORD) {
@@ -336,24 +359,24 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
             break;
         }
         if (option == TelnetOption::TRANSMIT_BINARY) {
-            sendTelnetCommand(TelnetCommand::WILL, TelnetOption::TRANSMIT_BINARY);
+            acceptOption(TelnetCommand::WILL, TelnetOption::TRANSMIT_BINARY);
             m_binaryNegotiated = true;
             logger::Logger::instance()->debug("[TN5250->Client]: Binary mode enabled");
             checkHandshakeComplete();
         } else if (option == TelnetOption::END_OF_RECORD) {
-            sendTelnetCommand(TelnetCommand::WILL, TelnetOption::END_OF_RECORD);
+            acceptOption(TelnetCommand::WILL, TelnetOption::END_OF_RECORD);
             m_eorNegotiated = true;
             logger::Logger::instance()->debug("[TN5250->Client]: EOR enabled");
             checkHandshakeComplete();
         } else if (option == TelnetOption::TERMINAL_TYPE) {
             // Accept TERMINAL_TYPE so server can request our terminal type
-            sendTelnetCommand(TelnetCommand::WILL, TelnetOption::TERMINAL_TYPE);
+            acceptOption(TelnetCommand::WILL, TelnetOption::TERMINAL_TYPE);
             logger::Logger::instance()->debug(
                 "[TN5250->Client]: Accepted TERMINAL_TYPE negotiation"
             );
         } else if (option == TelnetOption::NEW_ENVIRON) {
             // Accept NEW_ENVIRON so server can request environment variables
-            sendTelnetCommand(TelnetCommand::WILL, TelnetOption::NEW_ENVIRON);
+            acceptOption(TelnetCommand::WILL, TelnetOption::NEW_ENVIRON);
             logger::Logger::instance()->debug(
                 "[TN5250->Client]: Accepted NEW_ENVIRON negotiation"
             );
@@ -363,7 +386,10 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
         break;
 
     case TelnetCommand::DONT:
-        // Server wants us to disable an option
+        // Server wants us to disable an option: acknowledge only a change
+        // (RFC 854)
+        if (m_optionsUs.remove(opt))
+            sendTelnetCommand(TelnetCommand::WONT, option);
         break;
 
     case TelnetCommand::SB:
@@ -496,8 +522,12 @@ void TN5250Client::handleSubnegotiation(TelnetOption opt, const QByteArray &data
             logger::Logger::instance()->debug("[TN5250->Client]: NEW_ENVIRON requested "
                                               "by server (empty subnegotiation)");
         }
-        // Always respond with our environment variables
-        sendNewEnviron();
+        // RFC 1572: only a SEND (some servers send it empty) asks for our
+        // variables. Answering an unsolicited IS or INFO would also mark
+        // DEVNAME as sent before the real SEND arrives. A SEND is answered
+        // even without DO NEW-ENVIRON first, as tn5250j does.
+        if (data.isEmpty() || static_cast<uint8_t>(data[0]) == 0x01)
+            sendNewEnviron();
         break;
 
     case TelnetOption::NEGOTIATE_ABOUT_WINDOW_SIZE:
