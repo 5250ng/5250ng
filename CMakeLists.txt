@@ -720,6 +720,20 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_server_stop COMMAND test_mcp_server_stop)
 
+    # MCP request log escapes the client's method and tool name (issue #435)
+    add_executable(test_mcp_log_escaping
+        tests/unit/test_mcp_log_escaping.cpp
+        src/mcp/McpServer.cpp
+        src/mcp/McpHttpParser.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_log_escaping PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_log_escaping COMMAND test_mcp_log_escaping)
+
     # MCP requests arriving during a tool's nested event loop (issue #254)
     add_executable(test_mcp_server_reentry
         tests/unit/test_mcp_server_reentry.cpp
