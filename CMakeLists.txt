@@ -599,6 +599,17 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_write_error_code_lock COMMAND test_write_error_code_lock)
 
+    # 5250 Query reply layout (issue #247)
+    add_executable(test_query_reply
+        tests/unit/test_query_reply.cpp
+        src/ui/rendering/tn5250_command_handler.cpp
+        src/ui/rendering/tn5250_stream_renderer.cpp
+        src/ui/dialogs/pc_command_confirm_dialog.cpp
+    )
+    target_link_libraries(test_query_reply PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_query_reply COMMAND test_query_reply)
+
     # Stream renderer: non-display input fields (issue #360)
     add_executable(test_stream_renderer_nondisplay
         tests/unit/test_stream_renderer_nondisplay.cpp
