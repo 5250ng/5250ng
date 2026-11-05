@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include "core/ebcdic.h"
+#include "core/keyboard_mapping.h"
 #include "ui/rendering/tn5250_command_handler.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 
@@ -58,6 +60,13 @@ class TestCommandHandlerSoh : public QObject {
     void testClearUnitAlternateSwitchesTo27x132();
     void testClearUnitSwitchesBackTo24x80();
     void testClearUnitFrom27x132ReturnsTo24x80();
+
+    // Issue #249: the SOH command key mask marks PF keys whose AID is sent
+    // without field data (command attention keys).
+    void testMaskBitMapping();
+    void testMaskedPfKeySendsNoFieldData();
+    void testUnmaskedKeysSendFieldData();
+    void testClearUnitResetsKeyMask();
 
   private:
     Q5250ScreenWidget *m_widget = nullptr;
@@ -410,6 +419,85 @@ void TestCommandHandlerSoh::testClearUnitFrom27x132ReturnsTo24x80() {
     m_handler->onClearScreenRequested();
     QCOMPARE(m_widget->screenBuffer()->rows(), 24);
     QCOMPARE(m_widget->screenBuffer()->cols(), 80);
+}
+
+// lib5250 tn5250_dbuffer_send_data_for_aid_key: PF1 is bit 0x01 of the
+// third mask byte, PF8 0x80, PF9 0x01 of the second, PF24 0x80 of the first
+void TestCommandHandlerSoh::testMaskBitMapping() {
+    struct Case { uint8_t aid; int byte; uint8_t bit; };
+    const Case cases[] = {
+        {0x31, 2, 0x01}, {0x33, 2, 0x04}, {0x38, 2, 0x80},  // PF1, PF3, PF8
+        {0x39, 1, 0x01}, {0x3C, 1, 0x08},                   // PF9, PF12
+        {0xB1, 1, 0x10}, {0xB4, 1, 0x80},                   // PF13, PF16
+        {0xB5, 0, 0x01}, {0xBC, 0, 0x80},                   // PF17, PF24
+    };
+    for (const Case &c : cases) {
+        uint8_t mask[3] = {0, 0, 0};
+        QVERIFY(!Q5250ScreenWidget::aidSendsNoFieldData(mask, c.aid));
+        mask[c.byte] = c.bit;
+        QVERIFY2(Q5250ScreenWidget::aidSendsNoFieldData(mask, c.aid),
+                 qPrintable(QString::number(c.aid, 16)));
+        // No other PF key is affected by that bit
+        for (uint8_t other : {uint8_t(0x31), uint8_t(0x38), uint8_t(0x39), uint8_t(0xB1),
+                              uint8_t(0xB5), uint8_t(0xBC)}) {
+            if (other != c.aid)
+                QVERIFY(!Q5250ScreenWidget::aidSendsNoFieldData(mask, other));
+        }
+    }
+    // Enter, Roll Up, Help and Clear always send data
+    const uint8_t all[3] = {0xFF, 0xFF, 0xFF};
+    for (uint8_t aid : {uint8_t(0xF1), uint8_t(0xF5), uint8_t(0xF3), uint8_t(0xBD)})
+        QVERIFY(!Q5250ScreenWidget::aidSendsNoFieldData(all, aid));
+}
+
+namespace {
+// A modified input field holding "AB" at row 5, column 10
+void setUpModifiedField(Q5250ScreenWidget *widget) {
+    auto *screen = widget->screenBuffer();
+    screen->setField(4, 9, 5, false);
+    screen->setFieldFFW(4, 9, 0x40, 0x00);
+    screen->setCursorPosition(4, 9);
+    widget->setKeyboardState(ui::widgets::KeyboardState::Unlocked);
+    widget->dispatchCharacter('A');
+    widget->dispatchCharacter('B');
+}
+} // namespace
+
+void TestCommandHandlerSoh::testMaskedPfKeySendsNoFieldData() {
+    setUpModifiedField(m_widget);
+    // PF3 is a command attention key on this screen
+    m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
+    QSignalSpy spy(m_widget, &Q5250ScreenWidget::inputReady);
+    m_widget->dispatchMappedAction(core::MappedAction::PF3);
+    QCOMPARE(spy.count(), 1);
+    const QByteArray sent = spy.at(0).at(0).toByteArray();
+    QCOMPARE(sent.size(), 3); // row, column, AID only
+    QCOMPARE(quint8(sent[2]), quint8(0x33));
+}
+
+void TestCommandHandlerSoh::testUnmaskedKeysSendFieldData() {
+    setUpModifiedField(m_widget);
+    m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
+    QSignalSpy spy(m_widget, &Q5250ScreenWidget::inputReady);
+    m_widget->dispatchMappedAction(core::MappedAction::PF4);
+    QCOMPARE(spy.count(), 1);
+    const QByteArray sent = spy.at(0).at(0).toByteArray();
+    QCOMPARE(quint8(sent[2]), quint8(0x34));
+    QVERIFY2(sent.contains(core::EBCDIC::stringToEBCDIC("AB")), sent.toHex().constData());
+}
+
+// Clear Unit clears the format table and its SOH header, so the mask too
+void TestCommandHandlerSoh::testClearUnitResetsKeyMask() {
+    m_handler->onSohReceived(0, 0x80, 0x80, 0x04);
+    m_handler->onClearScreenRequested();
+    const uint8_t *mask = m_widget->cmdKeyMask();
+    QCOMPARE(int(mask[0]) | int(mask[1]) | int(mask[2]), 0);
+    m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
+    m_handler->onClearFormatTableRequested();
+    QCOMPARE(int(m_widget->cmdKeyMask()[2]), 0);
+    m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
+    m_handler->onClearScreenAlternateRequested();
+    QCOMPARE(int(m_widget->cmdKeyMask()[2]), 0);
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)
