@@ -17,6 +17,7 @@
 #include "../main_window.h"
 #include "ui/dialogs/script_editor_window.h"
 #include "ui/quit_confirmation.h"
+#include "ui/window_geometry.h"
 #include <QCloseEvent>
 #include <QtUiStyle/StyledMessageBox.h>
 
@@ -71,5 +72,6 @@ void MainWindow::closeEvent(QCloseEvent *event) {
             return;
         }
     }
+    ui::saveWindowGeometry(this, ui::kMainWindowGeometryKey);
     MainWindowBase::closeEvent(event);
 }

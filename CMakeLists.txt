@@ -887,6 +887,11 @@ if(BUILD_TESTS)
     target_link_libraries(test_quit_confirmation PRIVATE tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_quit_confirmation COMMAND test_quit_confirmation)
 
+    # Main window geometry persistence (issue #412)
+    add_executable(test_window_geometry tests/unit/test_window_geometry.cpp)
+    target_link_libraries(test_window_geometry PRIVATE tn5250_core Qt6::Test Qt6::Widgets)
+    add_test(NAME test_window_geometry COMMAND test_window_geometry)
+
     # MCP transport tests
     # McpHttpParser lives in the main application target (not tn5250_core),
     # so compile it into the test binary directly.
