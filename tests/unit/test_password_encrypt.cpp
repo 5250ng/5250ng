@@ -123,6 +123,43 @@ class TestPasswordEncrypt : public QObject {
         QCOMPARE(result1, result2);
     }
 
+    // Vectors from IBM JTOpen 21.0.7 (AS400ImplRemote.generateShaToken and
+    // generateShaSubstitute, with the user ID built as JTOpen builds it:
+    // blank-padded to 10 characters, UTF-16BE). Issue #444.
+    void testEncryptSHA1JTOpenVectors_data() {
+        QTest::addColumn<QString>("userId");
+        QTest::addColumn<QString>("password");
+        QTest::addColumn<QByteArray>("expected");
+        QTest::newRow("7-char ID") << "QSECOFR" << "QSECOFR0"
+                                   << QByteArray::fromHex("b14f1aa9bb3ff62cb6d22af3c0498692de58fd9e");
+        QTest::newRow("1-char ID") << "A" << "b"
+                                   << QByteArray::fromHex("3a405dee6d7c11a23680b34c3321fe5af0c59b46");
+        QTest::newRow("mixed-case password")
+            << "TESTUSER" << "Secret1" << QByteArray::fromHex("59df75f320a9bb9b72ffd35a1a3755c15c262ce3");
+        QTest::newRow("10-char ID") << "ABCDEFGHIJ" << "password"
+                                    << QByteArray::fromHex("632212ac0d94207404ad76f15daa0a4b4c14bda5");
+        QTest::newRow("long password")
+            << "USER" << "LongPassword123" << QByteArray::fromHex("273d6f34359ed19fdd50da8ef9b71cd8ec979d0d");
+        QTest::newRow("lower-case ID") << "qsecofr" << "QSECOFR0"
+                                       << QByteArray::fromHex("b14f1aa9bb3ff62cb6d22af3c0498692de58fd9e");
+    }
+
+    void testEncryptSHA1JTOpenVectors() {
+        QFETCH(QString, userId);
+        QFETCH(QString, password);
+        QFETCH(QByteArray, expected);
+        const QByteArray client = QByteArray::fromHex("0123456789abcdef");
+        const QByteArray server = QByteArray::fromHex("fedcba9876543210");
+        QCOMPARE(PasswordEncrypt::encryptSHA1(userId, password, client, server).toHex(), expected.toHex());
+    }
+
+    // A user ID the wire would truncate gets no substitute
+    void testEncryptSHA1RejectsLongUserId() {
+        const QByteArray seed = QByteArray::fromHex("0123456789abcdef");
+        QVERIFY(PasswordEncrypt::encryptSHA1(QStringLiteral("ABCDEFGHIJK"), QStringLiteral("pw"), seed, seed)
+                    .isEmpty());
+    }
+
     void testEncryptAutoSelectDES() {
         QByteArray clientSeed = PasswordEncrypt::generateSeed();
         QByteArray serverSeed = PasswordEncrypt::generateSeed();
