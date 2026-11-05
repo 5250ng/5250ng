@@ -665,6 +665,23 @@ QByteArray TN5250CommandHandler::buildSaveScreenResponse() {
     out.append(static_cast<char>(0x00));  // CC1
     out.append(static_cast<char>(0x08));  // CC2: unlock keyboard
 
+    // 3a) SOH with the current error row and command key mask, as lib5250
+    //     saves its header data, so Restore Screen brings back the keys the
+    //     host marked as command attention keys (Clear Unit above resets it)
+    const uint8_t *mask = m_displayWidget->cmdKeyMask();
+    const int errorRow = m_displayWidget->errorLineRow();
+    if (mask[0] || mask[1] || mask[2] || errorRow >= 0) {
+        out.append(static_cast<char>(SOH));
+        out.append(static_cast<char>(0x07));  // length of the header data
+        out.append(static_cast<char>(0x00));  // flags
+        out.append(static_cast<char>(0x00));  // reserved
+        out.append(static_cast<char>(0x00));  // resequence
+        out.append(static_cast<char>(errorRow >= 0 ? errorRow + 1 : 0));
+        out.append(static_cast<char>(mask[0]));
+        out.append(static_cast<char>(mask[1]));
+        out.append(static_cast<char>(mask[2]));
+    }
+
     // Track which cells belong to field attribute markers so we skip them
     // when dumping cell content (they are recreated by the SF orders).
     QVector<bool> isAttrMarker(rows * cols, false);

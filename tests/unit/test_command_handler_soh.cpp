@@ -74,6 +74,11 @@ class TestCommandHandlerSoh : public QObject {
     void testSohStartsNewFormatTable();
     void testSohWithoutFollowingFieldsLeavesNoFields();
 
+    // Issue #441: Save Screen keeps the SOH key mask and error row, so
+    // Restore Screen brings them back
+    void testSaveRestoreKeepsKeyMask();
+    void testSaveWithoutHeaderHasNoSoh();
+
   private:
     // One GDS record (record type 12A0, opcode Put/Get) around `payload`
     static QByteArray gdsRecord(const QByteArray &payload) {
@@ -550,6 +555,48 @@ void TestCommandHandlerSoh::testSohWithoutFollowingFieldsLeavesNoFields() {
     m_handler->onSohReceived(0, 0, 0, 0);
     QVERIFY(screen->fields().isEmpty());
     QVERIFY(!m_widget->hasICAddress());
+}
+
+namespace {
+QByteArray saveScreen(TN5250CommandHandler *handler) {
+    QByteArray saved;
+    handler->setSendGDSCallback([&saved](uint8_t, uint8_t, const QByteArray &p) { saved = p; });
+    handler->onSaveScreenRequested();
+    handler->setSendGDSCallback(nullptr);
+    return saved;
+}
+} // namespace
+
+void TestCommandHandlerSoh::testSaveRestoreKeepsKeyMask() {
+    tn5250::client::DecoderAdapter decoder;
+    m_handler->connectDecoder(&decoder);
+    m_handler->onSohReceived(22, 0x80, 0x00, 0x04);
+    m_widget->screenBuffer()->setField(4, 9, 5, false);
+    m_widget->screenBuffer()->setFieldFFW(4, 9, 0x40, 0x00);
+
+    const QByteArray saved = saveScreen(m_handler);
+    QVERIFY2(saved.contains(QByteArray::fromHex("0107000000168000" "04")), saved.toHex().constData());
+
+    // A different screen replaces it, then the host restores the saved one
+    m_handler->onClearScreenRequested();
+    QCOMPARE(int(m_widget->cmdKeyMask()[2]), 0);
+    decoder.parseData(gdsRecord(saved));
+
+    QCOMPARE(int(m_widget->cmdKeyMask()[0]), 0x80);
+    QCOMPARE(int(m_widget->cmdKeyMask()[1]), 0x00);
+    QCOMPARE(int(m_widget->cmdKeyMask()[2]), 0x04);
+    QCOMPARE(m_widget->errorLineRow(), 21);
+    QCOMPARE(m_widget->screenBuffer()->fields().size(), 1);
+    QCOMPARE(m_widget->screenBuffer()->fields().first().startRow, 4);
+    QCOMPARE(m_widget->screenBuffer()->fields().first().startCol, 9);
+}
+
+void TestCommandHandlerSoh::testSaveWithoutHeaderHasNoSoh() {
+    // No SOH was received: the saved WTD starts with its first SBA
+    m_widget->screenBuffer()->setField(4, 9, 5, false);
+    m_widget->screenBuffer()->setFieldFFW(4, 9, 0x40, 0x00);
+    const QByteArray saved = saveScreen(m_handler);
+    QCOMPARE(saved.mid(4, 5).toHex(), QByteArray("04110008") + "11");
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)
