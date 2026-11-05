@@ -524,6 +524,16 @@ void TN5250CommandHandler::onSohReceived(uint8_t errorRow, uint8_t ckm1,
     if (!m_displayWidget) {
         return;
     }
+    // SOH starts a new format table and drops the pending IC address, as in
+    // lib5250 (tn5250_session_start_of_header) and tn5250j (clearTable). A
+    // host window's WTD starts with SOH and often has no IC order, so the
+    // fields and IC of the screen under the window must not survive it. The
+    // decoder reports SOH before the WTD's display data is rendered, so the
+    // fields that follow it are defined after this clear.
+    if (m_displayWidget->screenBuffer()) {
+        m_displayWidget->screenBuffer()->clearFields();
+    }
+    m_displayWidget->clearICAddress();
     if (errorRow > 0) {
         // The SOH error row is a raw host byte; everything that later indexes
         // the screen with errorLineRow() (Write Error Code save/clear, error

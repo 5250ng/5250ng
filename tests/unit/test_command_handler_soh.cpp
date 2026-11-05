@@ -16,6 +16,7 @@
 
 #include "core/ebcdic.h"
 #include "core/keyboard_mapping.h"
+#include "network/tn5250_qt/client/decoder_adapter.h"
 #include "ui/rendering/tn5250_command_handler.h"
 #include "ui/widgets/Q5250ScreenWidget/Q5250ScreenWidget.h"
 
@@ -68,7 +69,21 @@ class TestCommandHandlerSoh : public QObject {
     void testUnmaskedKeysSendFieldData();
     void testClearUnitResetsKeyMask();
 
+    // Issue #237: SOH clears the format table and the pending IC, so a host
+    // window without an IC order gets the cursor in its own field.
+    void testSohStartsNewFormatTable();
+    void testSohWithoutFollowingFieldsLeavesNoFields();
+
   private:
+    // One GDS record (record type 12A0, opcode Put/Get) around `payload`
+    static QByteArray gdsRecord(const QByteArray &payload) {
+        QByteArray body = QByteArray::fromHex("12a0000004000003") + payload;
+        QByteArray rec;
+        rec.append(static_cast<char>(((body.size() + 2) >> 8) & 0xFF));
+        rec.append(static_cast<char>((body.size() + 2) & 0xFF));
+        return rec + body;
+    }
+
     Q5250ScreenWidget *m_widget = nullptr;
     TN5250CommandHandler *m_handler = nullptr;
 };
@@ -464,9 +479,10 @@ void setUpModifiedField(Q5250ScreenWidget *widget) {
 } // namespace
 
 void TestCommandHandlerSoh::testMaskedPfKeySendsNoFieldData() {
-    setUpModifiedField(m_widget);
-    // PF3 is a command attention key on this screen
+    // PF3 is a command attention key on this screen. SOH comes first, as on
+    // the wire, since it starts a new format table (#237)
     m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
+    setUpModifiedField(m_widget);
     QSignalSpy spy(m_widget, &Q5250ScreenWidget::inputReady);
     m_widget->dispatchMappedAction(core::MappedAction::PF3);
     QCOMPARE(spy.count(), 1);
@@ -476,8 +492,8 @@ void TestCommandHandlerSoh::testMaskedPfKeySendsNoFieldData() {
 }
 
 void TestCommandHandlerSoh::testUnmaskedKeysSendFieldData() {
-    setUpModifiedField(m_widget);
     m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
+    setUpModifiedField(m_widget);
     QSignalSpy spy(m_widget, &Q5250ScreenWidget::inputReady);
     m_widget->dispatchMappedAction(core::MappedAction::PF4);
     QCOMPARE(spy.count(), 1);
@@ -498,6 +514,42 @@ void TestCommandHandlerSoh::testClearUnitResetsKeyMask() {
     m_handler->onSohReceived(0, 0x00, 0x00, 0x04);
     m_handler->onClearScreenAlternateRequested();
     QCOMPARE(int(m_widget->cmdKeyMask()[2]), 0);
+}
+
+void TestCommandHandlerSoh::testSohStartsNewFormatTable() {
+    tn5250::client::DecoderAdapter decoder;
+    m_handler->connectDecoder(&decoder);
+    auto *screen = m_widget->screenBuffer();
+
+    // The underlying screen: Clear Unit, WTD (CC2 unlock), IC at row 5
+    // col 20 and a 10-byte input field there
+    decoder.parseData(gdsRecord(QByteArray::fromHex("0440" "04110008" "130514" "110513"
+                                                    "1d400020000a")));
+    QCOMPARE(screen->fields().size(), 1);
+    QCOMPARE(screen->cursorPosition(), QPoint(19, 4));
+
+    // A DDS WINDOW record: WTD that starts with SOH, draws the window and
+    // defines its field at row 8 col 13, with no IC order (as IBM i sends it)
+    decoder.parseData(gdsRecord(QByteArray::fromHex("04110008" "0107000000180000" "00"
+                                                    "11050ac9958289" "11080c"
+                                                    "1d400020000a")));
+
+    // Only the window's field is left, and the cursor is in it
+    QCOMPARE(screen->fields().size(), 1);
+    QCOMPARE(screen->fields().first().startRow, 7);
+    QCOMPARE(screen->fields().first().startCol, 12);
+    QCOMPARE(screen->cursorPosition(), QPoint(12, 7));
+    QVERIFY(!m_widget->hasICAddress());
+}
+
+void TestCommandHandlerSoh::testSohWithoutFollowingFieldsLeavesNoFields() {
+    auto *screen = m_widget->screenBuffer();
+    screen->setField(4, 19, 10, false);
+    screen->setFieldFFW(4, 19, 0x40, 0x00);
+    m_widget->setICAddress(4, 19);
+    m_handler->onSohReceived(0, 0, 0, 0);
+    QVERIFY(screen->fields().isEmpty());
+    QVERIFY(!m_widget->hasICAddress());
 }
 
 QTEST_MAIN(TestCommandHandlerSoh)
