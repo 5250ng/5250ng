@@ -94,6 +94,7 @@ void MainWindow::setupUI() {
     for (const QKeySequence &sequence :
          QKeySequence::keyBindings(QKeySequence::NextChild)) {
         auto *shortcut = new QShortcut(sequence, this);
+        shortcut->setWhatsThis(tr("Next Tab"));
         connect(shortcut, &QShortcut::activated, this, [this]() {
             if (m_tabWidget->count() > 1)
                 m_tabWidget->setCurrentIndex(
@@ -103,6 +104,7 @@ void MainWindow::setupUI() {
     for (const QKeySequence &sequence :
          QKeySequence::keyBindings(QKeySequence::PreviousChild)) {
         auto *shortcut = new QShortcut(sequence, this);
+        shortcut->setWhatsThis(tr("Previous Tab"));
         connect(shortcut, &QShortcut::activated, this, [this]() {
             if (m_tabWidget->count() > 1)
                 m_tabWidget->setCurrentIndex(

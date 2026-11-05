@@ -93,6 +93,18 @@ class KeyboardRemapDialog : public qt_ui_style::BaseFramelessDialog {
     explicit KeyboardRemapDialog(QWidget *parent = nullptr,
                                  core::MappedAction focusOn = core::MappedAction::None);
 
+    // Name of the menu or window shortcut in `window` that `chord` also
+    // triggers, or an empty string. Only window- and application-wide
+    // shortcuts count: those are the ones a 5250 binding shadows while the
+    // screen has focus.
+    static QString shadowedShortcutName(const QWidget *window, const core::KeyChord &chord);
+
+    // The question to ask before binding `chord` to `action`, or an empty
+    // string when nothing else uses the chord: a shortcut of `window`, or
+    // the platform Copy or Paste key the screen handles itself.
+    static QString shadowingPrompt(const QWidget *window, const core::KeyChord &chord,
+                                   core::MappedAction action);
+
   signals:
     // Emitted after the user clicks Save and the singleton has been updated.
     void mappingChanged();

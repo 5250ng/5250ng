@@ -18,6 +18,7 @@
 
 #include <QtUiStyle/StyledFileDialog.h>
 #include <QtUiStyle/StyledMessageBox.h>
+#include <QAction>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -26,7 +27,10 @@
 #include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QString>
 #include <QVBoxLayout>
@@ -237,6 +241,71 @@ void KeyboardRemapDialog::populateRows() {
     m_table->resizeRowsToContents();
 }
 
+// The top-level window a shortcut belongs to. A menu popup is a window of
+// its own but belongs to the window whose menu bar or context it is part of.
+static const QWidget *owningWindow(const QObject *object) {
+    for (const QObject *o = object->parent(); o; o = o->parent()) {
+        const auto *w = qobject_cast<const QWidget *>(o);
+        if (w && w->isWindow() && !qobject_cast<const QMenu *>(w))
+            return w;
+    }
+    return nullptr;
+}
+
+QString KeyboardRemapDialog::shadowedShortcutName(const QWidget *window,
+                                                 const KeyChord &chord) {
+    if (!window || !chord.isValid())
+        return QString();
+    const QKeySequence sequence(QKeyCombination(chord.modifiers, Qt::Key(chord.key)));
+    // Only shortcuts of `window` itself: the Script Editor and other child
+    // top-level windows are found by findChildren() too, but their shortcuts
+    // never fire while the main window has focus
+    auto shadows = [window](const QObject *o, Qt::ShortcutContext context) {
+        return (context == Qt::WindowShortcut || context == Qt::ApplicationShortcut) &&
+               owningWindow(o) == window;
+    };
+    for (const QAction *a : window->findChildren<QAction *>()) {
+        if (!a->shortcuts().contains(sequence) || !shadows(a, a->shortcutContext()))
+            continue;
+        QString name = a->text();
+        name.remove(QRegularExpression(QStringLiteral("&(?!&)")));
+        name.remove(QStringLiteral("..."));
+        return name.isEmpty() ? sequence.toString(QKeySequence::NativeText) : name;
+    }
+    for (const QShortcut *s : window->findChildren<QShortcut *>()) {
+        if (s->keys().contains(sequence) && shadows(s, s->context()))
+            return s->whatsThis().isEmpty() ? sequence.toString(QKeySequence::NativeText)
+                                            : s->whatsThis();
+    }
+    return QString();
+}
+
+QString KeyboardRemapDialog::shadowingPrompt(const QWidget *window, const KeyChord &chord,
+                                             MappedAction action) {
+    if (!chord.isValid())
+        return QString();
+    const QKeySequence sequence(QKeyCombination(chord.modifiers, Qt::Key(chord.key)));
+    const QString name = chord.toString();
+    const QString target = KeyboardMapping::actionName(action);
+    // The screen handles the platform Paste and Copy keys before it looks at
+    // the mapping (Q5250ScreenWidget::keyPressEvent)
+    if (QKeySequence::keyBindings(QKeySequence::Paste).contains(sequence))
+        return tr("%1 is the Paste shortcut. The 5250 screen pastes on %1 before it "
+                  "checks key bindings, so %1 will not do \"%2\".\n\nBind it anyway?")
+            .arg(name, target);
+    if (QKeySequence::keyBindings(QKeySequence::Copy).contains(sequence))
+        return tr("%1 is the Copy shortcut. While text is selected on the 5250 screen, "
+                  "%1 copies it instead of doing \"%2\".\n\nBind it anyway?")
+            .arg(name, target);
+    const QString shadowed = shadowedShortcutName(window, chord);
+    if (shadowed.isEmpty())
+        return QString();
+    return tr("%1 is also the shortcut for \"%2\".\n\n"
+              "While the 5250 screen has focus and accepts input, %1 will do \"%3\" "
+              "instead; otherwise it still does \"%2\".\n\nBind it anyway?")
+        .arg(name, shadowed, target);
+}
+
 void KeyboardRemapDialog::onRowChordsChanged(MappedAction action,
                                              const QList<KeyChord> &chords) {
     // Snapshot this action's previous bindings BEFORE any mutation so we can
@@ -252,6 +321,21 @@ void KeyboardRemapDialog::onRowChordsChanged(MappedAction action,
     for (const auto &chord : chords) {
         if (!chord.isValid()) continue;
         if (previous.contains(chord)) continue;
+        const QString shadowing = shadowingPrompt(
+            parentWidget() ? parentWidget()->window() : nullptr, chord, action);
+        if (!shadowing.isEmpty()) {
+            auto result = qt_ui_style::StyledMessageBox::question(
+                this, tr("Shortcut already in use"), shadowing);
+            if (result != qt_ui_style::StyledMessageBox::Yes) {
+                ChordListEditor *editor = editorForAction(action);
+                if (editor) {
+                    QSignalBlocker block(editor);
+                    editor->setChords(previous);
+                }
+                m_table->resizeRowsToContents();
+                return;
+            }
+        }
         auto existing = m_working.constFind(chord);
         if (existing == m_working.constEnd() || existing.value() == action) continue;
 

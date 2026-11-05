@@ -1037,6 +1037,15 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_remap_edge_cases COMMAND test_remap_edge_cases)
 
+    # Remap Keyboard warns about menu and window shortcuts (issue #371)
+    add_executable(test_remap_menu_shortcut_warning
+        tests/unit/test_remap_menu_shortcut_warning.cpp
+        src/ui/dialogs/keyboard_remap_dialog.cpp
+    )
+    target_link_libraries(test_remap_menu_shortcut_warning PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_remap_menu_shortcut_warning COMMAND test_remap_menu_shortcut_warning)
+
     # Session > Save over a profile edited since the tab opened (issue #348)
     add_executable(test_save_session_profile_edits
         tests/integration/test_save_session_profile_edits.cpp
