@@ -941,6 +941,14 @@ if(BUILD_TESTS)
     add_test(NAME test_connect_dialog_device_size
              COMMAND test_connect_dialog_device_size)
 
+    # Match & Replace dialog refuses invalid regexes (issue #461)
+    add_executable(test_match_replace_dialog
+        tests/unit/test_match_replace_dialog.cpp
+        src/ui/dialogs/match_replace_dialog.cpp)
+    target_link_libraries(test_match_replace_dialog PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_match_replace_dialog COMMAND test_match_replace_dialog)
+
     # Quit confirmation with connected sessions (issue #409)
     add_executable(test_quit_confirmation tests/unit/test_quit_confirmation.cpp)
     target_link_libraries(test_quit_confirmation PRIVATE tn5250_core Qt6::Test QtUiStyle::Dialogs)

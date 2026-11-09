@@ -21,6 +21,7 @@
 #include <QCheckBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -35,6 +36,16 @@ class MatchReplaceDialog : public qt_ui_style::BaseFramelessDialog {
                                 QWidget *parent = nullptr);
 
     QVector<core::MatchReplaceRule> rules() const;
+
+    // Why a rule cannot be used: its regex does not compile. Empty when it
+    // is fine (and always for a plain-text rule)
+    static QString patternError(const core::MatchReplaceRule &rule);
+    // The message shown under the table after a refused OK
+    QString errorText() const { return m_errorLabel->text(); }
+
+  public slots:
+    // Refuses to close while a regex rule does not compile
+    void accept() override;
 
   private slots:
     void onAddRule();
@@ -51,6 +62,7 @@ class MatchReplaceDialog : public qt_ui_style::BaseFramelessDialog {
     QPushButton *m_removeBtn;
     QPushButton *m_upBtn;
     QPushButton *m_downBtn;
+    QLabel *m_errorLabel;
 };
 
 } // namespace ui::dialogs
