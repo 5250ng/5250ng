@@ -54,6 +54,7 @@ void Q5250ScreenWidget::refreshMatchReplaceOverlay() {
         decodedLines.append(line);
     }
     m_matchReplace->rebuildOverlay(decodedLines, rows, cols);
+    m_matchReplaceDirty = false;
 }
 
 void Q5250ScreenWidget::onScreenChanged() {
@@ -62,10 +63,9 @@ void Q5250ScreenWidget::onScreenChanged() {
     m_historyTimer.start();
     if (m_hotspotDetector.isEnabled())
         refreshHotspots();
-    // Rebuild match-and-replace overlay
-    if (m_matchReplace && m_matchReplace->isEnabled()) {
-        refreshMatchReplaceOverlay();
-    }
+    // The match-and-replace overlay is rebuilt once, before the next
+    // paint, not once per written cell
+    m_matchReplaceDirty = true;
     update();
 }
 
