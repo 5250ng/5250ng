@@ -160,21 +160,30 @@ bool Gddm5292Decoder::LineStyle::covers(int offset, int segment,
     // Offset picks which run a line starts on and may override its length.
     const int lengths[4] = {visible1, gap1, visible2, gap2};
     const bool visible[4] = {true, false, true, false};
-    if (period() <= 0 || offset < 0)
+    const int cycle = period();
+    if (cycle <= 0)
         return true;
 
     int run = segment & 0x03;
-    int remaining = overrideLength > 0 ? overrideLength : lengths[run];
-    // period() > 0 guarantees a nonzero run, so this terminates; the bound is
-    // belt and braces against a hostile style.
-    for (int guard = 0; guard < 4096; ++guard) {
-        if (remaining > 0) {
-            if (offset < remaining)
-                return visible[run];
-            offset -= remaining;
-        }
+    if (offset < 0) {
+        // Before the start (a diagonal fill phase is x - y, negative below the
+        // diagonal) the pattern continues backwards with its normal runs, so
+        // a hatch stays a hatch rather than turning solid
+        offset = ((offset % cycle) + cycle) % cycle;
+    } else {
+        const int first = overrideLength > 0 ? overrideLength : lengths[run];
+        if (offset < first)
+            return visible[run];
+        // After the first run the four runs repeat with the period, so the
+        // offset is reduced once instead of walked run by run per pixel
+        offset = (offset - first) % cycle;
         run = (run + 1) & 0x03;
-        remaining = lengths[run];
+    }
+    // offset < cycle, the sum of the four runs: found within four steps
+    for (int step = 0; step < 4; ++step, run = (run + 1) & 0x03) {
+        if (offset < lengths[run])
+            return visible[run];
+        offset -= lengths[run];
     }
     return true;
 }
