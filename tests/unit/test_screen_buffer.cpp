@@ -39,6 +39,7 @@ class TestScreenBuffer : public QObject {
     void testAttributes();
     void testProtectedFields();
     void testPositionOutsideFieldsIsProtected();
+    void testInboundSignedNumericFieldData();
 
   private:
     ScreenBuffer *m_buffer;
@@ -286,6 +287,38 @@ void TestScreenBuffer::testProtectedFields() {
     // Set an unprotected field
     m_buffer->setField(6, 5, 15, false);
     QVERIFY(!m_buffer->isProtected(6, 10));
+}
+
+// Issue #240: the sign position of a signed numeric field is not sent, and a
+// '-' there sets the D zone of the last digit (5494 Functions Reference,
+// READ INPUT FIELDS). Used by both the widget's AID response and
+// TN5250CommandHandler::buildFieldResponse()
+void TestScreenBuffer::testInboundSignedNumericFieldData() {
+    m_buffer->setField(2, 10, 4, false);
+    m_buffer->setFieldFFW(2, 10, 0x47, 0x00);
+    auto write = [this](const QByteArray &bytes) {
+        for (int i = 0; i < bytes.size(); ++i)
+            m_buffer->writeChar(2, 10 + i, static_cast<uint8_t>(bytes[i]));
+    };
+    const ScreenBuffer::Field field = m_buffer->getField(2, 10);
+
+    write(QByteArray::fromHex("40f1f260")); // " 12-"
+    QCOMPARE(m_buffer->getInboundFieldData(field).toHex(), QByteArray("40f1d2"));
+    write(QByteArray::fromHex("40f1f240")); // " 12 "
+    QCOMPARE(m_buffer->getInboundFieldData(field).toHex(), QByteArray("40f1f2"));
+    write(QByteArray::fromHex("f1000000")); // "1" not yet adjusted
+    QCOMPARE(m_buffer->getInboundFieldData(field).toHex(), QByteArray("f1"));
+    write(QByteArray::fromHex("f1000060")); // a '-' after a null digit
+    QCOMPARE(m_buffer->getInboundFieldData(field).toHex(), QByteArray("f1"));
+
+    // Other fields: trailing nulls stripped, other nulls sent as blanks
+    m_buffer->setField(3, 10, 4, false);
+    m_buffer->setFieldFFW(3, 10, 0x40, 0x00);
+    m_buffer->writeChar(3, 10, 0xC1);
+    m_buffer->writeChar(3, 11, 0x00);
+    m_buffer->writeChar(3, 12, 0xC2);
+    m_buffer->writeChar(3, 13, 0x00);
+    QCOMPARE(m_buffer->getInboundFieldData(m_buffer->getField(3, 10)).toHex(), QByteArray("c140c2"));
 }
 
 QTEST_MAIN(TestScreenBuffer)

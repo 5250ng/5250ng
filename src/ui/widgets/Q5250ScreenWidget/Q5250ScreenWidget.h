@@ -289,6 +289,8 @@ class Q5250ScreenWidget : public QWidget {
     void handleBackspace();
     void handleDelete();
     void handleEraseInput();
+    void clearToFieldEnd(const ScreenBuffer::Field &field, int row, int col);
+    void writeSign(const ScreenBuffer::Field &field, uint8_t sign);
     void handleFieldExit();
     void handleEraseEOF();
     void handleEraseField();

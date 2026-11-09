@@ -475,6 +475,23 @@ QByteArray ScreenBuffer::getFieldData(const Field &field) const {
     return data;
 }
 
+QByteArray ScreenBuffer::getInboundFieldData(const Field &field) const {
+    QByteArray data = getFieldData(field);
+    if (isSignedNumeric(field) && data.size() == field.length) {
+        const bool negative = static_cast<uint8_t>(data.back()) == 0x60;
+        data.chop(1);
+        const uint8_t last = data.isEmpty() ? 0 : static_cast<uint8_t>(data.back());
+        if (negative && last >= 0xF0 && last <= 0xF9)
+            data.back() = static_cast<char>(0xD0 | (last & 0x0F));
+    }
+    while (!data.isEmpty() && data.back() == '\0')
+        data.chop(1);
+    for (char &ch : data) {
+        if (ch == '\0') ch = static_cast<char>(0x40);
+    }
+    return data;
+}
+
 QByteArray ScreenBuffer::getDisplayedFieldData(const Field &field) const {
     QByteArray data;
     int addr = field.startRow * m_cols + field.startCol;

@@ -674,8 +674,13 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
                 case 5: // Digits only - only allow 0xF0-0xF9
                     if (eb < 0xF0 || eb > 0xF9) return;
                     break;
-                case 7: // Signed numeric - digits plus sign (0xF0-0xF9, 0x60 '-', 0x4E '+')
-                    if (!((eb >= 0xF0 && eb <= 0xF9) || eb == 0x60 || eb == 0x4E)) return;
+                case 7: // Signed numeric - digits only; the sign position takes
+                        // none (Field+/Field- write the sign, #459)
+                    if (eb < 0xF0 || eb > 0xF9) return;
+                    if (ScreenBuffer::isSignedNumeric(field) &&
+                        row * m_screenBuffer->cols() + col >=
+                            field.startRow * m_screenBuffer->cols() + field.startCol + ScreenBuffer::inputLength(field))
+                        return;
                     break;
                 default:
                     break;
@@ -695,7 +700,7 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
             // Insert mode: shift field data right before writing
             if (m_insertMode && field.length > 0) {
                 int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-                int fieldEnd = fieldStart + field.length;
+                int fieldEnd = fieldStart + ScreenBuffer::inputLength(field);
                 int curAddr = row * m_screenBuffer->cols() + col;
 
                 // Check if last position has data - insert would overflow
@@ -722,10 +727,11 @@ void Q5250ScreenWidget::processEncodedInput(const QByteArray &data, bool isAID) 
             m_screenBuffer->writeChar(row, col, firstByte);
             m_screenBuffer->markFieldModified(row, col);
 
-            // Field boundary-aware cursor advancement
+            // Field boundary-aware cursor advancement; a signed numeric
+            // field is full before its sign position
             if (field.length > 0) {
                 int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-                int fieldEnd = fieldStart + field.length;
+                int fieldEnd = fieldStart + ScreenBuffer::inputLength(field);
                 int curAddr = row * m_screenBuffer->cols() + col;
 
                 if (curAddr + 1 >= fieldEnd) {
@@ -955,19 +961,7 @@ QByteArray Q5250ScreenWidget::buildAIDResponse(uint8_t aidByte) {
         response.append(static_cast<char>(0x11)); // SBA order
         response.append(static_cast<char>(field.startRow + 1));
         response.append(static_cast<char>(field.startCol + 1));
-        // Get field data, strip trailing nulls, convert embedded nulls to blanks
-        QByteArray fieldData = m_screenBuffer->getFieldData(field);
-        // Strip trailing null bytes (0x00)
-        while (!fieldData.isEmpty() && fieldData.back() == '\0') {
-            fieldData.chop(1);
-        }
-        // Convert remaining embedded nulls to EBCDIC blanks (0x40)
-        for (int k = 0; k < fieldData.size(); ++k) {
-            if (fieldData[k] == '\0') {
-                fieldData[k] = static_cast<char>(0x40);
-            }
-        }
-        response.append(fieldData);
+        response.append(m_screenBuffer->getInboundFieldData(field));
     }
 
     return response;
@@ -1012,8 +1006,10 @@ void Q5250ScreenWidget::handleDelete() {
         ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
         if (field.length > 0) {
             int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-            int fieldEnd = fieldStart + field.length;
+            // The sign of a signed numeric field stays where it is
+            int fieldEnd = fieldStart + ScreenBuffer::inputLength(field);
             int curAddr = row * m_screenBuffer->cols() + col;
+            if (curAddr >= fieldEnd) return;
 
             for (int addr = curAddr; addr < fieldEnd - 1; ++addr) {
                 int srcR = (addr + 1) / m_screenBuffer->cols();
@@ -1151,10 +1147,15 @@ void Q5250ScreenWidget::rightAdjustField(int row, int col) {
     //   5 (101) = right adjust, zero fill
     //   6 (110) = right adjust, blank fill
     //   7 (111) = mandatory fill (not right-adjust)
-    if (field.length <= 0 || (field.rightAdjust != 5 && field.rightAdjust != 6)) return;
+    // A signed numeric field is right-adjusted even without those bits, and
+    // its last position is the sign, which the digits never move into
+    // (5494 Functions Reference, FFW "Signed numeric"; lib5250
+    // tn5250_display_field_adjust, tn5250j Screen5250.fieldExit)
+    const bool isSigned = ScreenBuffer::isSignedNumeric(field);
+    if (field.length <= 0 || (field.rightAdjust != 5 && field.rightAdjust != 6 && !isSigned)) return;
 
     int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-    int fieldEnd = fieldStart + field.length;
+    int fieldEnd = fieldStart + ScreenBuffer::inputLength(field);
 
     // Find last non-blank character
     int lastData = fieldStart - 1;
@@ -1169,13 +1170,13 @@ void Q5250ScreenWidget::rightAdjustField(int row, int col) {
     }
 
     int dataLen = lastData - fieldStart + 1;
-    if (dataLen <= 0 || dataLen >= field.length) return; // Nothing to adjust or already full
+    if (dataLen <= 0 || dataLen >= fieldEnd - fieldStart) return; // Nothing to adjust or already full
 
     // Fill character: EBCDIC '0' (0xF0) for zero-fill, EBCDIC space (0x40) for blank-fill
     uint8_t fillChar = (field.rightAdjust == 5) ? 0xF0 : 0x40;
 
     // Shift data to the right
-    int shift = field.length - dataLen;
+    int shift = (fieldEnd - fieldStart) - dataLen;
     for (int addr = fieldEnd - 1; addr >= fieldStart; --addr) {
         int srcAddr = addr - shift;
         int r = addr / m_screenBuffer->cols();
@@ -1192,6 +1193,21 @@ void Q5250ScreenWidget::rightAdjustField(int row, int col) {
     update();
 }
 
+// Null the field from the cursor to its end. The sign position of a signed
+// numeric field is left to the caller, which writes the sign
+void Q5250ScreenWidget::clearToFieldEnd(const ScreenBuffer::Field &field, int row, int col) {
+    const int cols = m_screenBuffer->cols();
+    const int fieldEnd = field.startRow * cols + field.startCol + ScreenBuffer::inputLength(field);
+    for (int addr = row * cols + col; addr < fieldEnd; ++addr)
+        m_screenBuffer->writeChar(addr / cols, addr % cols, 0x00);
+}
+
+void Q5250ScreenWidget::writeSign(const ScreenBuffer::Field &field, uint8_t sign) {
+    const int cols = m_screenBuffer->cols();
+    const int signAddr = field.startRow * cols + field.startCol + field.length - 1;
+    m_screenBuffer->writeChar(signAddr / cols, signAddr % cols, sign);
+}
+
 void Q5250ScreenWidget::handleFieldExit() {
     if (!m_screenBuffer) return;
     QPoint cursor = m_screenBuffer->cursorPosition();
@@ -1202,10 +1218,11 @@ void Q5250ScreenWidget::handleFieldExit() {
     ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
     if (field.length <= 0) return;
 
-    // Check mandatory fill (rightAdjust == 7): all positions must be filled
+    // Check mandatory fill (rightAdjust == 7): all positions must be
+    // filled, except a signed numeric field's sign
     if (field.rightAdjust == 7) {
         int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-        for (int j = 0; j < field.length; ++j) {
+        for (int j = 0; j < ScreenBuffer::inputLength(field); ++j) {
             int r = (fieldStart + j) / m_screenBuffer->cols();
             int c = (fieldStart + j) % m_screenBuffer->cols();
             uint8_t ch = m_screenBuffer->character(r, c);
@@ -1217,31 +1234,12 @@ void Q5250ScreenWidget::handleFieldExit() {
         }
     }
 
-    // Clear from cursor to end of field
-    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-    int fieldEnd = fieldStart + field.length;
-    int curAddr = row * m_screenBuffer->cols() + col;
-    for (int addr = curAddr; addr < fieldEnd; ++addr) {
-        int r = addr / m_screenBuffer->cols();
-        int c = addr % m_screenBuffer->cols();
-        m_screenBuffer->writeChar(r, c, 0x00);
-    }
-
-    // Right-adjust the field
+    // Clear from cursor to end of field, right-adjust, and on a signed
+    // numeric field write a blank (positive) sign, as Field+ does
+    clearToFieldEnd(field, row, col);
     rightAdjustField(field.startRow, field.startCol);
-
-    // Handle signed numeric field - process sign
-    if (field.shiftType == 7) {
-        // Signed numeric: last position gets zone byte
-        int lastAddr = fieldEnd - 1;
-        int lastR = lastAddr / m_screenBuffer->cols();
-        int lastC = lastAddr % m_screenBuffer->cols();
-        uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
-        // Ensure the last digit has proper zone for positive sign
-        if (lastCh >= 0xF0 && lastCh <= 0xF9) {
-            // Already has F-zone (positive) - leave as-is
-        }
-    }
+    if (ScreenBuffer::isSignedNumeric(field))
+        writeSign(field, 0x40);
 
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
 
@@ -1332,29 +1330,23 @@ void Q5250ScreenWidget::handleFieldPlus() {
     ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
     if (field.length <= 0) return;
 
-    // Field Plus: right-adjust and write '+' sign (EBCDIC 0x4E) at last position
-    // Only meaningful for signed numeric fields, but write regardless
-    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-    int fieldEnd = fieldStart + field.length;
-
-    // Clear from cursor to end
-    int curAddr = row * m_screenBuffer->cols() + col;
-    for (int addr = curAddr; addr < fieldEnd; ++addr) {
-        int r = addr / m_screenBuffer->cols();
-        int c = addr % m_screenBuffer->cols();
-        m_screenBuffer->writeChar(r, c, 0x00);
-    }
-
+    // Field Plus: clear from cursor to end and right-adjust. A signed
+    // numeric field gets a blank (positive) sign in its last position;
+    // otherwise a D-zone (negative) last digit goes back to F-zone
+    clearToFieldEnd(field, row, col);
     rightAdjustField(field.startRow, field.startCol);
 
-    // For signed numeric, zone the last digit with F-zone (positive)
-    int lastAddr = fieldEnd - 1;
-    int lastR = lastAddr / m_screenBuffer->cols();
-    int lastC = lastAddr % m_screenBuffer->cols();
-    uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
-    if (lastCh >= 0xD0 && lastCh <= 0xD9) {
-        // Change D-zone to F-zone (negative → positive)
-        m_screenBuffer->writeChar(lastR, lastC, lastCh + 0x20);
+    if (ScreenBuffer::isSignedNumeric(field)) {
+        writeSign(field, 0x40);
+    } else {
+        int lastAddr = field.startRow * m_screenBuffer->cols() + field.startCol + field.length - 1;
+        int lastR = lastAddr / m_screenBuffer->cols();
+        int lastC = lastAddr % m_screenBuffer->cols();
+        uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
+        if (lastCh >= 0xD0 && lastCh <= 0xD9) {
+            // Change D-zone to F-zone (negative → positive)
+            m_screenBuffer->writeChar(lastR, lastC, lastCh + 0x20);
+        }
     }
 
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
@@ -1384,27 +1376,24 @@ void Q5250ScreenWidget::handleFieldMinus() {
     ScreenBuffer::Field field = m_screenBuffer->getField(row, col);
     if (field.length <= 0) return;
 
-    int fieldStart = field.startRow * m_screenBuffer->cols() + field.startCol;
-    int fieldEnd = fieldStart + field.length;
-
-    // Clear from cursor to end
-    int curAddr = row * m_screenBuffer->cols() + col;
-    for (int addr = curAddr; addr < fieldEnd; ++addr) {
-        int r = addr / m_screenBuffer->cols();
-        int c = addr % m_screenBuffer->cols();
-        m_screenBuffer->writeChar(r, c, 0x00);
-    }
-
+    // Clear from cursor to end and right-adjust. A signed numeric field
+    // gets '-' in its sign position (sent as a D zone on the last digit, see
+    // ScreenBuffer::getInboundFieldData); otherwise the last digit's zone
+    // becomes D (negative)
+    clearToFieldEnd(field, row, col);
     rightAdjustField(field.startRow, field.startCol);
 
-    // For signed numeric, zone the last digit with D-zone (negative)
-    int lastAddr = fieldEnd - 1;
-    int lastR = lastAddr / m_screenBuffer->cols();
-    int lastC = lastAddr % m_screenBuffer->cols();
-    uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
-    if (lastCh >= 0xF0 && lastCh <= 0xF9) {
-        // Change F-zone to D-zone (positive → negative)
-        m_screenBuffer->writeChar(lastR, lastC, lastCh - 0x20);
+    if (ScreenBuffer::isSignedNumeric(field)) {
+        writeSign(field, 0x60);
+    } else {
+        int lastAddr = field.startRow * m_screenBuffer->cols() + field.startCol + field.length - 1;
+        int lastR = lastAddr / m_screenBuffer->cols();
+        int lastC = lastAddr % m_screenBuffer->cols();
+        uint8_t lastCh = m_screenBuffer->character(lastR, lastC);
+        if (lastCh >= 0xF0 && lastCh <= 0xF9) {
+            // Change F-zone to D-zone (positive → negative)
+            m_screenBuffer->writeChar(lastR, lastC, lastCh - 0x20);
+        }
     }
 
     m_screenBuffer->markFieldModified(field.startRow, field.startCol);
