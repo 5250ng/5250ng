@@ -481,7 +481,7 @@ QString McpToolHandler::readScreenText(ui::widgets::Q5250ScreenWidget *widget) {
         QString line;
         for (int c = 0; c < buf->cols(); ++c) {
             uint8_t ch = buf->displayedCharacter(r, c);
-            line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
+            line += sanitizeChar(widget->codePage().toUnicode(ch));
         }
         while (line.endsWith(' '))
             line.chop(1);
@@ -538,7 +538,7 @@ QJsonObject McpToolHandler::handleGetFieldAt(const QJsonObject &args) {
     QByteArray data = buf->getDisplayedFieldData(field);
     QString fieldText;
     for (uint8_t byte : data)
-        fieldText += sanitizeChar(core::EBCDIC::ebcdicToChar(byte));
+        fieldText += sanitizeChar(widget->codePage().toUnicode(byte));
     QString resultText = QString("startRow: %1, startCol: %2, length: %3, protected: %4, modified: %5, text: \"%6\"")
         .arg(field.startRow).arg(field.startCol).arg(field.length)
         .arg(field.protected_field ? "true" : "false")
@@ -578,7 +578,7 @@ QJsonObject McpToolHandler::handleFindText(const QJsonObject &args) {
         QString line;
         for (int c = 0; c < buf->cols(); ++c) {
             uint8_t ch = buf->displayedCharacter(r, c);
-            line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
+            line += sanitizeChar(widget->codePage().toUnicode(ch));
         }
         int col = 0;
         while ((col = line.indexOf(text, col, Qt::CaseInsensitive)) != -1) {
@@ -609,7 +609,7 @@ QJsonObject McpToolHandler::handleReadLine(const QJsonObject &args) {
     QString line;
     for (int c = 0; c < buf->cols(); ++c) {
         uint8_t ch = buf->displayedCharacter(row, c);
-        line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
+        line += sanitizeChar(widget->codePage().toUnicode(ch));
     }
     while (line.endsWith(' '))
         line.chop(1);
@@ -642,7 +642,7 @@ QJsonObject McpToolHandler::handleReadRegion(const QJsonObject &args) {
         QString line;
         for (int c = col; c < col + numCols; ++c) {
             uint8_t ch = buf->displayedCharacter(r, c);
-            line += sanitizeChar(core::EBCDIC::ebcdicToChar(ch));
+            line += sanitizeChar(widget->codePage().toUnicode(ch));
         }
         while (line.endsWith(' '))
             line.chop(1);

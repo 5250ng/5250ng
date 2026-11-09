@@ -996,6 +996,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // truth and prevents accidental "enabled but no policy" states.
     session->commandHandler->setCommandRunner(session->commandRunner);
     session->commandHandler->setCodePage(session->config.codePage());
+    session->displayWidget->setCodePage(session->config.codePage());
     session->commandHandler->setHostname(session->config.hostname());
     session->commandHandler->setDialogParent(session->container);
     session->commandHandler->setPcCommandPolicy(session->config.pcCommandPolicy());

@@ -654,6 +654,18 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_mcp_login COMMAND test_mcp_login)
 
+    # MCP reads use the session's own code page (issue #481)
+    add_executable(test_mcp_session_code_page
+        tests/unit/test_mcp_session_code_page.cpp
+        src/mcp/McpToolHandler.cpp
+        src/mcp/McpSessionRegistry.cpp
+        src/agent/agent_script_runner.cpp
+        src/ui/dialogs/mcp_password_prompt_dialog.cpp
+    )
+    target_link_libraries(test_mcp_session_code_page PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_mcp_session_code_page COMMAND test_mcp_session_code_page)
+
     # read_region bounds without overflow (issue #406)
     add_executable(test_read_region_bounds
         tests/unit/test_read_region_bounds.cpp
