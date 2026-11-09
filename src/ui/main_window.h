@@ -254,6 +254,20 @@ class MainWindow : public MainWindowBase {
     // A tab reopened from another tab (Reconnect, Duplicate) inherits its
     // profile snapshot instead of reading the profile afresh
     std::optional<QByteArray> m_inheritProfileSnapshotOnce;
+    // Set by onReconnect(): the tab it closes is reopened in its place, with
+    // its label and its running session log (#470); consumed by
+    // connectToServer()
+    struct ReopenedTab {
+        int index = -1;
+        QString label;
+        QString logPath; // empty when the log was not running
+        core::SessionLogger::Verbosity logVerbosity = core::SessionLogger::ScreensAndKeys;
+    };
+    std::optional<ReopenedTab> m_reopenTabOnce;
+    // The MCP tab onReconnect() is closing to reopen under the same id: the
+    // MCP client keeps its session. Only that tab, so no other close skips
+    // its notice
+    const Session *m_closingForReconnect = nullptr;
 
     // UI elements
     QAction *m_connectAction;

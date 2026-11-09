@@ -1098,6 +1098,21 @@ if(BUILD_TESTS)
     endif()
     add_test(NAME test_save_session_profile_edits COMMAND test_save_session_profile_edits)
 
+    # Reconnect keeps the tab's place and label (issue #470)
+    add_executable(test_reconnect_keeps_tab
+        tests/integration/test_reconnect_keeps_tab.cpp
+        resources/resources.qrc
+        ${UI_SOURCES}
+        ${AGENT_SOURCES}
+    )
+    target_link_libraries(test_reconnect_keeps_tab PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    target_include_directories(test_reconnect_keeps_tab PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    if(HAVE_QT6_SSL)
+        target_compile_definitions(test_reconnect_keeps_tab PRIVATE HAVE_QT6_SSL)
+    endif()
+    add_test(NAME test_reconnect_keeps_tab COMMAND test_reconnect_keeps_tab)
+
     # Edited built-in terminal themes (issue #287)
     add_executable(test_edited_builtin_theme
         tests/unit/test_edited_builtin_theme.cpp

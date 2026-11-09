@@ -32,8 +32,21 @@ void MainWindow::onReconnect() {
     // the finished thread delete the worker, which onCloseTabRequested()
     // then still uses.
     int oldIndex = m_activeIndex;
+    // The new tab takes this one's place and label, keeps a running log
+    // going, and keeps an MCP client's session id (#470)
+    ReopenedTab reopen;
+    reopen.index = oldIndex;
+    reopen.label = m_tabWidget->tabText(oldIndex);
+    if (s->sessionLogger && s->sessionLogger->isActive()) {
+        reopen.logPath = s->sessionLogger->filePath();
+        reopen.logVerbosity = s->sessionLogger->verbosity();
+    }
+    const QString mcpSessionId = s->mcpControlled ? s->mcpSessionId : QString();
+    m_closingForReconnect = s;
     onCloseTabRequested(oldIndex);
+    m_closingForReconnect = nullptr;
     m_skipStartupScriptOnce = !config.startupScriptOnReconnect();
     m_inheritProfileSnapshotOnce = snapshot;
-    connectToServer(config);
+    m_reopenTabOnce = reopen;
+    connectToServer(config, mcpSessionId);
 }

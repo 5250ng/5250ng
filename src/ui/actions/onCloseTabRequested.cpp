@@ -25,7 +25,7 @@ void MainWindow::onCloseTabRequested(int index) {
     }
     Session *s = m_sessions[index];
     // Notify MCP registry if this is an MCP-controlled session being closed by the user
-    if (s->mcpControlled && !s->mcpSessionId.isEmpty() && m_mcpServer) {
+    if (s->mcpControlled && !s->mcpSessionId.isEmpty() && m_mcpServer && s != m_closingForReconnect) {
         m_mcpServer->onSessionClosed(s->mcpSessionId);
     }
     // Disconnect all signals from worker to prevent queued signals from
