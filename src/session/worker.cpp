@@ -19,6 +19,8 @@
 #include "tn5250/message/message.h"
 #include <QThread>
 #include <QTimer>
+#include <QtNumeric>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -269,8 +271,12 @@ void Worker::onReplayTick() {
     m_replayIndex++;
 
     if (m_replayIndex < m_replayRecords.size()) {
-        const qint64 deltaMs =
-            (m_replayRecords[m_replayIndex].timestampUsec - tsUsec) / 1000;
+        // Capture timestamps are not trusted: the step is bounded by qBound
+        // below, so an overflowing difference only needs to stay defined
+        qint64 deltaUsec = 0;
+        if (qSubOverflow(m_replayRecords[m_replayIndex].timestampUsec, tsUsec, &deltaUsec))
+            deltaUsec = std::numeric_limits<qint64>::max();
+        const qint64 deltaMs = deltaUsec / 1000;
         m_replayTimer->start(
             static_cast<int>(qBound(kReplayMinStepMs, deltaMs, kReplayMaxStepMs)));
     }

@@ -17,6 +17,7 @@
 #include "core/pcap_replay.h"
 
 #include <QtTest/QtTest>
+#include <limits>
 
 using core::pcap::PcapReplayLoader;
 using core::pcap::ReplaySession;
@@ -57,6 +58,8 @@ struct TcpParams {
     QByteArray payload;
     int etherPadding = 0; // trailer bytes after the IP datagram
     bool vlanTag = false;
+    bool tsoZeroLength = false; // IPv4 total length 0, as TSO captures have
+    bool ipv6 = false;          // IPv6 instead of IPv4 (addresses fe80::<ip>)
 };
 
 constexpr quint8 TCP_SYN = 0x02;
@@ -76,10 +79,34 @@ QByteArray buildFrame(const TcpParams &p) {
     appendBE16(tcp, 0);    // urgent pointer
     tcp.append(p.payload);
 
+    if (p.ipv6) {
+        auto address = [](quint32 v4) {
+            QByteArray a(12, char(0));
+            a[0] = char(0xFE);
+            a[1] = char(0x80);
+            appendBE32(a, v4);
+            return a;
+        };
+        QByteArray ip6;
+        appendBE32(ip6, 0x60000000); // version 6
+        appendBE16(ip6, p.tsoZeroLength ? quint16(0) : quint16(tcp.size()));
+        ip6.append(char(6));         // next header: TCP
+        ip6.append(char(64));        // hop limit
+        ip6.append(address(p.srcIp));
+        ip6.append(address(p.dstIp));
+        ip6.append(tcp);
+        QByteArray frame;
+        frame.append(QByteArray(6, char(0x02)));
+        frame.append(QByteArray(6, char(0x04)));
+        appendBE16(frame, 0x86DD);
+        frame.append(ip6);
+        return frame;
+    }
+
     QByteArray ip;
     ip.append(char(0x45)); // v4, ihl=5
     ip.append(char(0x00)); // DSCP
-    appendBE16(ip, quint16(20 + tcp.size()));
+    appendBE16(ip, p.tsoZeroLength ? quint16(0) : quint16(20 + tcp.size()));
     appendBE16(ip, 0x1234); // identification
     appendBE16(ip, 0x4000); // DF, no fragment offset
     ip.append(char(64));    // TTL
@@ -150,7 +177,8 @@ QByteArray buildBigEndianPcap(const QVector<CapturePacket> &packets) {
 }
 
 // pcapng container: SHB + one Ethernet IDB + one EPB per packet
-QByteArray buildPcapNg(const QVector<CapturePacket> &packets) {
+// tsresol >= 0 adds an if_tsresol option; tsUsec then holds raw ticks
+QByteArray buildPcapNg(const QVector<CapturePacket> &packets, int tsresol = -1) {
     QByteArray out;
 
     QByteArray shb;
@@ -167,6 +195,13 @@ QByteArray buildPcapNg(const QVector<CapturePacket> &packets) {
     idb.append(char(1)); idb.append(char(0)); // LINKTYPE_ETHERNET
     idb.append(char(0)); idb.append(char(0)); // reserved
     appendLE32(idb, 65535);                   // snaplen
+    if (tsresol >= 0) {
+        idb.append(char(9)); idb.append(char(0)); // if_tsresol
+        idb.append(char(1)); idb.append(char(0)); // length 1
+        idb.append(char(tsresol));
+        idb.append(QByteArray(3, char(0)));       // padding
+        appendLE32(idb, 0);                       // opt_endofopt
+    }
     appendLE32(out, 1);
     appendLE32(out, quint32(idb.size() + 12));
     out.append(idb);
@@ -265,6 +300,7 @@ struct ConversationBuilder {
         syn.srcIp = CLIENT_IP; syn.dstIp = SERVER_IP;
         syn.srcPort = CLIENT_PORT; syn.dstPort = SERVER_PORT;
         syn.seq = clientSeq; syn.flags = TCP_SYN;
+        syn.ipv6 = ipv6;
         packets.append({ts, buildFrame(syn)});
         ts += 1000;
 
@@ -273,15 +309,21 @@ struct ConversationBuilder {
         synAck.srcPort = SERVER_PORT; synAck.dstPort = CLIENT_PORT;
         synAck.seq = serverSeq; synAck.ack = clientSeq + 1;
         synAck.flags = TCP_SYN | TCP_ACK;
+        synAck.ipv6 = ipv6;
         packets.append({ts, buildFrame(synAck)});
         ts += 1000;
         serverSeq++;
         clientSeq++;
     }
 
+    bool tso = false;  // server segments carry an IP length of 0
+    bool ipv6 = false; // every segment is IPv6
+
     void serverSends(const QByteArray &data, qint64 advanceUsec = 1000,
                      int etherPadding = 0) {
         TcpParams p;
+        p.tsoZeroLength = tso;
+        p.ipv6 = ipv6;
         p.srcIp = SERVER_IP; p.dstIp = CLIENT_IP;
         p.srcPort = SERVER_PORT; p.dstPort = CLIENT_PORT;
         p.seq = serverSeq; p.payload = data;
@@ -296,6 +338,7 @@ struct ConversationBuilder {
         p.srcIp = CLIENT_IP; p.dstIp = SERVER_IP;
         p.srcPort = CLIENT_PORT; p.dstPort = SERVER_PORT;
         p.seq = clientSeq; p.payload = data;
+        p.ipv6 = ipv6;
         packets.append({ts, buildFrame(p)});
         clientSeq += data.size();
         ts += 1000;
@@ -349,6 +392,77 @@ class TestPcapReplay : public QObject {
                  qPrintable(error));
         QCOMPARE(session.records.size(), 1);
         QCOMPARE(session.records[0].data, rec);
+    }
+
+    // Issue #475: TSO captures carry IPv4 total length 0; the data is in the
+    // frame and must be kept
+    void testTsoZeroIpLengthKept() {
+        ConversationBuilder conv;
+        conv.handshake();
+        conv.tso = true;
+        conv.serverSends(telnetNegotiation());
+        QByteArray rec = gdsRecord(QByteArray("TSO-PAYLOAD"));
+        conv.serverSends(withEor(rec));
+
+        ReplaySession session;
+        QString error;
+        QVERIFY2(PcapReplayLoader::loadData(buildClassicPcap(conv.packets), &session, &error),
+                 qPrintable(error));
+        QCOMPARE(session.records.size(), 1);
+        QCOMPARE(session.records[0].data, rec);
+    }
+
+    // The same for IPv6: a payload length of 0 (TSO/LSO, jumbogram) means
+    // the frame holds the datagram; a normal IPv6 capture still replays
+    void testIpv6ZeroPayloadLengthKept_data() {
+        QTest::addColumn<bool>("tso");
+        QTest::newRow("normal") << false;
+        QTest::newRow("length 0") << true;
+    }
+
+    void testIpv6ZeroPayloadLengthKept() {
+        QFETCH(bool, tso);
+        ConversationBuilder conv;
+        conv.ipv6 = true;
+        conv.handshake();
+        conv.tso = tso;
+        conv.serverSends(telnetNegotiation());
+        QByteArray rec = gdsRecord(QByteArray("IPV6-PAYLOAD"));
+        conv.serverSends(withEor(rec));
+
+        ReplaySession session;
+        QString error;
+        QVERIFY2(PcapReplayLoader::loadData(buildClassicPcap(conv.packets), &session, &error),
+                 qPrintable(error));
+        QCOMPARE(session.records.size(), 1);
+        QCOMPARE(session.records[0].data, rec);
+    }
+
+    // Issue #475: at one tick per second (if_tsresol 0) a large 64-bit tick
+    // count is beyond qint64 microseconds; it is clamped, not overflowed
+    void testPcapNgTimestampOutOfRangeClamped() {
+        ConversationBuilder conv;
+        conv.ts = 0x7000000000000000LL; // ticks, read at 1 per second
+        conv.handshake();
+        conv.serverSends(telnetNegotiation());
+        QByteArray rec = gdsRecord(QByteArray("CLAMPED"));
+        conv.serverSends(withEor(rec));
+
+        ReplaySession session;
+        QString error;
+        QVERIFY2(PcapReplayLoader::loadData(buildPcapNg(conv.packets, 0), &session, &error),
+                 qPrintable(error));
+        QCOMPARE(session.records.size(), 1);
+        QCOMPARE(session.records[0].timestampUsec, std::numeric_limits<qint64>::max());
+
+        // A resolution that fits is converted as before: 10^-3 s ticks
+        ConversationBuilder milli;
+        milli.ts = 1700000000000LL;
+        milli.handshake();
+        milli.serverSends(telnetNegotiation());
+        milli.serverSends(withEor(rec));
+        QVERIFY(PcapReplayLoader::loadData(buildPcapNg(milli.packets, 3), &session, &error));
+        QCOMPARE(session.records[0].timestampUsec, (1700000000000LL + 3000) * 1000);
     }
 
     void testNanosecondPcap() {
