@@ -41,6 +41,9 @@ class TestGddm5292 : public QObject {
     void rejectsMarkerAboveEight();
     void markerOutsideDisplayIsRecoverable();
     void styleOffsetSelectsStartingSegment();
+    void diagonalHatchRepeatsBelowDiagonal_data();
+    void diagonalHatchRepeatsBelowDiagonal();
+    void styleOverrideLengthKeepsPattern();
     void warnsOnBlockBelowMinimumLength();
     void warnsOnBlockBeyondDeviceLimit();
     void reportsSuppressedPacingDistinctly();
@@ -467,6 +470,57 @@ void TestGddm5292::styleOffsetSelectsStartingSegment() {
     const int y = planeY(20);
     QCOMPARE(unshifted.graphicsPlane().pixelColor(8, y), QColor(255, 255, 255));
     QCOMPARE(shifted.graphicsPlane().pixelColor(8, y), QColor(0, 0, 0));
+}
+
+// Issue #466. A diagonal fill's style phase is x - y (Plus45) or x + y
+// (Minus45). Below the diagonal x - y is negative, which used to count as
+// "draw", so the hatch turned solid there. The same square as above, hatched
+// 1/3/1/3, must show the 8-period hatch on every interior pixel.
+void TestGddm5292::diagonalHatchRepeatsBelowDiagonal_data() {
+    QTest::addColumn<QByteArray>("fillMode");
+    QTest::addColumn<int>("sign");
+    QTest::newRow("Plus45") << QByteArray::fromHex("b76240") << -1;
+    QTest::newRow("Minus45") << QByteArray::fromHex("b77240") << 1;
+}
+
+void TestGddm5292::diagonalHatchRepeatsBelowDiagonal() {
+    QFETCH(QByteArray, fillMode);
+    QFETCH(int, sign);
+    const QByteArray block = QByteArray::fromHex("ff93b1" "41434143" "b047") + fillMode
+        + QByteArray::fromHex("a5") + QByteArray::fromHex("4048404a405e404a405e405e4048405e")
+        + QByteArray::fromHex("9295");
+    Gddm5292Decoder decoder;
+    QVERIFY(!decoder.process(block).error);
+
+    int painted = 0, wrong = 0;
+    for (int y = 11; y <= 29; ++y) {
+        for (int x = 9; x <= 29; ++x) {
+            const int phase = ((x + sign * y) % 8 + 8) % 8;
+            const bool expected = phase == 0 || phase == 4;
+            const bool actual = decoder.graphicsPlane().pixelColor(x, planeY(y)) == QColor(255, 255, 255);
+            painted += actual;
+            if (actual != expected) ++wrong;
+        }
+    }
+    QVERIFY2(wrong == 0, qPrintable(QString("%1 pixels off the hatch, %2 painted").arg(wrong).arg(painted)));
+}
+
+// Set Style Offset with an override length: the first run takes the
+// override, then the four runs repeat. Segment 0 overridden to 2 on style
+// 1/3/1/3 paints phases 0-1, then every 4th phase from 5: in the square's
+// columns 8..30 (vertical reference, phase = x), columns 9, 13, ..., 29.
+void TestGddm5292::styleOverrideLengthKeepsPattern() {
+    const QByteArray block = QByteArray::fromHex("ff93b1" "41434143" "b047" "b242" "b74240")
+        + QByteArray::fromHex("a5") + QByteArray::fromHex("4048404a405e404a405e405e4048405e")
+        + QByteArray::fromHex("9295");
+    Gddm5292Decoder decoder;
+    QVERIFY(!decoder.process(block).error);
+    const int y = planeY(20);
+    QList<int> paintedColumns;
+    for (int x = 9; x <= 29; ++x)
+        if (decoder.graphicsPlane().pixelColor(x, y) == QColor(255, 255, 255))
+            paintedColumns.append(x);
+    QCOMPARE(paintedColumns, (QList<int>{9, 13, 17, 21, 25, 29}));
 }
 
 // Diagnostics report; they never reject a block.
