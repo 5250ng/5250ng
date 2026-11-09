@@ -163,9 +163,7 @@ class TN5250Client : public QObject {
     void processHandshakeData(const QByteArray &data);
     void checkHandshakeComplete();
 
-    // TLS negotiation
-    void startTLS();
-    void handleStartTLS();
+    // TLS (implicit, from the first byte; telnet START_TLS is refused)
     // Load the configured CA / client certificate files into the TLS socket.
     // Returns false with a user-facing message when a file can't be used.
     bool applyTlsFiles(QString *error);

@@ -329,9 +329,10 @@ void TN5250Client::handleTelnetCommand(uint8_t cmd, uint8_t opt) {
             logger::Logger::instance()->debug(
                 "[TN5250->Client]: Accepted SUPPRESS_GO_AHEAD"
             );
-        } else if (option == TelnetOption::TELNET_START_TLS) {
-            handleStartTLS();
         } else {
+            // Refused, START_TLS included: the client does not implement
+            // it (TLS is implicit, from the first byte), so the server is
+            // answered instead of left waiting (#446)
             sendTelnetCommand(TelnetCommand::DONT, option);
         }
         break;
