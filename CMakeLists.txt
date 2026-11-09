@@ -929,6 +929,17 @@ if(BUILD_TESTS)
         tn5250_core Qt6::Test QtUiStyle::Dialogs)
     add_test(NAME test_connect_dialog_tls_fields
              COMMAND test_connect_dialog_tls_fields)
+    add_executable(test_connect_dialog_match_replace
+        tests/unit/test_connect_dialog_match_replace.cpp
+        src/ui/dialogs/connect_dialog.cpp
+        src/ui/dialogs/script_editor_window.cpp
+        src/ui/dialogs/script_editor_dialog.cpp
+        src/ui/themes/terminal_theme_manager.cpp
+    )
+    target_link_libraries(test_connect_dialog_match_replace PRIVATE
+        tn5250_core Qt6::Test QtUiStyle::Dialogs)
+    add_test(NAME test_connect_dialog_match_replace
+             COMMAND test_connect_dialog_match_replace)
     add_executable(test_connect_dialog_device_size
         tests/unit/test_connect_dialog_device_size.cpp
         src/ui/dialogs/connect_dialog.cpp

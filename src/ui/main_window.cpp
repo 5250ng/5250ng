@@ -818,6 +818,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         applyThemeToSession(session, themeId);
     }
 
+    // Match & Replace rules saved with the session (#462)
+    applySavedMatchReplace(session);
+
     // Wire display input - per-session, routes directly to this session's worker
     connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::inputReady, this,
         [session](const QByteArray &data) {

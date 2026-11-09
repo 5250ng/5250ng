@@ -235,6 +235,10 @@ class MainWindow : public MainWindowBase {
     void runStartupScript(Session *session);
     void scheduleStartupScript(Session *session);
     void applyThemeToSession(Session *session, const QString &themeId);
+    // Match & Replace: set up the tab's engine from its config, and write
+    // the tab's rules and toggle back to its saved profile
+    void applySavedMatchReplace(Session *session);
+    void persistMatchReplace(Session *session);
 
     QTabWidget *m_tabWidget = nullptr;
     QVector<Session *> m_sessions;

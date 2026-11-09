@@ -17,6 +17,7 @@
 #pragma once
 
 #include "core/codepage.h"
+#include "core/match_replace_engine.h"
 #include <QHash>
 #include <QJsonObject>
 #include <QObject>
@@ -175,6 +176,12 @@ class SessionConfig : public QObject {
     QString tlsClientKeyFile() const { return m_tlsClientKeyFile; }
     void setTlsClientKeyFile(const QString &path) { m_tlsClientKeyFile = path; }
 
+    // Match & Replace rules and the Tools menu toggle, kept with the session
+    bool matchReplaceEnabled() const { return m_matchReplaceEnabled; }
+    void setMatchReplaceEnabled(bool enabled) { m_matchReplaceEnabled = enabled; }
+    QVector<core::MatchReplaceRule> matchReplaceRules() const { return m_matchReplaceRules; }
+    void setMatchReplaceRules(const QVector<core::MatchReplaceRule> &rules) { m_matchReplaceRules = rules; }
+
     // Allowed ranges for the numeric connection settings above
     static constexpr int kDefaultConnectTimeoutSeconds = 30;
     static constexpr int kMinConnectTimeoutSeconds = 5;
@@ -236,6 +243,8 @@ class SessionConfig : public QObject {
     QString m_tlsClientCertificateFile;
     QString m_tlsClientKeyFile;
     QString m_replayPcapFile;
+    bool m_matchReplaceEnabled = false;
+    QVector<core::MatchReplaceRule> m_matchReplaceRules;
 
 };
 
