@@ -816,17 +816,7 @@ QByteArray TN5250CommandHandler::buildFieldResponse(uint8_t aidByte,
         response.append(static_cast<char>(0x11));
         response.append(static_cast<char>(field.startRow + 1));
         response.append(static_cast<char>(field.startCol + 1));
-        // Get field data, strip trailing nulls, convert embedded nulls to blanks
-        QByteArray fieldData = screen->getFieldData(field);
-        while (!fieldData.isEmpty() && fieldData.back() == '\0') {
-            fieldData.chop(1);
-        }
-        for (int k = 0; k < fieldData.size(); ++k) {
-            if (fieldData[k] == '\0') {
-                fieldData[k] = static_cast<char>(0x40);
-            }
-        }
-        response.append(fieldData);
+        response.append(screen->getInboundFieldData(field));
     }
 
     return response;

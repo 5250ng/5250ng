@@ -108,6 +108,16 @@ class ScreenBuffer : public QObject {
     void resetAllMDTFlags();
     QVector<Field> getModifiedFields() const;
     QByteArray getFieldData(const Field &field) const;
+    // A field's data as sent to the host: trailing nulls stripped, other
+    // nulls as blanks. A signed numeric field's sign position is not sent; a
+    // '-' there sets the D zone of the last digit (5494 Functions Reference,
+    // FFW "Signed numeric" and READ INPUT FIELDS)
+    QByteArray getInboundFieldData(const Field &field) const;
+    // FFW shift type 7; the last position holds the sign
+    static bool isSignedNumeric(const Field &field) { return field.shiftType == 7 && field.length >= 2; }
+    // The positions the operator can type into: all but a signed numeric
+    // field's sign position
+    static int inputLength(const Field &field) { return field.length - (isSignedNumeric(field) ? 1 : 0); }
     // getFieldData() with non-display cells as blanks (see displayedCharacter())
     QByteArray getDisplayedFieldData(const Field &field) const;
     void markFieldModified(int row, int col);

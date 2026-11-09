@@ -542,6 +542,7 @@ if(BUILD_TESTS)
 
     add_tn5250_test(test_shortcut_override tests/unit/test_shortcut_override.cpp)
     add_tn5250_test(test_auto_enter_aid tests/unit/test_auto_enter_aid.cpp)
+    add_tn5250_test(test_signed_numeric_field tests/unit/test_signed_numeric_field.cpp)
     add_tn5250_test(test_keyboard_mapping tests/unit/test_keyboard_mapping.cpp)
     add_tn5250_test(test_macro_chords tests/unit/test_macro_chords.cpp)
     add_tn5250_test(test_popup_choice_filter tests/unit/test_popup_choice_filter.cpp)
