@@ -380,6 +380,7 @@ class Q5250ScreenWidget : public QWidget {
 
     // Match and Replace overlay
     core::MatchReplaceEngine *m_matchReplace = nullptr;
+    bool m_matchReplaceDirty = false; // screen changed since the last overlay rebuild
 
     // Screen history / scrollback
     core::ScreenHistory m_screenHistory;

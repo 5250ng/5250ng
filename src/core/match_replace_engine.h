@@ -61,12 +61,14 @@ class MatchReplaceEngine : public QObject {
   signals:
     void enabledChanged(bool enabled);
     void rulesChanged();
+    void overlayRebuilt();
 
   private:
     QString applyRules(const QString &line) const;
 
     bool m_enabled = false;
     QVector<MatchReplaceRule> m_rules;
+    QVector<QRegularExpression> m_compiled; // per rule, compiled by setRules()
 
     // Flat overlay buffer (rows * cols)
     QVector<QChar> m_overlay;

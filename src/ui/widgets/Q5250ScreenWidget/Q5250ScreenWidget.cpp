@@ -337,6 +337,8 @@ void Q5250ScreenWidget::setGddmGraphicsOpacity(qreal opacity) {
  * selection border, hotspot underlines, and cursor rules overlay when enabled.
  */
 void Q5250ScreenWidget::renderScreen(QPainter &painter) {
+    if (m_matchReplaceDirty && m_matchReplace && m_matchReplace->isEnabled())
+        refreshMatchReplaceOverlay();
     painter.setFont(m_font);
 
     // Calculate offset to center the screen

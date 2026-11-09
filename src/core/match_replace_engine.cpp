@@ -30,6 +30,15 @@ void MatchReplaceEngine::setEnabled(bool on) {
 
 void MatchReplaceEngine::setRules(const QVector<MatchReplaceRule> &rules) {
     m_rules = rules;
+    // Compile each regex once here, not on every line of every rebuild
+    m_compiled.clear();
+    m_compiled.reserve(m_rules.size());
+    for (const auto &rule : m_rules) {
+        QRegularExpression::PatternOptions opts = QRegularExpression::NoPatternOption;
+        if (!rule.caseSensitive)
+            opts |= QRegularExpression::CaseInsensitiveOption;
+        m_compiled.append(rule.isRegex ? QRegularExpression(rule.pattern, opts) : QRegularExpression());
+    }
     emit rulesChanged();
 }
 
@@ -41,7 +50,10 @@ void MatchReplaceEngine::rebuildOverlay(const QVector<QString> &decodedLines, in
     m_overlayActive.resize(total);
     m_overlayActive.fill(false);
 
-    if (!m_enabled || m_rules.isEmpty()) return;
+    if (!m_enabled || m_rules.isEmpty()) {
+        emit overlayRebuilt();
+        return;
+    }
 
     for (int r = 0; r < rows && r < decodedLines.size(); ++r) {
         const QString &original = decodedLines[r];
@@ -64,6 +76,7 @@ void MatchReplaceEngine::rebuildOverlay(const QVector<QString> &decodedLines, in
         }
         // If replacement is longer than cols, truncated (grid is fixed-width)
     }
+    emit overlayRebuilt();
 }
 
 bool MatchReplaceEngine::hasOverlay(int row, int col) const {
@@ -80,14 +93,12 @@ QChar MatchReplaceEngine::overlayChar(int row, int col) const {
 
 QString MatchReplaceEngine::applyRules(const QString &line) const {
     QString result = line;
-    for (const auto &rule : m_rules) {
+    for (int i = 0; i < m_rules.size(); ++i) {
+        const MatchReplaceRule &rule = m_rules[i];
         if (!rule.enabled || rule.pattern.isEmpty()) continue;
 
         if (rule.isRegex) {
-            QRegularExpression::PatternOptions opts = QRegularExpression::NoPatternOption;
-            if (!rule.caseSensitive)
-                opts |= QRegularExpression::CaseInsensitiveOption;
-            QRegularExpression re(rule.pattern, opts);
+            const QRegularExpression &re = m_compiled[i];
             if (re.isValid()) {
                 result.replace(re, rule.replacement);
             }
