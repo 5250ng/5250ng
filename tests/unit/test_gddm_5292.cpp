@@ -51,6 +51,8 @@ class TestGddm5292 : public QObject {
     void retainsPrinterDataAndTimeout();
     void reportsScreenCopyRequest();
     void resumesOrderSplitBeforeAnyDataArrives();
+    void pendingDataIsCapped();
+    void polylineErrorReportsBlockOffset();
 };
 
 namespace {
@@ -606,6 +608,42 @@ void TestGddm5292::resumesOrderSplitBeforeAnyDataArrives() {
     QVERIFY(!second.error);
     QVERIFY(second.changed);
     QCOMPARE(decoder.graphicsPlane().pixelColor(12, planeY(10)), QColor(255, 0, 0));
+}
+
+// Issue #467: an order that keeps ending its blocks with More Data to Come
+// used to buffer its data without limit. Past kMaxPendingBytes the order is
+// dropped as a recoverable error, its remaining data is skipped up to its
+// End of Data, and the next order decodes normally.
+void TestGddm5292::pendingDataIsCapped() {
+    Gddm5292Decoder decoder;
+    QVERIFY(!decoder.process(QByteArray::fromHex("ff93a091")).error);
+    const QByteArray chunk = QByteArray(1920, static_cast<char>(0x40)) + QByteArray::fromHex("91");
+    const int blocks = Gddm5292Decoder::kMaxPendingBytes / 1920 + 2;
+    int errors = 0;
+    for (int i = 0; i < blocks; ++i) {
+        const auto result = decoder.process(chunk);
+        if (result.error) {
+            ++errors;
+            QVERIFY2(result.errorMessage.contains("limit"), qPrintable(result.errorMessage));
+            QCOMPARE(result.completion, Gddm5292Decoder::Completion::RecoverableError);
+        }
+        QVERIFY(decoder.graphicsMode());
+    }
+    QCOMPARE(errors, 1);
+
+    // The dropped order's End of Data draws nothing; a new polyline does
+    const auto end = decoder.process(QByteArray::fromHex("4040" "92" "a04040404a41644072425640599295"));
+    QVERIFY2(!end.error, qPrintable(end.errorMessage));
+    QCOMPARE(decoder.graphicsPlane().pixelColor(0, 277), QColor(255, 255, 255));
+}
+
+// A polyline error reports its place in the block, like the other orders:
+// here the End of Data at offset 5, not the 2 bytes buffered
+void TestGddm5292::polylineErrorReportsBlockOffset() {
+    Gddm5292Decoder decoder;
+    const auto result = decoder.process(QByteArray::fromHex("ff93a0404092"));
+    QVERIFY(result.error);
+    QVERIFY2(result.errorMessage.startsWith("G1 at offset 5:"), qPrintable(result.errorMessage));
 }
 
 QTEST_MAIN(TestGddm5292)

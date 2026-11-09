@@ -35,6 +35,12 @@ class Gddm5292Decoder {
     // The device raises G4 on a fill polygon with more nonhorizontal edges.
     static constexpr int kMaxFillEdges = 128;
 
+    // An emulator limit, not a device one: the data one variable order may
+    // gather across More Data to Come blocks (34 full 1920-byte host blocks,
+    // 16384 polyline points). Past it the order is dropped as a recoverable
+    // error, so a stream that never sends End of Data cannot grow memory.
+    static constexpr int kMaxPendingBytes = 65536;
+
     // Printer colour-mix tables, loaded by orders C2 and C3 for the screen-copy
     // path. Each entry is four bcmy bits: black, cyan, magenta, yellow.
     static constexpr int kAlphaMixEntries = 32;
@@ -181,7 +187,7 @@ class Gddm5292Decoder {
 
     void reset(bool clearPlane);
     bool completePending(Result &result, int offset);
-    bool drawPolyline(Result &result);
+    bool drawPolyline(Result &result, int offset);
     bool fillPolygon(Result &result, int offset);
     bool drawScanline(Result &result, int offset);
     bool drawPolymarker(Result &result, int offset);
@@ -218,6 +224,9 @@ class Gddm5292Decoder {
     bool m_suppressPacing = false;
     PendingOrder m_pendingOrder = PendingOrder::None;
     QByteArray m_pendingData;
+    // The pending order passed kMaxPendingBytes: its remaining data is
+    // skipped up to its End of Data
+    bool m_discardPending = false;
     std::array<QColor, 8> m_palette;
     int m_colorIndex = 7;
     int m_lineWeight = 1;

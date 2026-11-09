@@ -32,6 +32,7 @@ void Gddm5292Decoder::reset(bool clearPlane) {
     m_suppressPacing = false;
     m_pendingOrder = PendingOrder::None;
     m_pendingData.clear();
+    m_discardPending = false;
     m_palette = {QColor(0, 0, 0), QColor(255, 0, 0), QColor(0, 255, 0),
                  QColor(0, 0, 255), QColor(255, 0, 255), QColor(255, 255, 0),
                  QColor(0, 255, 255), QColor(255, 255, 255)};
@@ -131,6 +132,7 @@ bool Gddm5292Decoder::fail(Result &result, ErrorCode code, int offset,
     m_graphicsMode = false;
     m_pendingOrder = PendingOrder::None;
     m_pendingData.clear();
+    m_discardPending = false;
     return false;
 }
 
@@ -282,9 +284,9 @@ bool Gddm5292Decoder::decodePoints(Result &result, int offset, const char *what,
     return true;
 }
 
-bool Gddm5292Decoder::drawPolyline(Result &result) {
+bool Gddm5292Decoder::drawPolyline(Result &result, int offset) {
     QVector<QPoint> points;
-    if (!decodePoints(result, m_pendingData.size(), "polyline", 2, &points))
+    if (!decodePoints(result, offset, "polyline", 2, &points))
         return false;
 
     for (int index = 1; index < points.size(); ++index) {
@@ -479,7 +481,7 @@ bool Gddm5292Decoder::completePending(Result &result, int offset) {
 
     bool ok = true;
     if (m_pendingOrder == PendingOrder::Polyline) {
-        ok = drawPolyline(result);
+        ok = drawPolyline(result, offset);
     } else if (m_pendingOrder == PendingOrder::FillPolygon) {
         ok = fillPolygon(result, offset);
     } else if (m_pendingOrder == PendingOrder::Scanline) {
@@ -612,7 +614,23 @@ Gddm5292Decoder::Result Gddm5292Decoder::process(const QByteArray &data) {
 
         if (m_pendingOrder != PendingOrder::None) {
             if (isGraphicsData(byte)) {
-                m_pendingData.append(static_cast<char>(byte));
+                if (!m_discardPending && m_pendingData.size() >= kMaxPendingBytes) {
+                    noteRecoverable(result, ErrorCode::G1, offset,
+                                    QString("variable order data passed the %1-byte limit; "
+                                            "the order is dropped").arg(kMaxPendingBytes));
+                    m_pendingData.clear();
+                    m_pendingData.squeeze();
+                    m_discardPending = true;
+                }
+                if (!m_discardPending)
+                    m_pendingData.append(static_cast<char>(byte));
+                ++offset;
+                continue;
+            }
+            if (byte == 0x92 && m_discardPending) {
+                // End of the dropped order: nothing to draw
+                m_discardPending = false;
+                m_pendingOrder = PendingOrder::None;
                 ++offset;
                 continue;
             }
