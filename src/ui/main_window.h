@@ -235,6 +235,11 @@ class MainWindow : public MainWindowBase {
     void runStartupScript(Session *session);
     void scheduleStartupScript(Session *session);
     void applyThemeToSession(Session *session, const QString &themeId);
+    // Write the tab's theme to its saved profile, keeping the snapshot
+    // current when it was (no Save warning for this tab's own write)
+    void persistThemeChoice(Session *session);
+    // The same, with the snapshot state read by the caller before any write
+    void persistThemeChoice(Session *session, bool snapshotCurrent);
 
     QTabWidget *m_tabWidget = nullptr;
     QVector<Session *> m_sessions;
