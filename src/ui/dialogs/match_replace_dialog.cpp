@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "match_replace_dialog.h"
+#include <QBrush>
+#include <QRegularExpression>
 
 namespace ui::dialogs {
 
@@ -41,6 +43,12 @@ MatchReplaceDialog::MatchReplaceDialog(const QVector<core::MatchReplaceRule> &ru
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->verticalHeader()->setVisible(false);
     content->addWidget(m_table, 1);
+
+    m_errorLabel = new QLabel(this);
+    m_errorLabel->setWordWrap(true);
+    m_errorLabel->setStyleSheet("color: #d04040;");
+    m_errorLabel->hide();
+    content->addWidget(m_errorLabel);
 
     // Buttons row: Add/Remove/Up/Down on left, OK/Cancel on right
     auto *btnLayout = new QHBoxLayout();
@@ -153,6 +161,46 @@ QVector<core::MatchReplaceRule> MatchReplaceDialog::rules() const {
         result.append(rule);
     }
     return result;
+}
+
+QString MatchReplaceDialog::patternError(const core::MatchReplaceRule &rule) {
+    if (!rule.isRegex) return {};
+    const QRegularExpression re(rule.pattern);
+    if (re.isValid()) return {};
+    return QStringLiteral("%1 at position %2").arg(re.errorString()).arg(re.patternErrorOffset() + 1);
+}
+
+void MatchReplaceDialog::accept() {
+    // Commit a cell still being edited, so its text is what gets checked
+    m_table->setCurrentIndex(QModelIndex());
+    const auto all = rules();
+    for (int row = 0; row < all.size(); ++row) {
+        if (auto *item = m_table->item(row, 1)) {
+            item->setBackground(QBrush());
+            item->setToolTip(QString());
+        }
+    }
+    for (int row = 0; row < all.size(); ++row) {
+        const QString error = patternError(all[row]);
+        if (error.isEmpty()) continue;
+        // Show the first broken rule and stay open, instead of keeping a
+        // rule that would silently never match
+        const QString message =
+            QStringLiteral("Rule %1: the regular expression is not valid: %2").arg(row + 1).arg(error);
+        if (auto *item = m_table->item(row, 1)) {
+            item->setBackground(QColor(0xd0, 0x40, 0x40, 0x60));
+            item->setToolTip(message);
+            // Make it current without the row selection painting over the tint
+            m_table->setCurrentItem(item);
+            m_table->clearSelection();
+        }
+        m_errorLabel->setText(message);
+        m_errorLabel->show();
+        return;
+    }
+    m_errorLabel->clear();
+    m_errorLabel->hide();
+    BaseFramelessDialog::accept();
 }
 
 void MatchReplaceDialog::onAddRule() {
