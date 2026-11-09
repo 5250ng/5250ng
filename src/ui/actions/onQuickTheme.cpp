@@ -65,6 +65,21 @@ static void persistSessionTheme(const session::SessionConfig &config) {
     }
 }
 
+// Every theme picker (Quick Theme, the tab menu, Settings) keeps the
+// choice with the tab's saved profile (#472)
+void MainWindow::persistThemeChoice(Session *s) {
+    // The theme write is this tab's own, so Save need not warn about it, but
+    // only if the profile had not been edited elsewhere before: that edit
+    // is still not in this tab's copy
+    persistThemeChoice(s, savedProfileJson(s) == s->profileSnapshot);
+}
+
+void MainWindow::persistThemeChoice(Session *s, bool snapshotCurrent) {
+    persistSessionTheme(s->config);
+    if (snapshotCurrent)
+        s->profileSnapshot = savedProfileJson(s);
+}
+
 void MainWindow::onQuickThemeChosen(QAction *action) {
     if (!action) return;
     QString themeId = action->data().toString();
@@ -74,13 +89,6 @@ void MainWindow::onQuickThemeChosen(QAction *action) {
 
     applyThemeToSession(m_sessions[m_activeIndex], themeId);
     m_currentSession.setTerminalThemeId(themeId);
-    Session *s = m_sessions[m_activeIndex];
-    // The theme write is this tab's own, so Save need not warn about it, but
-    // only if the profile had not been edited elsewhere before: that edit
-    // is still not in this tab's copy
-    const bool snapshotCurrent = savedProfileJson(s) == s->profileSnapshot;
-    persistSessionTheme(s->config);
-    if (snapshotCurrent)
-        s->profileSnapshot = savedProfileJson(s);
+    persistThemeChoice(m_sessions[m_activeIndex]);
 }
 

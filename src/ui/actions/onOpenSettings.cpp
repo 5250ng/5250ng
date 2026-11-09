@@ -57,8 +57,15 @@ void MainWindow::onOpenSettings() {
     connect(&dlg, &SettingsDialog::terminalThemeApplyToAllRequested,
             this, [this, &dlg](const ui::themes::TerminalTheme &t) {
         const QString id = applyEditedTheme(dlg, t);
-        for (Session *session : m_sessions) {
-            applyThemeToSession(session, id);
+        // Whether each tab's snapshot is current is read before any write:
+        // two tabs on one profile would otherwise see each other's write as
+        // an edit made elsewhere
+        QVector<bool> snapshotCurrent;
+        for (Session *session : m_sessions)
+            snapshotCurrent << (savedProfileJson(session) == session->profileSnapshot);
+        for (int i = 0; i < m_sessions.size(); ++i) {
+            applyThemeToSession(m_sessions[i], id);
+            persistThemeChoice(m_sessions[i], snapshotCurrent[i]);
         }
         m_currentSession.setTerminalThemeId(id);
     });

@@ -16,6 +16,8 @@
 
 #include "session/config.h"
 #include "session/manager.h"
+#include "ui/dialogs/session_settings_dialog.h"
+#include "ui/dialogs/settings_dialog.h"
 #include "ui/main_window.h"
 #include "ui/themes/terminal_theme_manager.h"
 
@@ -23,6 +25,7 @@
 #include <QApplication>
 #include <QLabel>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QStandardPaths>
 #include <QTabWidget>
 #include <QTcpServer>
@@ -47,6 +50,7 @@ class TestSaveSessionProfileEdits : public QObject {
 
     void saveAsksBeforeReplacingEditedProfile();
     void editBeforeQuickThemeStillAsks();
+    void settingsApplyToAllSavesTheme();
     // Last: a reopened tab's teardown is still pending when its window goes
     void editBeforeReconnectStillAsks();
 
@@ -187,6 +191,42 @@ void TestSaveSessionProfileEdits::editBeforeQuickThemeStillAsks() {
     save();
     QCOMPARE(m_questions.size(), 1);
     QCOMPARE(savedUser(), QStringLiteral("EDITED"));
+}
+
+// Issue #472: Settings > 5250 Theme, applied to all sessions, wrote the
+// theme only to the tabs, not to their saved profiles; and the write is the
+// tab's own, so Save must not ask about it
+void TestSaveSessionProfileEdits::settingsApplyToAllSavesTheme() {
+    auto savedTheme = [this]() {
+        session::SessionManager reader;
+        session::SessionConfig saved;
+        return reader.loadSession(m_name, saved) ? saved.terminalThemeId() : QStringLiteral("(missing)");
+    };
+    const QString before = savedTheme();
+
+    m_responder->stop(); // the Settings dialog is driven below instead
+    QString applied;
+    QTimer driver;
+    connect(&driver, &QTimer::timeout, this, [&]() {
+        auto *dlg = qobject_cast<SettingsDialog *>(QApplication::activeModalWidget());
+        if (!dlg) return;
+        driver.stop();
+        SessionSettingsDialog *editor = dlg->terminalThemeEditor();
+        QSpinBox *spin = editor->findChild<QSpinBox *>();
+        spin->setValue(spin->value() + 1); // an edit gives a new derived theme
+        editor->onApplyToAll();
+        applied = editor->selectedThemeId();
+        dlg->reject();
+    });
+    driver.start(50);
+    QVERIFY(QMetaObject::invokeMethod(m_window, "onOpenSettings"));
+    m_responder->start(20);
+
+    QVERIFY(!applied.isEmpty());
+    QVERIFY(applied != before);
+    QCOMPARE(savedTheme(), applied);
+    save();
+    QCOMPARE(m_questions.size(), 0);
 }
 
 QTEST_MAIN(TestSaveSessionProfileEdits)
