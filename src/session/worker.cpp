@@ -17,6 +17,8 @@
 #include "worker.h"
 #include "logger/logger.h"
 #include "tn5250/message/message.h"
+#include <QDateTime>
+#include <QTimeZone>
 #include <QThread>
 #include <QTimer>
 #include <QtNumeric>
@@ -243,6 +245,16 @@ void Worker::startReplay() {
         emit errorOccurred(err);
         emit stateChanged(tn5250::client::TN5250Client::ConnectionState::Disconnected);
         return;
+    }
+    // Lost packets: tell the user where the replay skips a record
+    for (const core::pcap::ReplayGap &gap : replay.gaps) {
+        logger::Logger::instance()->warning(
+            QString("[Worker] PCAP replay: %1 bytes missing from the capture at %2; "
+                    "replay resumes at the next record boundary, and one screen "
+                    "record is lost")
+                .arg(gap.missingBytes)
+                .arg(QDateTime::fromMSecsSinceEpoch(gap.timestampUsec / 1000, QTimeZone::utc())
+                         .toString(Qt::ISODateWithMs)));
     }
     logger::Logger::instance()->debug(
         QString("[Worker] Replaying %1 records from %2 (server %3, client %4)")
