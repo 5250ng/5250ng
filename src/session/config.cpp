@@ -23,7 +23,7 @@ namespace session {
 
 SessionConfig::SessionConfig(QObject *parent) : QObject(parent), m_name("New Session"), m_hostname(""), m_port(23), m_useTLS(false), m_deviceType("IBM-3179-2"), m_deviceName(""), m_screenRows(24), m_screenCols(80), m_codePage(core::CodePage::ID::CP037), m_terminalThemeId("classic_green") {}
 
-SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_startupScriptPath(other.m_startupScriptPath), m_startupScriptLinked(other.m_startupScriptLinked), m_startupScriptTrigger(other.m_startupScriptTrigger), m_startupScriptOnReconnect(other.m_startupScriptOnReconnect), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_mcpAllowed(other.m_mcpAllowed), m_pcCommandPolicy(other.m_pcCommandPolicy), m_connectTimeoutSeconds(other.m_connectTimeoutSeconds), m_keepaliveIntervalSeconds(other.m_keepaliveIntervalSeconds), m_autoReconnect(other.m_autoReconnect), m_autoReconnectDelaySeconds(other.m_autoReconnectDelaySeconds), m_autoReconnectMaxAttempts(other.m_autoReconnectMaxAttempts), m_tlsCaCertificateFile(other.m_tlsCaCertificateFile), m_tlsClientCertificateFile(other.m_tlsClientCertificateFile), m_tlsClientKeyFile(other.m_tlsClientKeyFile), m_replayPcapFile(other.m_replayPcapFile) {}
+SessionConfig::SessionConfig(const SessionConfig &other) : QObject(other.parent()), m_name(other.m_name), m_hostname(other.m_hostname), m_port(other.m_port), m_useTLS(other.m_useTLS), m_allowInvalidCertificates(other.m_allowInvalidCertificates), m_deviceType(other.m_deviceType), m_deviceName(other.m_deviceName), m_screenRows(other.m_screenRows), m_screenCols(other.m_screenCols), m_codePage(other.m_codePage), m_terminalThemeId(other.m_terminalThemeId), m_startupScriptSource(other.m_startupScriptSource), m_startupScriptName(other.m_startupScriptName), m_startupScriptPath(other.m_startupScriptPath), m_startupScriptLinked(other.m_startupScriptLinked), m_startupScriptTrigger(other.m_startupScriptTrigger), m_startupScriptOnReconnect(other.m_startupScriptOnReconnect), m_sessionVariables(other.m_sessionVariables), m_username(other.m_username), m_password(other.m_password), m_mcpAllowed(other.m_mcpAllowed), m_pcCommandPolicy(other.m_pcCommandPolicy), m_connectTimeoutSeconds(other.m_connectTimeoutSeconds), m_keepaliveIntervalSeconds(other.m_keepaliveIntervalSeconds), m_autoReconnect(other.m_autoReconnect), m_autoReconnectDelaySeconds(other.m_autoReconnectDelaySeconds), m_autoReconnectMaxAttempts(other.m_autoReconnectMaxAttempts), m_tlsCaCertificateFile(other.m_tlsCaCertificateFile), m_tlsClientCertificateFile(other.m_tlsClientCertificateFile), m_tlsClientKeyFile(other.m_tlsClientKeyFile), m_replayPcapFile(other.m_replayPcapFile), m_matchReplaceEnabled(other.m_matchReplaceEnabled), m_matchReplaceRules(other.m_matchReplaceRules) {}
 
 SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
     if (this != &other) {
@@ -58,6 +58,8 @@ SessionConfig &SessionConfig::operator=(const SessionConfig &other) {
         m_tlsClientCertificateFile = other.m_tlsClientCertificateFile;
         m_tlsClientKeyFile = other.m_tlsClientKeyFile;
         m_replayPcapFile = other.m_replayPcapFile;
+        m_matchReplaceEnabled = other.m_matchReplaceEnabled;
+        m_matchReplaceRules = other.m_matchReplaceRules;
         emit changed();
     }
     return *this;
@@ -149,6 +151,22 @@ QJsonObject SessionConfig::toJson() const {
         json["tlsClientCertificateFile"] = m_tlsClientCertificateFile;
     if (!m_tlsClientKeyFile.isEmpty())
         json["tlsClientKeyFile"] = m_tlsClientKeyFile;
+    if (m_matchReplaceEnabled || !m_matchReplaceRules.isEmpty()) {
+        QJsonArray rules;
+        for (const auto &rule : m_matchReplaceRules) {
+            QJsonObject r;
+            r["pattern"] = rule.pattern;
+            r["replacement"] = rule.replacement;
+            if (rule.isRegex) r["regex"] = true;
+            if (rule.caseSensitive) r["caseSensitive"] = true;
+            if (!rule.enabled) r["enabled"] = false;
+            rules.append(r);
+        }
+        QJsonObject matchReplace;
+        matchReplace["enabled"] = m_matchReplaceEnabled;
+        matchReplace["rules"] = rules;
+        json["matchReplace"] = matchReplace;
+    }
     return json;
 }
 
@@ -299,6 +317,22 @@ bool SessionConfig::fromJson(const QJsonObject &json) {
     m_tlsCaCertificateFile = json["tlsCaCertificateFile"].toString();
     m_tlsClientCertificateFile = json["tlsClientCertificateFile"].toString();
     m_tlsClientKeyFile = json["tlsClientKeyFile"].toString();
+    // Assigned on every load, so a file without the key clears rules read
+    // into this object before. Entries that are not objects are skipped
+    const QJsonObject matchReplace = json["matchReplace"].toObject();
+    m_matchReplaceEnabled = matchReplace["enabled"].toBool(false);
+    m_matchReplaceRules.clear();
+    for (const QJsonValue &value : matchReplace["rules"].toArray()) {
+        if (!value.isObject()) continue;
+        const QJsonObject r = value.toObject();
+        core::MatchReplaceRule rule;
+        rule.pattern = r["pattern"].toString();
+        rule.replacement = r["replacement"].toString();
+        rule.isRegex = r["regex"].toBool(false);
+        rule.caseSensitive = r["caseSensitive"].toBool(false);
+        rule.enabled = r["enabled"].toBool(true);
+        m_matchReplaceRules.append(rule);
+    }
     emit changed();
     return isValid();
 }

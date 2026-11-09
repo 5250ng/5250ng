@@ -55,6 +55,9 @@ class TestSessionConfig : public QObject {
     void testDistinctNamesDoNotCollideOnDisk();
     void testLegacySessionFilenameLoads();
     void testSavedSessionPermissions();
+    void testMatchReplaceDefaults();
+    void testMatchReplaceRoundTrip();
+    void testMatchReplaceMalformedValues();
 
   private:
     SessionConfig *m_config;
@@ -701,6 +704,83 @@ void TestSessionConfig::testConnectionOptionsOutOfRangeFallBack() {
     QCOMPARE(loaded.autoReconnect(), false);
     QCOMPARE(loaded.autoReconnectDelaySeconds(), 5);
     QCOMPARE(loaded.autoReconnectMaxAttempts(), 5);
+}
+
+// Issue #462: Match & Replace rules and the toggle are kept with the session
+void TestSessionConfig::testMatchReplaceDefaults() {
+    m_config->setHostname("host.example.com");
+    QCOMPARE(m_config->matchReplaceEnabled(), false);
+    QVERIFY(m_config->matchReplaceRules().isEmpty());
+    QVERIFY(!m_config->toJson().contains("matchReplace"));
+}
+
+void TestSessionConfig::testMatchReplaceRoundTrip() {
+    m_config->setName("Rules");
+    m_config->setHostname("host.example.com");
+    core::MatchReplaceRule plain;
+    plain.pattern = "QSYSOPR";
+    plain.replacement = "Operator";
+    core::MatchReplaceRule regex;
+    regex.pattern = "CPF(\\d{4})";
+    regex.replacement = "Error \\1";
+    regex.isRegex = true;
+    regex.caseSensitive = true;
+    regex.enabled = false;
+    m_config->setMatchReplaceRules({plain, regex});
+    m_config->setMatchReplaceEnabled(true);
+
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(m_config->toJson()));
+    SessionConfig copy(loaded);
+    SessionConfig assigned;
+    assigned = loaded;
+    for (const SessionConfig *c : {&loaded, &copy, &assigned}) {
+        QCOMPARE(c->matchReplaceEnabled(), true);
+        const auto rules = c->matchReplaceRules();
+        QCOMPARE(rules.size(), 2);
+        QCOMPARE(rules[0].pattern, QString("QSYSOPR"));
+        QCOMPARE(rules[0].replacement, QString("Operator"));
+        QCOMPARE(rules[0].isRegex, false);
+        QCOMPARE(rules[0].caseSensitive, false);
+        QCOMPARE(rules[0].enabled, true);
+        QCOMPARE(rules[1].pattern, QString("CPF(\\d{4})"));
+        QCOMPARE(rules[1].replacement, QString("Error \\1"));
+        QCOMPARE(rules[1].isRegex, true);
+        QCOMPARE(rules[1].caseSensitive, true);
+        QCOMPARE(rules[1].enabled, false);
+    }
+
+    // Rules kept while the toggle is off are still saved
+    m_config->setMatchReplaceEnabled(false);
+    QVERIFY(loaded.fromJson(m_config->toJson()));
+    QCOMPARE(loaded.matchReplaceEnabled(), false);
+    QCOMPARE(loaded.matchReplaceRules().size(), 2);
+
+    // A file without the key clears what an earlier load put in the object
+    SessionConfig bare;
+    bare.setName("Bare");
+    bare.setHostname("host.example.com");
+    QVERIFY(loaded.fromJson(bare.toJson()));
+    QCOMPARE(loaded.matchReplaceEnabled(), false);
+    QVERIFY(loaded.matchReplaceRules().isEmpty());
+}
+
+void TestSessionConfig::testMatchReplaceMalformedValues() {
+    m_config->setHostname("host.example.com");
+    QJsonObject json = m_config->toJson();
+    QJsonObject rule;
+    rule["pattern"] = "A";
+    rule["regex"] = "yes"; // wrong type
+    json["matchReplace"] = QJsonObject{{"enabled", "on"}, {"rules", QJsonArray{rule, 42, "x"}}};
+    SessionConfig loaded;
+    QVERIFY(loaded.fromJson(json));
+    QCOMPARE(loaded.matchReplaceEnabled(), false);
+    QCOMPARE(loaded.matchReplaceRules().size(), 1);
+    QCOMPARE(loaded.matchReplaceRules()[0].isRegex, false);
+
+    json["matchReplace"] = "not an object";
+    QVERIFY(loaded.fromJson(json));
+    QVERIFY(loaded.matchReplaceRules().isEmpty());
 }
 
 QTEST_MAIN(TestSessionConfig)

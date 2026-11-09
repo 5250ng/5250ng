@@ -15,7 +15,41 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "../main_window.h"
+#include "session/manager.h"
 #include "ui/dialogs/match_replace_dialog.h"
+
+void MainWindow::applySavedMatchReplace(Session *s) {
+    const auto &rules = s->config.matchReplaceRules();
+    if (rules.isEmpty() && !s->config.matchReplaceEnabled()) return;
+    if (!s->matchReplace)
+        s->matchReplace = new core::MatchReplaceEngine(s->container);
+    s->matchReplace->setRules(rules);
+    s->matchReplace->setEnabled(s->config.matchReplaceEnabled());
+    s->displayWidget->setMatchReplaceEngine(s->matchReplace);
+    s->displayWidget->refreshMatchReplaceOverlay();
+}
+
+// The rules and toggle are this tab's own: keep them in its config, so Save
+// writes them, and in its saved profile right away, as the quick theme does
+void MainWindow::persistMatchReplace(Session *s) {
+    s->config.setMatchReplaceRules(s->matchReplace->rules());
+    s->config.setMatchReplaceEnabled(s->matchReplace->isEnabled());
+    const QString name = s->config.name();
+    if (name.isEmpty() || name == "Current Session" || name == "Command Line Session"
+        || !s->config.replayPcapFile().isEmpty())
+        return;
+    // Save need not warn about this write, but only if the profile had not
+    // been edited elsewhere before: that edit is still not in this tab's copy
+    const bool snapshotCurrent = savedProfileJson(s) == s->profileSnapshot;
+    session::SessionManager mgr;
+    session::SessionConfig saved;
+    if (!mgr.loadSession(name, saved)) return;
+    saved.setMatchReplaceRules(s->config.matchReplaceRules());
+    saved.setMatchReplaceEnabled(s->config.matchReplaceEnabled());
+    mgr.saveSession(saved);
+    if (snapshotCurrent)
+        s->profileSnapshot = savedProfileJson(s);
+}
 
 void MainWindow::onToggleMatchReplace() {
     if (m_activeIndex < 0 || m_activeIndex >= m_sessions.size()) return;
@@ -32,6 +66,7 @@ void MainWindow::onToggleMatchReplace() {
     // Rebuild overlay immediately so the current screen reflects the change
     s->displayWidget->refreshMatchReplaceOverlay();
     s->displayWidget->update();
+    persistMatchReplace(s);
 }
 
 void MainWindow::onEditMatchReplacePatterns() {
@@ -57,5 +92,6 @@ void MainWindow::onEditMatchReplacePatterns() {
         // Rebuild overlay immediately so the current screen reflects the new rules
         s->displayWidget->refreshMatchReplaceOverlay();
         s->displayWidget->update();
+        persistMatchReplace(s);
     }
 }

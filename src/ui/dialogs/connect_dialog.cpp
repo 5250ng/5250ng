@@ -681,6 +681,10 @@ session::SessionConfig ConnectDialog::getSessionConfig() const {
     config.setStartupScriptSource(m_currentConfig.startupScriptSource());
     config.setStartupScriptName(m_currentConfig.startupScriptName());
     config.setStartupScriptPath(m_currentConfig.startupScriptPath());
+    // Match & Replace has no field here: keep the loaded session's rules,
+    // or Connect and Save would drop them (#462)
+    config.setMatchReplaceEnabled(m_currentConfig.matchReplaceEnabled());
+    config.setMatchReplaceRules(m_currentConfig.matchReplaceRules());
     config.setStartupScriptLinked(m_scriptLinkedCheck->isChecked());
     config.setStartupScriptTrigger(static_cast<session::StartupScriptTrigger>(
         m_scriptTriggerCombo->currentData().toInt()));
