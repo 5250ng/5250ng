@@ -118,7 +118,7 @@ void Q5250ScreenWidget::copySelection() {
             if (row >= 0 && col >= 0) {
                 // As the screen shows it: non-display (password) cells blank
                 uint8_t ebcdicChar = buffer->displayedCharacter(row, col);
-                QChar ch = core::EBCDIC::ebcdicToChar(ebcdicChar);
+                QChar ch = m_codePage.toUnicode(ebcdicChar);
 
                 // Only replace null bytes and EBCDIC spaces with ASCII space to
                 // preserve formatting Keep all other characters including non-printable

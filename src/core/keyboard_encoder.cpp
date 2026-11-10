@@ -143,7 +143,7 @@ QByteArray KeyboardEncoder::encodeAction(KeyboardAction action) {
 
 QByteArray KeyboardEncoder::encodeCharacter(QChar ch) {
     // Convert character to EBCDIC
-    uint8_t ebcdic = EBCDIC::charToEBCDIC(ch);
+    uint8_t ebcdic = m_codePage ? m_codePage->fromUnicode(ch) : EBCDIC::charToEBCDIC(ch);
 
     QByteArray result;
     result.append(ebcdic);

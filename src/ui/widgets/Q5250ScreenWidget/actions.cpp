@@ -49,7 +49,7 @@ void Q5250ScreenWidget::refreshMatchReplaceOverlay() {
             if (ch == 0x00 || m_screenBuffer->cell(r, c).attributes.nonDisplay)
                 line.append(QChar(' '));
             else
-                line.append(core::EBCDIC::ebcdicToChar(ch));
+                line.append(m_codePage.toUnicode(ch));
         }
         decodedLines.append(line);
     }

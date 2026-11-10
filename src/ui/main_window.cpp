@@ -599,8 +599,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
             auto *agentPanel = session->agentPanel;
             auto *screenBuf = session->displayWidget->screenBuffer();
             connect(screenBuf, &ui::widgets::ScreenBuffer::screenChanged,
-                    agentPanel, [agentPanel, screenBuf]() {
-                        if (!screenBuf) return;
+                    agentPanel, [agentPanel, screenBuf, display = QPointer<ui::widgets::Q5250ScreenWidget>(session->displayWidget)]() {
+                        if (!screenBuf || !display) return;
                         QString screenText;
                         screenText.reserve(screenBuf->rows() * (screenBuf->cols() + 1));
                         for (int r = 0; r < screenBuf->rows(); ++r) {
@@ -608,7 +608,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                             line.reserve(screenBuf->cols());
                             for (int c = 0; c < screenBuf->cols(); ++c) {
                                 uint8_t ch = screenBuf->displayedCharacter(r, c);
-                                QChar qc = core::EBCDIC::ebcdicToChar(ch);
+                                QChar qc = display->codePage().toUnicode(ch);
                                 line += qc.isPrint() ? qc : QChar(' ');
                             }
                             // Trim trailing spaces
@@ -888,7 +888,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
                     QByteArray row;
                     for (int c = 0; c < buf->cols(); ++c)
                         row.append(static_cast<char>(buf->character(r, c)));
-                    rows << core::EBCDIC::ebcdicToString(row);
+                    rows << display->codePage().toUnicode(row);
                 }
                 const QString systemName = core::signOnSystemName(rows);
                 if (!systemName.isEmpty())
