@@ -79,6 +79,11 @@ class Q5250ScreenWidget : public QWidget {
     // Match and Replace
     void setMatchReplaceEngine(core::MatchReplaceEngine *engine);
     core::MatchReplaceEngine *matchReplaceEngine() const { return m_matchReplace; }
+
+    // This session's code page. core::EBCDIC holds the active tab's, so a
+    // reader serving a background session decodes with this one (#481)
+    void setCodePage(core::CodePage::ID id) { m_codePage = core::CodePage(id); }
+    const core::CodePage &codePage() const { return m_codePage; }
     void refreshMatchReplaceOverlay();
 
     // Screen history
@@ -380,6 +385,7 @@ class Q5250ScreenWidget : public QWidget {
 
     // Match and Replace overlay
     core::MatchReplaceEngine *m_matchReplace = nullptr;
+    core::CodePage m_codePage;
     bool m_matchReplaceDirty = false; // screen changed since the last overlay rebuild
 
     // Screen history / scrollback

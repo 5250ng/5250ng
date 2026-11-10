@@ -52,7 +52,9 @@ QString ScreenBufferAdapter::readText(int row, int col, int length) const {
     QString result;
     for (int i = 0; i < length && col + i < buf->cols(); ++i) {
         uint8_t ch = buf->displayedCharacter(row, col + i);
-        result += core::EBCDIC::ebcdicToChar(ch);
+        // The session's own page: scripts (MCP wait_for_text, login,
+        // run_script) may read a background tab (#481)
+        result += m_widget->codePage().toUnicode(ch);
     }
     return result;
 }
@@ -65,7 +67,7 @@ QString ScreenBufferAdapter::readFieldText(int row, int col) const {
     if (field.length == 0) return {};
 
     QByteArray data = buf->getDisplayedFieldData(field);
-    return core::EBCDIC::ebcdicToString(data);
+    return m_widget->codePage().toUnicode(data);
 }
 
 ScreenInterface::KeyboardState ScreenBufferAdapter::keyboardState() const {

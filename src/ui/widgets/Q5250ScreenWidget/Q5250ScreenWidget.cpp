@@ -513,7 +513,9 @@ void Q5250ScreenWidget::renderCell(QPainter &painter, int row, int col, const Sc
     if (m_matchReplace && m_matchReplace->isEnabled() && m_matchReplace->hasOverlay(row, col)) {
         ch = m_matchReplace->overlayChar(row, col);
     } else {
-        ch = (cell.character == 0x00) ? QChar(' ') : core::EBCDIC::ebcdicToChar(cell.character);
+        // The session's own page: an MCP screenshot paints a background
+        // tab too (#481)
+        ch = (cell.character == 0x00) ? QChar(' ') : m_codePage.toUnicode(cell.character);
     }
 
     painter.setPen(fgColor);
