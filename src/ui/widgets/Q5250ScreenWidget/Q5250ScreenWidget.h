@@ -82,7 +82,10 @@ class Q5250ScreenWidget : public QWidget {
 
     // This session's code page. core::EBCDIC holds the active tab's, so a
     // reader serving a background session decodes with this one (#481)
-    void setCodePage(core::CodePage::ID id) { m_codePage = core::CodePage(id); }
+    void setCodePage(core::CodePage::ID id) {
+        m_codePage = core::CodePage(id);
+        if (m_encoder) m_encoder->setCodePage(id);
+    }
     const core::CodePage &codePage() const { return m_codePage; }
     void refreshMatchReplaceOverlay();
 

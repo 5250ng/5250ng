@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include "codepage.h"
 #include <QByteArray>
 #include <QObject>
 #include <cstdint>
+#include <optional>
 
 class QKeyEvent;
 
@@ -73,6 +75,10 @@ class KeyboardEncoder : public QObject {
     // Encode a normal character
     QByteArray encodeCharacter(QChar ch);
 
+    // The session's code page for typed characters; without one, the
+    // process-wide core::EBCDIC page (the active tab's) is used (#482)
+    void setCodePage(CodePage::ID id) { m_codePage.emplace(id); }
+
     // Check if key is a PF key
     static bool isPFKey(int key);
 
@@ -83,6 +89,7 @@ class KeyboardEncoder : public QObject {
     void keyEncoded(const QByteArray &data);
 
   private:
+    std::optional<CodePage> m_codePage;
     // 5250 AID (Attention ID) codes — per SA21-9247-6 page 2-2
     static constexpr uint8_t AID_ENTER = 0xF1;    // Enter/Rec Adv
     static constexpr uint8_t AID_PF1 = 0x31;      // Command Function 1
