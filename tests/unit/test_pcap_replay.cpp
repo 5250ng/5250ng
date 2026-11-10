@@ -465,6 +465,95 @@ class TestPcapReplay : public QObject {
         QCOMPARE(session.records[0].timestampUsec, (1700000000000LL + 3000) * 1000);
     }
 
+    // Issue #476: a lost packet used to end the replay at the gap. Now the
+    // record spanning it is dropped, the gap is reported, and replay goes on
+    // from the next record
+    void testGapSkipsOnlyTheBrokenRecord() {
+        ConversationBuilder conv;
+        conv.handshake();
+        conv.serverSends(telnetNegotiation());
+        const QByteArray rec1 = gdsRecord(QByteArray("BEFORE-GAP"));
+        const QByteArray rec2 = withEor(gdsRecord(QByteArray("SPANS-THE-LOST-PACKET")));
+        const QByteArray rec3 = gdsRecord(QByteArray("AFTER-GAP"));
+        conv.serverSends(withEor(rec1));
+        conv.serverSends(rec2.left(8));
+        conv.serverSeq += 10; // the next 10 bytes were never captured
+        conv.serverSends(rec2.mid(18));
+        conv.serverSends(withEor(rec3));
+
+        ReplaySession session;
+        QString error;
+        QVERIFY2(PcapReplayLoader::loadData(buildClassicPcap(conv.packets), &session, &error),
+                 qPrintable(error));
+        QCOMPARE(session.records.size(), 2);
+        QCOMPARE(session.records[0].data, rec1);
+        QCOMPARE(session.records[1].data, rec3);
+        QCOMPARE(session.gaps.size(), 1);
+        QCOMPARE(session.gaps[0].missingBytes, qint64(10));
+    }
+
+    // A gap that cuts a telnet sequence: the IAC before it must not pair with
+    // a byte from after it. Wire CC FF | FF DD FF | EF, with the middle three
+    // bytes lost, left "CC" to be emitted as a record (IAC + the later EF
+    // read as IAC EOR)
+    void testGapInsideIacSequence() {
+        ConversationBuilder conv;
+        conv.handshake();
+        conv.serverSends(telnetNegotiation());
+        conv.serverSends(QByteArray::fromHex("aabbffef"));
+        conv.serverSends(QByteArray::fromHex("ccff"));
+        conv.serverSeq += 3; // FF DD FF never captured
+        conv.serverSends(QByteArray::fromHex("ef"));
+        conv.serverSends(QByteArray::fromHex("eeffef"));
+
+        ReplaySession session;
+        QString error;
+        QVERIFY2(PcapReplayLoader::loadData(buildClassicPcap(conv.packets), &session, &error),
+                 qPrintable(error));
+        QCOMPARE(session.records.size(), 1);
+        QCOMPARE(session.records[0].data.toHex(), QByteArray("aabb"));
+        QCOMPARE(session.gaps.size(), 1);
+    }
+
+    // Two gaps a few bytes apart: each is reported, and the record after
+    // the second one's resync point still replays
+    void testTwoCloseGaps() {
+        ConversationBuilder conv;
+        conv.handshake();
+        conv.serverSends(telnetNegotiation());
+        const QByteArray rec1 = gdsRecord(QByteArray("FIRST"));
+        const QByteArray lost = withEor(gdsRecord(QByteArray("LOST-TWICE-OVER")));
+        const QByteArray rec3 = gdsRecord(QByteArray("THIRD"));
+        conv.serverSends(withEor(rec1));
+        conv.serverSends(lost.left(6));
+        conv.serverSeq += 2;
+        conv.serverSends(lost.mid(8, 3));
+        conv.serverSeq += 2;
+        conv.serverSends(lost.mid(13));
+        conv.serverSends(withEor(rec3));
+
+        ReplaySession session;
+        QString error;
+        QVERIFY2(PcapReplayLoader::loadData(buildClassicPcap(conv.packets), &session, &error),
+                 qPrintable(error));
+        QCOMPARE(session.records.size(), 2);
+        QCOMPARE(session.records[0].data, rec1);
+        QCOMPARE(session.records[1].data, rec3);
+        QCOMPARE(session.gaps.size(), 2);
+    }
+
+    // Without loss nothing is reported
+    void testNoGapReportedForCompleteCapture() {
+        ConversationBuilder conv;
+        conv.handshake();
+        conv.serverSends(telnetNegotiation());
+        conv.serverSends(withEor(gdsRecord(QByteArray("COMPLETE"))));
+        ReplaySession session;
+        QString error;
+        QVERIFY(PcapReplayLoader::loadData(buildClassicPcap(conv.packets), &session, &error));
+        QVERIFY(session.gaps.isEmpty());
+    }
+
     void testNanosecondPcap() {
         ConversationBuilder conv;
         conv.handshake();

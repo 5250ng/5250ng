@@ -32,9 +32,17 @@ struct ReplayRecord {
     QByteArray data;          // raw GDS record bytes
 };
 
+// Bytes missing from the captured host->client stream (lost packets). The
+// record that spans the gap is dropped and replay resumes at the next one.
+struct ReplayGap {
+    qint64 timestampUsec = 0; // capture timestamp of the first packet after the gap
+    qint64 missingBytes = 0;
+};
+
 // A replayable TN5250 session extracted from a capture file.
 struct ReplaySession {
     QVector<ReplayRecord> records;
+    QVector<ReplayGap> gaps;
     QString serverEndpoint; // "address:port" of the AS/400 side
     QString clientEndpoint; // "address:port" of the terminal side
 };

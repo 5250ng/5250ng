@@ -448,6 +448,7 @@ struct Flow {
 struct StreamChunk {
     qint64 tsUsec = 0;
     QByteArray data;
+    qint64 missingBefore = 0; // bytes lost between the previous chunk and this one
 };
 
 QVector<StreamChunk> reassembleDirection(const FlowDirection &dir) {
@@ -478,15 +479,18 @@ QVector<StreamChunk> reassembleDirection(const FlowDirection &dir) {
     qint64 nextExpected = 0;
     for (const TcpSegment *s : ordered) {
         qint64 relStart = qint64(qint32(s->seq - base));
+        qint64 missing = 0;
         if (relStart > nextExpected) {
-            // Hole in the capture: bytes were lost. The telnet stream can't
-            // be parsed past the gap, so stop here.
-            break;
+            // Hole in the capture: bytes were lost. Mark it and go on from
+            // here; extractRecords() drops the record that spans it
+            missing = relStart - nextExpected;
+            nextExpected = relStart;
         }
         qint64 skip = nextExpected - relStart; // retransmitted/overlapping prefix
         if (skip >= s->payload.size()) continue;
         StreamChunk chunk;
         chunk.tsUsec = s->tsUsec;
+        chunk.missingBefore = missing;
         chunk.data = s->payload.mid(skip);
         nextExpected += chunk.data.size();
         chunks.append(chunk);
@@ -501,15 +505,25 @@ QVector<StreamChunk> reassembleDirection(const FlowDirection &dir) {
 // Strips the telnet layer from a reassembled host→client stream and splits
 // the application data into records at IAC EOR boundaries. Mirrors the
 // parsing semantics of TN5250Client::processTelnetData, minus the replies.
-QVector<ReplayRecord> extractRecords(const QVector<StreamChunk> &chunks) {
+QVector<ReplayRecord> extractRecords(const QVector<StreamChunk> &chunks,
+                                     QVector<ReplayGap> *gaps = nullptr) {
     QByteArray stream;
     QVector<qsizetype> chunkEnds;
     QVector<qint64> chunkTs;
+    QVector<qsizetype> gapOffsets; // stream offsets where bytes are missing
     for (const StreamChunk &c : chunks) {
+        if (c.missingBefore > 0) {
+            gapOffsets.append(stream.size());
+            if (gaps) gaps->append({c.tsUsec, c.missingBefore});
+        }
         stream.append(c.data);
         chunkEnds.append(stream.size());
         chunkTs.append(c.tsUsec);
     }
+    int gapIdx = 0;
+    // After a gap the stream is resumed mid-record: everything up to the
+    // next IAC EOR belongs to the record that lost bytes, and is skipped
+    bool resync = false;
 
     int tsIdx = 0;
     auto timestampAt = [&](qsizetype offset) -> qint64 {
@@ -526,10 +540,34 @@ QVector<ReplayRecord> extractRecords(const QVector<StreamChunk> &chunks) {
     qsizetype i = 0;
     const qsizetype size = stream.size();
     while (i < size) {
+        if (gapIdx < gapOffsets.size() && i >= gapOffsets[gapIdx]) {
+            while (gapIdx < gapOffsets.size() && i >= gapOffsets[gapIdx]) ++gapIdx;
+            current.clear();
+            inSubnegotiation = false;
+            resync = true;
+        }
+        // No telnet sequence is read across the next gap: the bytes after
+        // it are not the ones that followed. A sequence cut by the gap
+        // resumes at the gap, which starts the resync
+        const qsizetype limit = gapIdx < gapOffsets.size() ? gapOffsets[gapIdx] : size;
         uchar byte = static_cast<uchar>(stream[i]);
 
+        if (resync) {
+            if (byte == IAC && i + 1 < limit
+                && static_cast<uchar>(stream[i + 1]) == static_cast<uchar>(TelnetCommand::EOR))
+                resync = false;
+            // IAC IAC is a data byte: skip both so its second byte is not
+            // taken for the start of a command
+            i += (byte == IAC && i + 1 < limit) ? 2 : 1;
+            continue;
+        }
+
         if (byte == IAC) {
-            if (i + 1 >= size) break; // truncated escape at capture end
+            if (i + 1 >= limit) {
+                if (limit == size) break; // truncated escape at capture end
+                i = limit;
+                continue;
+            }
             uchar next = static_cast<uchar>(stream[i + 1]);
 
             if (next == IAC) {
@@ -557,7 +595,11 @@ QVector<ReplayRecord> extractRecords(const QVector<StreamChunk> &chunks) {
             }
 
             // WILL / WONT / DO / DONT / SB take an option byte
-            if (i + 2 >= size) break;
+            if (i + 2 >= limit) {
+                if (limit == size) break;
+                i = limit;
+                continue;
+            }
             if (next == static_cast<uchar>(TelnetCommand::SB)) {
                 inSubnegotiation = true;
             }
@@ -716,7 +758,8 @@ bool PcapReplayLoader::loadData(const QByteArray &data, ReplaySession *out, QStr
     const FlowDirection &hostToClient = serverIsA ? selected->ab : selected->ba;
     out->serverEndpoint = (serverIsA ? selected->a : selected->b).toString();
     out->clientEndpoint = (serverIsA ? selected->b : selected->a).toString();
-    out->records = extractRecords(reassembleDirection(hostToClient));
+    out->gaps.clear();
+    out->records = extractRecords(reassembleDirection(hostToClient), &out->gaps);
 
     if (out->records.isEmpty()) {
         if (error) *error = QStringLiteral("No TN5250 session data found in capture");
