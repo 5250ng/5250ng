@@ -20,6 +20,7 @@
 #include <QHash>
 #include <QHostAddress>
 #include <algorithm>
+#include <limits>
 
 namespace core::pcap {
 
@@ -125,6 +126,20 @@ bool isPcapNg(const QByteArray &data) {
             || readU32(d + 8, false) == PCAPNG_BYTE_ORDER_MAGIC);
 }
 
+// A capture timestamp in microseconds, clamped to [0, INT64_MAX]: a 64-bit
+// tick count at a coarse resolution (if_tsresol) may not fit, and converting
+// an out-of-range value to an integer is undefined
+qint64 ticksToUsec(quint64 ticks, quint64 ticksPerSecond) {
+    if (ticksPerSecond == 1000000)
+        return ticks > quint64(std::numeric_limits<qint64>::max())
+                   ? std::numeric_limits<qint64>::max()
+                   : qint64(ticks);
+    const long double usec = (long double)ticks * 1000000.0L / (long double)ticksPerSecond;
+    if (!(usec < (long double)std::numeric_limits<qint64>::max()))
+        return std::numeric_limits<qint64>::max();
+    return qint64(usec);
+}
+
 struct PcapNgInterface {
     quint32 linkType = LINKTYPE_ETHERNET;
     quint64 ticksPerSecond = 1000000; // from if_tsresol, default 10^-6
@@ -194,9 +209,7 @@ bool parsePcapNg(const QByteArray &data, QVector<RawPacket> *out, QString *error
                 PcapNgInterface iface = (ifId < quint32(interfaces.size()))
                     ? interfaces[ifId] : PcapNgInterface{};
                 RawPacket pkt;
-                pkt.tsUsec = (iface.ticksPerSecond == 1000000)
-                    ? qint64(ts)
-                    : qint64((long double)ts * 1000000.0L / iface.ticksPerSecond);
+                pkt.tsUsec = ticksToUsec(ts, iface.ticksPerSecond);
                 pkt.linkType = iface.linkType;
                 pkt.frame = QByteArray(reinterpret_cast<const char *>(body + 20), capLen);
                 out->append(pkt);
@@ -322,8 +335,13 @@ bool parseTcpPacket(const RawPacket &pkt, ParsedTcp *out) {
         if ((fragField & 0x2000) || (fragField & 0x1FFF)) return false;
         if (ip[9] != 6) return false; // not TCP
         qsizetype totalLen = readBE16(ip + 2);
-        // Bound by the IP total length to trim Ethernet trailer padding
-        ipPayloadEnd = qMin<qsizetype>(size, ipOff + totalLen);
+        // Bound by the IP total length to trim Ethernet trailer padding. A
+        // total length of 0 is what segmentation offload (TSO) leaves in a
+        // capture taken on the sending host: the frame holds the datagram
+        if (totalLen == 0)
+            ipPayloadEnd = size;
+        else
+            ipPayloadEnd = qMin<qsizetype>(size, ipOff + totalLen);
         tcpOff = ipOff + ihl;
         out->srcAddr = QByteArray(reinterpret_cast<const char *>(ip + 12), 4);
         out->dstAddr = QByteArray(reinterpret_cast<const char *>(ip + 16), 4);
@@ -336,7 +354,12 @@ bool parseTcpPacket(const RawPacket &pkt, ParsedTcp *out) {
         out->srcAddr = QByteArray(reinterpret_cast<const char *>(ip + 8), 16);
         out->dstAddr = QByteArray(reinterpret_cast<const char *>(ip + 24), 16);
         qsizetype hdrOff = ipOff + 40;
-        ipPayloadEnd = qMin<qsizetype>(size, hdrOff + payloadLen);
+        // A payload length of 0 is a TSO/LSO capture or a jumbogram: either
+        // way the frame holds the datagram (as for IPv4 total length 0)
+        if (payloadLen == 0)
+            ipPayloadEnd = size;
+        else
+            ipPayloadEnd = qMin<qsizetype>(size, hdrOff + payloadLen);
         // Walk extension headers until TCP
         while (nextHeader != 6) {
             if (nextHeader == 0 || nextHeader == 43 || nextHeader == 60) {
