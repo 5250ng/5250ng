@@ -29,7 +29,7 @@ class TestTelnetOptionState : public QObject {
 
     static constexpr char IAC = '\xFF', WILL = '\xFB', WONT = '\xFC', DO = '\xFD', DONT = '\xFE',
                           SB = '\xFA', SE = '\xF0';
-    static constexpr char BINARY = '\x00', EOR = '\x19', NEW_ENVIRON = '\x27';
+    static constexpr char BINARY = '\x00', EOR = '\x19', NEW_ENVIRON = '\x27', START_TLS = '\x2E';
 
     QTcpServer m_server;
     QTcpSocket *m_peer = nullptr;
@@ -155,6 +155,18 @@ class TestTelnetOptionState : public QObject {
         m_peer->write(QByteArray() + IAC + SB + NEW_ENVIRON + '\x01' + IAC + SE);
         const QByteArray reply = readUntil("QPADEV9999");
         QVERIFY2(reply.contains("DEVNAME") && reply.contains("QPADEV9999"), reply.toHex().constData());
+    }
+
+    // Issue #446: START_TLS (option 46) is refused both ways. The server's
+    // WILL used to get no reply at all, leaving it waiting
+    void startTlsIsRefused() {
+        m_peer->write(cmd(WILL, START_TLS));
+        QCOMPARE(readBytes(3).toHex(), cmd(DONT, START_TLS).toHex());
+        m_peer->write(cmd(DO, START_TLS));
+        QCOMPARE(readBytes(3).toHex(), cmd(WONT, START_TLS).toHex());
+        // Still plain telnet: the next option is answered in clear
+        m_peer->write(cmd(DO, NEW_ENVIRON));
+        QCOMPARE(readBytes(3).toHex(), cmd(WILL, NEW_ENVIRON).toHex());
     }
 };
 
