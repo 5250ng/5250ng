@@ -400,6 +400,7 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // Taken first, so an early return cannot hand it to a later tab
     const std::optional<QByteArray> inheritedSnapshot =
         std::exchange(m_inheritProfileSnapshotOnce, std::nullopt);
+    const std::optional<ReopenedTab> reopened = std::exchange(m_reopenTabOnce, std::nullopt);
 
     m_currentSession = config;
 
@@ -750,7 +751,11 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
         tabDisplayName = QString("%1:%2").arg(config.hostname()).arg(config.port());
     }
 
-    int newIndex = m_tabWidget->addTab(session->container, tabDisplayName);
+    // A reconnected tab goes back where it was, under the label it had
+    int newIndex = reopened
+                       ? m_tabWidget->insertTab(qBound(0, reopened->index, m_tabWidget->count()),
+                                                session->container, reopened->label)
+                       : m_tabWidget->addTab(session->container, tabDisplayName);
     // Close button on the right side of the tab
     {
         QPushButton *closeBtn = new QPushButton(QString::fromUtf8("\xe2\x9c\x95"), this);
@@ -772,7 +777,8 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // A tab an MCP client opens stays in the background when the user already
     // has a tab open, so it does not take the screen away from them (#413)
     const int previousIndex = m_activeIndex;
-    if (session->mcpControlled && previousIndex >= 0 && previousIndex < m_sessions.size() &&
+    // Not for a reconnected tab: it was the current one, and stays so
+    if (session->mcpControlled && !reopened && previousIndex >= 0 && previousIndex < m_sessions.size() &&
         previousIndex != newIndex) {
         // The window-wide session and code page were set for the new tab
         // above; give them back to the tab that stays current. The later
@@ -931,6 +937,9 @@ void MainWindow::connectToServer(const session::SessionConfig &config,
     // Create per-session macro recorder and session logger
     session->macroRecorder = new core::MacroRecorder(session->container);
     session->sessionLogger = new core::SessionLogger(session->container);
+    // Reconnect keeps a running log going, appending to the same file
+    if (reopened && !reopened->logPath.isEmpty())
+        session->sessionLogger->start(reopened->logPath, reopened->logVerbosity);
 
     // Wire keyboard events to macro recorder for real-time capture
     connect(session->displayWidget, &ui::widgets::Q5250ScreenWidget::keyRecorded, this,
